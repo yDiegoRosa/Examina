@@ -1,0 +1,26 @@
+# https://docs.astral.sh/ruff/configuration/
+
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "DJ",  # flake8-django
+]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "N999",  # invalid module name — Django uses project name as module
+]
+
+[lint.isort]
+known-first-party = ["Examina", "banco_questoes"]
+
+[format]
+quote-style = "single"

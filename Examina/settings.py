@@ -10,17 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-import environ
 from pathlib import Path
+
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Initialize environ
-env = environ.Env(
-    DEBUG=(bool, False),
-    ALLOWED_HOSTS=(list, [])
-)
+env = environ.Env(DEBUG=(bool, False), ALLOWED_HOSTS=(list, []))
 
 # Read .env file if present
 environ.Env.read_env(BASE_DIR / '.env')
@@ -78,12 +76,7 @@ WSGI_APPLICATION = 'Examina.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': env.db(
-        'DATABASE_URL',
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'
-    )
-}
+DATABASES = {'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
 
 
 # Password validation
