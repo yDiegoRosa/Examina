@@ -1,0 +1,5 @@
+Django>=5.0
+django-environ>=0.11.0
+asgiref
+sqlparse
+tzdata
