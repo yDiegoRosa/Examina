@@ -1,23 +1,39 @@
 # https://docs.astral.sh/ruff/configuration/
+# Ruff substitui Black (formatter), isort (imports) e flake8/bandit (lint) em uma só ferramenta.
 
 target-version = "py311"
 line-length = 120
 
 [lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "DJ",  # flake8-django
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (ordenação de imports)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade (modernização de syntax)
+    "B",    # flake8-bugbear (bugs comuns)
+    "DJ",   # flake8-django
+    "S",    # flake8-bandit (segurança)
+    "C4",   # flake8-comprehensions
+    "T20",  # flake8-print (detecta print() esquecido)
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "PIE",  # flake8-pie (misc. improvements)
 ]
 ignore = [
-    "E501",  # line too long — handled by formatter
-    "N999",  # invalid module name — Django uses project name as module
+    "E501",   # line too long — handled by formatter
+    "N999",   # invalid module name — Django uses project name as module
+    "S101",   # assert used — permitido em testes
+    "S105",   # hardcoded password — muitos falsos positivos em settings
+    "RET504", # unnecessary assignment before return — legibilidade
 ]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S101"]        # asserts OK em testes
+"**/tests.py" = ["S101"]        # asserts OK em testes
+"**/settings.py" = ["S105"]     # variáveis de senha OK em settings
+"**/migrations/**" = ["E501"]   # migrations geradas podem ter linhas longas
 
 [lint.isort]
 known-first-party = ["Examina", "banco_questoes"]

@@ -4,3 +4,4 @@ asgiref
 sqlparse
 tzdata
 ruff>=0.5.0
+coverage>=7.0

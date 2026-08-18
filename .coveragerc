@@ -1,0 +1,21 @@
+[run]
+source =
+    Examina
+    banco_questoes
+omit =
+    */migrations/*
+    */tests/*
+    **/tests.py
+    manage.py
+    */wsgi.py
+    */asgi.py
+
+[report]
+show_missing = True
+# TODO: Aumentar gradualmente conforme testes forem adicionados (meta: 70%)
+fail_under = 0
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.
+    raise NotImplementedError
