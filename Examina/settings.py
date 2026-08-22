@@ -76,7 +76,36 @@ WSGI_APPLICATION = 'Examina.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
+# -- Default (dev / production) -----------------------------------------------
+DATABASES = {
+    'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
+}
+
+# MySQL-specific hardening: enforce utf8mb4, UTC session timezone, strict mode
+_MYSQL_OPTIONS = {
+    'charset': 'utf8mb4',
+    'init_command': (
+        "SET sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,"
+        "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';"
+        "SET SESSION time_zone='+00:00';"
+    ),
+    'connect_timeout': 5,
+}
+
+if DATABASES['default'].get('ENGINE', '').endswith('mysql'):
+    DATABASES['default'].setdefault('OPTIONS', {}).update(_MYSQL_OPTIONS)
+    DATABASES['default'].setdefault('TEST', {})['CHARSET'] = 'utf8mb4'
+    DATABASES['default'].setdefault('TEST', {})['COLLATION'] = 'utf8mb4_unicode_ci'
+
+# -- Staging / Homologação (optional) -----------------------------------------
+if env('STAGING_DATABASE_URL', default=''):
+    DATABASES['staging'] = env.db('STAGING_DATABASE_URL')
+    if DATABASES['staging'].get('ENGINE', '').endswith('mysql'):
+        DATABASES['staging'].setdefault('OPTIONS', {}).update(_MYSQL_OPTIONS)
+
+# -- Connection health ---------------------------------------------------------
+DATABASES['default']['CONN_MAX_AGE'] = env.int('DB_CONN_MAX_AGE', default=0 if DEBUG else 600)
+DATABASES['default']['CONN_HEALTH_CHECKS'] = not DEBUG
 
 
 # Password validation
@@ -101,9 +130,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'pt-br'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Sao_Paulo'
 
 USE_I18N = True
 
