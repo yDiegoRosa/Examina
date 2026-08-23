@@ -3,7 +3,9 @@ from pathlib import Path
 
 from django.test import TestCase
 
+from .models import Questao
 from .parser import CSVParseError, CSVQuestaoParser
+from .validator import CSVQuestaoValidator
 
 
 class CSVQuestaoParserTest(TestCase):
@@ -102,3 +104,163 @@ class CSVQuestaoParserTest(TestCase):
         """Verifica retorno de lista vazia para entradas em branco."""
         self.assertEqual(CSVQuestaoParser.parse(''), [])
         self.assertEqual(CSVQuestaoParser.parse(io.StringIO('')), [])
+
+
+class CSVQuestaoValidatorTest(TestCase):
+    """Testes unitários para as regras de validação linha a linha de CSV."""
+
+    def test_validate_valid_objective_row(self):
+        """Verifica validação de uma linha objetiva completa e válida."""
+        row = {
+            'linha': 2,
+            'enunciado': 'Qual é a fórmula da água?',
+            'tipo': 'OBJ',
+            'disciplina': 'Química',
+            'topico': 'Inorgânica',
+            'dificuldade': 'F',
+            'tags': ['quimica', 'agua'],
+            'alternativas': [
+                {'letra': 'A', 'texto': 'H2O', 'correta': True},
+                {'letra': 'B', 'texto': 'CO2', 'correta': False},
+            ],
+            'correta': 'A',
+            'criterios_correcao': '',
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertTrue(res.is_valid)
+        self.assertEqual(len(res.errors), 0)
+        self.assertEqual(res.cleaned_data['tipo'], Questao.Tipo.OBJETIVA)
+        self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.FACIL)
+        self.assertEqual(len(res.cleaned_data['alternativas']), 2)
+
+    def test_validate_valid_discursive_row(self):
+        """Verifica validação de uma linha discursiva completa e válida."""
+        row = {
+            'linha': 3,
+            'enunciado': 'Explique o princípio da inércia de Newton.',
+            'tipo': 'DIS',
+            'disciplina': 'Física',
+            'topico': 'Mecânica',
+            'dificuldade': 'M',
+            'tags': ['fisica', 'leis-de-newton'],
+            'alternativas': [],
+            'correta': None,
+            'criterios_correcao': 'Mencionar a tendência de manter repouso ou MRU caso força resultante seja nula.',
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertTrue(res.is_valid)
+        self.assertEqual(res.cleaned_data['tipo'], Questao.Tipo.DISCURSIVA)
+        self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.MEDIO)
+        self.assertTrue(bool(res.cleaned_data['criterios_correcao']))
+
+    def test_validate_missing_mandatory_fields(self):
+        """Verifica erro quando enunciado, tipo, disciplina e dificuldade faltam."""
+        row = {
+            'linha': 4,
+            'enunciado': '',
+            'tipo': '',
+            'disciplina': '',
+            'dificuldade': '',
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertFalse(res.is_valid)
+        self.assertTrue(any('enunciado' in err for err in res.errors))
+        self.assertTrue(any('disciplina' in err for err in res.errors))
+        self.assertTrue(any('tipo' in err for err in res.errors))
+        self.assertTrue(any('dificuldade' in err for err in res.errors))
+
+    def test_validate_invalid_tipo_and_dificuldade(self):
+        """Verifica rejeição de tipos e dificuldades inválidos."""
+        row = {
+            'linha': 5,
+            'enunciado': 'Enunciado de teste',
+            'tipo': 'INVALIDO',
+            'disciplina': 'Matemática',
+            'dificuldade': 'X',
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertFalse(res.is_valid)
+        self.assertTrue(any('Tipo de questão inválido' in err for err in res.errors))
+        self.assertTrue(any('Nível de dificuldade inválido' in err for err in res.errors))
+
+    def test_validate_objective_insufficient_alternatives(self):
+        """Verifica erro em questão objetiva com menos de 2 alternativas."""
+        row = {
+            'linha': 6,
+            'enunciado': 'Questão com 1 alternativa',
+            'tipo': 'OBJ',
+            'disciplina': 'História',
+            'dificuldade': 'F',
+            'alternativas': [{'letra': 'A', 'texto': 'Única alternativa', 'correta': True}],
+            'correta': 'A',
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertFalse(res.is_valid)
+        self.assertTrue(any('mínimo 2 alternativas' in err for err in res.errors))
+
+    def test_validate_objective_correta_not_matching_alternatives(self):
+        """Verifica erro quando gabarito não corresponde a nenhuma alternativa preenchida."""
+        row = {
+            'linha': 7,
+            'enunciado': 'Questão com gabarito inexistente',
+            'tipo': 'OBJ',
+            'disciplina': 'História',
+            'dificuldade': 'F',
+            'alternativas': [
+                {'letra': 'A', 'texto': 'Alt A', 'correta': False},
+                {'letra': 'B', 'texto': 'Alt B', 'correta': False},
+            ],
+            'correta': 'E',  # E não está preenchida
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertFalse(res.is_valid)
+        self.assertTrue(any('não corresponde a nenhuma alternativa preenchida' in err for err in res.errors))
+
+    def test_validate_discursive_missing_criterios(self):
+        """Verifica erro quando questão discursiva não tem critérios de correção."""
+        row = {
+            'linha': 8,
+            'enunciado': 'Discursiva sem critérios',
+            'tipo': 'DIS',
+            'disciplina': 'Filosofia',
+            'dificuldade': 'D',
+            'criterios_correcao': '   ',  # Vazio
+        }
+        res = CSVQuestaoValidator.validate_row(row)
+        self.assertFalse(res.is_valid)
+        self.assertTrue(any('Critérios de correção são obrigatórios' in err for err in res.errors))
+
+    def test_validate_batch_rows_report(self):
+        """Verifica a geração do relatório consolidado com validate_rows."""
+        rows = [
+            # 1 Válida
+            {
+                'linha': 2,
+                'enunciado': 'Questão Válida',
+                'tipo': 'OBJ',
+                'disciplina': 'Biologia',
+                'dificuldade': 'F',
+                'alternativas': [
+                    {'letra': 'A', 'texto': 'A', 'correta': True},
+                    {'letra': 'B', 'texto': 'B', 'correta': False},
+                ],
+                'correta': 'A',
+            },
+            # 1 Inválida
+            {
+                'linha': 3,
+                'enunciado': '',
+                'tipo': 'OBJ',
+                'disciplina': 'Biologia',
+                'dificuldade': 'F',
+            },
+        ]
+        report = CSVQuestaoValidator.validate_rows(rows)
+
+        self.assertEqual(report.total_processadas, 2)
+        self.assertEqual(report.total_validas, 1)
+        self.assertEqual(report.total_invalidas, 1)
+        self.assertFalse(report.is_valid)
+        self.assertEqual(len(report.linhas_validas), 1)
+        self.assertEqual(len(report.linhas_invalidas), 1)
+        self.assertEqual(report.linhas_invalidas[0].linha, 3)
