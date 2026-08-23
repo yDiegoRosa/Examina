@@ -1,0 +1,72 @@
+/**
+ * Examina — JavaScript Vanilla 100% Nativo (Zero Dependências)
+ * Interatividades, Menu Mobile, Formsets e Realces Visuais
+ */
+
+document.addEventListener('DOMContentLoaded', function () {
+  'use strict';
+
+  // -------------------------------------------------------------------------
+  // 1. Mobile Menu Toggle
+  // -------------------------------------------------------------------------
+  const mobileToggle = document.querySelector('.mobile-toggle');
+  const navLinks = document.querySelector('.nav-links');
+
+  if (mobileToggle && navLinks) {
+    mobileToggle.addEventListener('click', function () {
+      navLinks.classList.toggle('open');
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. Auto-dismiss de Alertas
+  // -------------------------------------------------------------------------
+  const alerts = document.querySelectorAll('.alert-toast');
+  alerts.forEach(function (alert) {
+    // Botão de fechar manual
+    const closeBtn = alert.querySelector('.alert-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        dismissAlert(alert);
+      });
+    }
+
+    // Auto fechar após 5 segundos
+    setTimeout(function () {
+      dismissAlert(alert);
+    }, 5000);
+  });
+
+  function dismissAlert(alert) {
+    alert.style.opacity = '0';
+    alert.style.transform = 'translateY(-8px)';
+    setTimeout(function () {
+      alert.remove();
+    }, 250);
+  }
+
+  // -------------------------------------------------------------------------
+  // 3. Realce em Tempo Real da Alternativa Correta (Gabarito)
+  // -------------------------------------------------------------------------
+  function updateCorrectAlternativeHighlight() {
+    const checkboxes = document.querySelectorAll('.alternativa-card-item input[type="checkbox"][name$="-correta"]');
+    checkboxes.forEach(function (checkbox) {
+      const card = checkbox.closest('.alternativa-card-item');
+      if (card) {
+        if (checkbox.checked) {
+          card.classList.add('is-correct');
+        } else {
+          card.classList.remove('is-correct');
+        }
+      }
+    });
+  }
+
+  document.addEventListener('change', function (e) {
+    if (e.target.matches('input[type="checkbox"][name$="-correta"]')) {
+      updateCorrectAlternativeHighlight();
+    }
+  });
+
+  updateCorrectAlternativeHighlight();
+});

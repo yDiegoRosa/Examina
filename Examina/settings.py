@@ -151,7 +151,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'banco_questoes' / 'static',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
@@ -171,7 +174,6 @@ LOG_DIR.mkdir(exist_ok=True)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-
     # -- Formatters ----------------------------------------------------------
     'formatters': {
         'verbose': {
@@ -184,7 +186,6 @@ LOGGING = {
             'style': '{',
         },
     },
-
     # -- Filters -------------------------------------------------------------
     'filters': {
         'require_debug_false': {
@@ -194,7 +195,6 @@ LOGGING = {
             '()': 'django.utils.log.RequireDebugTrue',
         },
     },
-
     # -- Handlers ------------------------------------------------------------
     'handlers': {
         'console': {
@@ -206,7 +206,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': LOG_DIR / 'examina.log',
-            'maxBytes': 5 * 1024 * 1024,   # 5 MB
+            'maxBytes': 5 * 1024 * 1024,  # 5 MB
             'backupCount': 5,
             'formatter': 'verbose',
             'encoding': 'utf-8',
@@ -218,7 +218,6 @@ LOGGING = {
             'formatter': 'verbose',
         },
     },
-
     # -- Loggers -------------------------------------------------------------
     'loggers': {
         'django': {

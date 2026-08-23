@@ -1,40 +1,106 @@
 {% extends "banco_questoes/base.html" %}
 
-{% block title %}Questões — Examina{% endblock %}
+{% block title %}Banco de Questões — Examina FAETERJ-Rio{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="h3 mb-0">📚 Banco de Questões</h1>
-  <div class="d-flex gap-2">
-    <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline-secondary" title="Baixar planilha modelo para importação em lote">
-      📥 Baixar Modelo CSV
+<!-- Hero Banner Moderno -->
+<div class="hero-card">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-layers-fill"></i> Módulo 1 • Banco de Questões
+      </span>
+    </div>
+    <h1 class="mb-1">Acervo Pedagógico</h1>
+    <p class="text-secondary" style="max-width: 580px;">
+      Explore, pesquise e versione o repositório de questões de alta qualidade para composição de exames da FAETERJ-Rio.
+    </p>
+  </div>
+
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline" title="Baixar planilha modelo para importação em lote">
+      <i class="bi bi-file-earmark-arrow-down-fill" style="color: var(--fae-blue-primary);"></i> Modelo CSV
     </a>
     {% if perms.banco_questoes.add_questao %}
     <a href="{% url 'banco_questoes:questao_create' %}" class="btn btn-primary">
-      + Nova Questão
+      <i class="bi bi-plus-lg"></i> Nova Questão
     </a>
     {% endif %}
   </div>
 </div>
 
-{# ——— Filtros ——— #}
-<div class="card mb-4">
-  <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-end">
+<!-- Grid de Métricas Tecnológicas -->
+<div class="grid grid-cols-4 gap-4 mb-4">
+  <div class="metric-card">
+    <div class="metric-icon-box metric-icon-primary">
+      <i class="bi bi-collection-fill"></i>
+    </div>
+    <div>
+      <div class="metric-num">{{ metricas.total|default:"0" }}</div>
+      <div class="metric-text">Total no Acervo</div>
+    </div>
+  </div>
 
-      <div class="col-md-2">
-        <label class="form-label small text-muted mb-0">Tipo</label>
-        <select name="tipo" class="form-select form-select-sm">
-          <option value="">Todos</option>
+  <div class="metric-card">
+    <div class="metric-icon-box metric-icon-obj">
+      <i class="bi bi-ui-radios-grid"></i>
+    </div>
+    <div>
+      <div class="metric-num">{{ metricas.objetivas|default:"0" }}</div>
+      <div class="metric-text">Objetivas</div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-icon-box metric-icon-dis">
+      <i class="bi bi-pencil-square"></i>
+    </div>
+    <div>
+      <div class="metric-num">{{ metricas.discursivas|default:"0" }}</div>
+      <div class="metric-text">Discursivas</div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-icon-box metric-icon-active">
+      <i class="bi bi-shield-check"></i>
+    </div>
+    <div>
+      <div class="metric-num">{{ metricas.ativas|default:"0" }}</div>
+      <div class="metric-text">Ativas</div>
+    </div>
+  </div>
+</div>
+
+<!-- Painel de Busca e Filtros -->
+<div class="card-surface mb-4">
+  <div class="card-header">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-sliders" style="color: var(--fae-blue-electric);"></i>
+      <span class="font-bold">Filtros e Pesquisa</span>
+    </div>
+    {% if filtros.tipo or filtros.dificuldade or filtros.ativo or filtros.q %}
+    <span class="badge-pill badge-pill-dis">
+      <i class="bi bi-funnel-fill"></i> Filtros Ativos
+    </span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <form method="get" class="grid grid-cols-12 gap-3 items-end">
+
+      <div class="col-span-2">
+        <label class="form-label">Tipo</label>
+        <select name="tipo" class="form-select">
+          <option value="">Todos os tipos</option>
           {% for value, label in tipos %}
           <option value="{{ value }}" {% if filtros.tipo == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
 
-      <div class="col-md-2">
-        <label class="form-label small text-muted mb-0">Dificuldade</label>
-        <select name="dificuldade" class="form-select form-select-sm">
+      <div class="col-span-2">
+        <label class="form-label">Dificuldade</label>
+        <select name="dificuldade" class="form-select">
           <option value="">Todas</option>
           {% for value, label in dificuldades %}
           <option value="{{ value }}" {% if filtros.dificuldade == value %}selected{% endif %}>{{ label }}</option>
@@ -42,80 +108,119 @@
         </select>
       </div>
 
-      <div class="col-md-2">
-        <label class="form-label small text-muted mb-0">Status</label>
-        <select name="ativo" class="form-select form-select-sm">
+      <div class="col-span-2">
+        <label class="form-label">Status</label>
+        <select name="ativo" class="form-select">
           <option value="">Todos</option>
-          <option value="1" {% if filtros.ativo == "1" %}selected{% endif %}>Ativo</option>
-          <option value="0" {% if filtros.ativo == "0" %}selected{% endif %}>Inativo</option>
+          <option value="1" {% if filtros.ativo == "1" %}selected{% endif %}>Ativa</option>
+          <option value="0" {% if filtros.ativo == "0" %}selected{% endif %}>Inativa</option>
         </select>
       </div>
 
-      <div class="col-md-4">
-        <label class="form-label small text-muted mb-0">Buscar no enunciado</label>
-        <input type="text" name="q" class="form-control form-control-sm"
-               value="{{ filtros.q }}" placeholder="Buscar…">
+      <div class="col-span-4">
+        <label class="form-label">Buscar no Enunciado</label>
+        <input type="text" name="q" class="form-input"
+               value="{{ filtros.q }}" placeholder="Buscar por palavra-chave…">
       </div>
 
-      <div class="col-md-2 d-flex gap-1">
-        <button type="submit" class="btn btn-outline-primary btn-sm flex-grow-1">🔍 Filtrar</button>
-        <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline-secondary btn-sm"
-           title="Limpar filtros">✕</a>
+      <div class="col-span-2 flex gap-2">
+        <button type="submit" class="btn btn-primary flex-1">
+          <i class="bi bi-search"></i> Filtrar
+        </button>
+        {% if filtros.tipo or filtros.dificuldade or filtros.ativo or filtros.q %}
+        <a href="{% url 'banco_questoes:questao_list' %}" class="btn-icon-circle" title="Limpar Filtros">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
       </div>
 
     </form>
   </div>
 </div>
 
-{# ——— Tabela de questões ——— #}
-<div class="card">
+<!-- Tabela de Questões SaaS -->
+<div class="card-surface">
   <div class="table-responsive">
-    <table class="table table-hover table-striped mb-0">
-      <thead class="table-light">
+    <table class="saas-table">
+      <thead>
         <tr>
-          <th style="width: 60px;">#</th>
-          <th style="width: 90px;">Tipo</th>
-          <th style="width: 100px;">Dificuldade</th>
-          <th style="width: 140px;">Disciplina</th>
-          <th>Enunciado</th>
-          <th style="width: 80px;">Status</th>
-          <th style="width: 80px;">Ações</th>
+          <th style="width: 80px;">ID</th>
+          <th style="width: 130px;">Tipo</th>
+          <th style="width: 120px;">Dificuldade</th>
+          <th style="width: 200px;">Disciplina / Tópico</th>
+          <th>Enunciado & Tags</th>
+          <th style="width: 110px;">Status</th>
+          <th style="width: 110px;" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for q in questoes %}
         <tr>
-          <td class="text-muted">Q{{ q.pk }}</td>
+          <td>
+            <span class="font-bold text-muted font-mono">#{{ q.pk }}</span>
+          </td>
           <td>
             {% if q.is_objetiva %}
-            <span class="badge bg-info text-dark">Objetiva</span>
+            <span class="badge-pill badge-pill-obj">
+              <i class="bi bi-ui-radios"></i> Objetiva
+            </span>
             {% else %}
-            <span class="badge bg-warning text-dark">Discursiva</span>
+            <span class="badge-pill badge-pill-dis">
+              <i class="bi bi-textarea-t"></i> Discursiva
+            </span>
             {% endif %}
           </td>
           <td>
             {% if q.dificuldade == 'F' %}
-            <span class="badge bg-success">Fácil</span>
+            <span class="badge-pill badge-pill-facil">
+              <span class="status-dot" style="background-color: var(--color-success);"></span> Fácil
+            </span>
             {% elif q.dificuldade == 'M' %}
-            <span class="badge bg-primary">Médio</span>
+            <span class="badge-pill badge-pill-medio">
+              <span class="status-dot" style="background-color: var(--fae-blue-primary);"></span> Médio
+            </span>
             {% else %}
-            <span class="badge bg-danger">Difícil</span>
+            <span class="badge-pill badge-pill-dificil">
+              <span class="status-dot" style="background-color: var(--color-danger);"></span> Difícil
+            </span>
             {% endif %}
           </td>
-          <td>{{ q.disciplina }}</td>
-          <td>{{ q.enunciado|truncatewords:15 }}</td>
+          <td>
+            <div class="font-bold" style="color: var(--text-main);">{{ q.disciplina.nome }}</div>
+            {% if q.topico %}
+            <div class="small text-muted flex items-center gap-1 mt-1">
+              <i class="bi bi-arrow-return-right"></i> {{ q.topico.nome }}
+            </div>
+            {% endif %}
+          </td>
+          <td>
+            <div class="font-bold text-main mb-1" style="max-width: 520px;">
+              {{ q.enunciado|truncatewords:24 }}
+            </div>
+            {% if q.tags.all %}
+            <div class="flex flex-wrap gap-1 mt-1">
+              {% for tag in q.tags.all %}
+              <span class="badge-pill badge-pill-inactive small font-mono">#{{ tag.name }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
           <td>
             {% if q.ativo %}
-            <span class="badge bg-success bg-opacity-75">Ativo</span>
+            <span class="badge-pill badge-pill-active">
+              <i class="bi bi-check-circle-fill"></i> Ativa
+            </span>
             {% else %}
-            <span class="badge bg-secondary">Inativo</span>
+            <span class="badge-pill badge-pill-inactive">
+              <i class="bi bi-dash-circle"></i> Inativa
+            </span>
             {% endif %}
           </td>
-          <td>
+          <td class="text-right">
             {% if perms.banco_questoes.change_questao %}
             <a href="{% url 'banco_questoes:questao_update' pk=q.pk %}"
-               class="btn btn-outline-primary btn-sm" title="Editar">
-              ✏️
+               class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;" title="Editar Questão">
+              <i class="bi bi-pencil-square"></i> Editar
             </a>
             {% else %}
             <span class="text-muted small">—</span>
@@ -124,10 +229,16 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">
-            Nenhuma questão encontrada.
+          <td colspan="7" class="text-center" style="padding: 4rem 1.5rem;">
+            <div class="text-muted mb-3" style="font-size: 2.5rem; opacity: 0.4;">
+              <i class="bi bi-journal-x"></i>
+            </div>
+            <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Nenhuma questão encontrada</div>
+            <p class="text-muted small mb-3">Tente ajustar os termos da pesquisa ou cadastre uma nova questão.</p>
             {% if perms.banco_questoes.add_questao %}
-            <a href="{% url 'banco_questoes:questao_create' %}">Cadastrar a primeira</a>
+            <a href="{% url 'banco_questoes:questao_create' %}" class="btn btn-primary">
+              <i class="bi bi-plus-lg"></i> Cadastrar Nova Questão
+            </a>
             {% endif %}
           </td>
         </tr>
@@ -136,8 +247,11 @@
     </table>
   </div>
   {% if questoes %}
-  <div class="card-footer text-muted small">
-    {{ questoes|length }} questão(ões) encontrada(s)
+  <div class="card-header" style="background: #F8FAFC; font-size: 0.825rem; color: var(--text-muted);">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-info-circle" style="color: var(--fae-blue-electric);"></i>
+      <span>Total de <strong>{{ questoes|length }}</strong> questão(ões) listada(s).</span>
+    </div>
   </div>
   {% endif %}
 </div>

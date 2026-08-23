@@ -1,42 +1,53 @@
-<div class="alternativa-row row g-2 align-items-start mb-2 p-2 rounded {% if form.errors %}bg-danger bg-opacity-10{% else %}bg-light{% endif %}"
+<div class="alternativa-card-item {% if form.correta.value %}is-correct{% endif %} {% if form.errors %}border-danger{% endif %}"
      {% if form.instance.pk %}data-pk="{{ form.instance.pk }}"{% endif %}>
 
-  {# Campo DELETE oculto (soft delete para o Django) #}
+  {# Campo DELETE oculto para soft delete #}
   <input type="hidden"
          name="{{ form.DELETE.html_name }}"
          id="{{ form.DELETE.id_for_label }}"
          class="alternativa-delete"
          value="{{ form.DELETE.value|default:'' }}">
 
-  {# ID oculto (necessário para edição) #}
+  {# ID oculto para edição #}
   {{ form.id }}
 
-  <div class="col-auto" style="min-width: 75px;">
-    <label class="form-label small text-muted mb-0">Letra</label>
-    {{ form.letra }}
-    {% if form.letra.errors %}
-    <div class="invalid-feedback d-block">{{ form.letra.errors|join:", " }}</div>
-    {% endif %}
-  </div>
-
-  <div class="col">
-    <label class="form-label small text-muted mb-0">Texto da alternativa</label>
-    {{ form.texto }}
-    {% if form.texto.errors %}
-    <div class="invalid-feedback d-block">{{ form.texto.errors|join:", " }}</div>
-    {% endif %}
-  </div>
-
-  <div class="col-auto">
-    <label class="form-label small text-muted mb-0 d-block">Correta?</label>
-    <div class="form-check mt-1">
-      {{ form.correta }}
+  <div class="flex items-start gap-4" style="width: 100%;">
+    <!-- Seletor de Letra -->
+    <div style="width: 110px; flex-shrink: 0;">
+      <label class="form-label">
+        <i class="bi bi-tag-fill me-1"></i> Letra
+      </label>
+      {{ form.letra }}
+      {% if form.letra.errors %}
+      <div class="invalid-feedback">{{ form.letra.errors|join:", " }}</div>
+      {% endif %}
     </div>
-  </div>
 
-  <div class="col-auto">
-    <label class="form-label small text-muted mb-0 d-block">&nbsp;</label>
-    <button type="button" class="btn btn-outline-danger btn-sm btn-remove-alternativa"
-            title="Remover alternativa">✕</button>
+    <!-- Texto da Alternativa -->
+    <div class="flex-grow">
+      <label class="form-label">
+        <i class="bi bi-fonts me-1"></i> Texto da Alternativa
+      </label>
+      {{ form.texto }}
+      {% if form.texto.errors %}
+      <div class="invalid-feedback">{{ form.texto.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Checkbox de Gabarito/Correta -->
+    <div style="min-width: 110px; flex-shrink: 0; padding-top: 0.25rem;">
+      <label class="form-label text-center">Gabarito?</label>
+      <div class="flex items-center justify-center gap-2 mt-2">
+        {{ form.correta }}
+        <label class="font-bold small text-success" for="{{ form.correta.id_for_label }}">Correta</label>
+      </div>
+    </div>
+
+    <!-- Botão de Remoção -->
+    <div style="padding-top: 1.65rem; flex-shrink: 0;">
+      <button type="button" class="btn-danger-circle btn-remove-alternativa" title="Remover Alternativa">
+        <i class="bi bi-trash3"></i>
+      </button>
+    </div>
   </div>
 </div>

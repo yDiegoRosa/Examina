@@ -1,169 +1,199 @@
 {% extends "banco_questoes/base.html" %}
 
-{% block title %}{{ titulo }} — Examina{% endblock %}
+{% block title %}{{ titulo }} — Examina FAETERJ-Rio{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-9">
+<div style="max-width: 980px; margin: 0 auto;">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1 class="h3 mb-0">{{ titulo }}</h1>
-      <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline-secondary btn-sm">
-        ← Voltar à lista
+  <!-- Hero Banner do Formulário -->
+  <div class="hero-card mb-4">
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="hero-tag">
+          <i class="bi bi-pencil-fill"></i> Cadastro & Edição • RF01
+        </span>
+      </div>
+      <h1 class="mb-1">{{ titulo }}</h1>
+      <p class="text-secondary" style="max-width: 580px;">
+        Insira o enunciado, alternativas e parâmetros pedagógicos de classificação.
+      </p>
+    </div>
+
+    <div>
+      <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">
+        <i class="bi bi-arrow-left"></i> Voltar ao Acervo
+      </a>
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}
+  <div class="alert-toast alert-toast-danger mb-4">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-exclamation-triangle-fill" style="color: var(--color-danger); font-size: 1.25rem;"></i>
+      <div>
+        {% for error in form.non_field_errors %}
+        <p class="mb-0 font-bold">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" novalidate id="questao-main-form">
+    {% csrf_token %}
+
+    {# ——— Seção 1: Classificação e Enunciado ——— #}
+    <div class="card-surface mb-4">
+      <div class="card-header header-primary">
+        <div class="flex items-center gap-2">
+          <i class="bi bi-card-text text-primary" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
+          <span class="font-bold">1. Informações Básicas e Classificação</span>
+        </div>
+        <span class="badge-pill badge-pill-medio font-bold">Etapa 1 de 2</span>
+      </div>
+      <div class="card-body">
+        <div class="grid grid-cols-12 gap-4">
+
+          <div class="col-span-4">
+            <label for="{{ form.tipo.id_for_label }}" class="form-label">
+              {{ form.tipo.label }} <span class="text-danger">*</span>
+            </label>
+            {{ form.tipo }}
+            {% if form.tipo.errors %}
+            <div class="invalid-feedback">{{ form.tipo.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-span-4">
+            <label for="{{ form.dificuldade.id_for_label }}" class="form-label">
+              {{ form.dificuldade.label }} <span class="text-danger">*</span>
+            </label>
+            {{ form.dificuldade }}
+            {% if form.dificuldade.errors %}
+            <div class="invalid-feedback">{{ form.dificuldade.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-span-4 flex items-center" style="padding-top: 1.5rem;">
+            <label class="switch-container">
+              {{ form.ativo }}
+              <span class="font-bold small text-main">{{ form.ativo.label }}</span>
+            </label>
+          </div>
+
+          <div class="col-span-6">
+            <label for="{{ form.disciplina.id_for_label }}" class="form-label">
+              {{ form.disciplina.label }} <span class="text-danger">*</span>
+            </label>
+            {{ form.disciplina }}
+            {% if form.disciplina.errors %}
+            <div class="invalid-feedback">{{ form.disciplina.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-span-6">
+            <label for="{{ form.topico.id_for_label }}" class="form-label">
+              {{ form.topico.label }}
+            </label>
+            {{ form.topico }}
+            {% if form.topico.errors %}
+            <div class="invalid-feedback">{{ form.topico.errors|join:", " }}</div>
+            {% endif %}
+            <div class="form-help">Opcional. Deve pertencer à disciplina selecionada.</div>
+          </div>
+
+          <div class="col-span-12">
+            <label for="{{ form.enunciado.id_for_label }}" class="form-label">
+              {{ form.enunciado.label }} <span class="text-danger">*</span>
+            </label>
+            {{ form.enunciado }}
+            {% if form.enunciado.errors %}
+            <div class="invalid-feedback">{{ form.enunciado.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-span-12" id="criterios-wrapper">
+            <label for="{{ form.criterios_correcao.id_for_label }}" class="form-label" style="color: var(--fae-gold-hover);">
+              <i class="bi bi-check2-all me-1"></i> {{ form.criterios_correcao.label }}
+            </label>
+            {{ form.criterios_correcao }}
+            <div class="form-help">Obrigatório para questões discursivas (critérios pedagógicos de pontuação).</div>
+            {% if form.criterios_correcao.errors %}
+            <div class="invalid-feedback">{{ form.criterios_correcao.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-span-12">
+            <label for="{{ form.tags.id_for_label }}" class="form-label">
+              <i class="bi bi-tags-fill me-1"></i> {{ form.tags.label }}
+            </label>
+            {{ form.tags }}
+            <div class="form-help">Separe as palavras-chave por vírgula (ex.: <code>algoritmos, matrizes, av2</code>).</div>
+            {% if form.tags.errors %}
+            <div class="invalid-feedback">{{ form.tags.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {# ——— Seção 2: Alternativas (Inline Formset) ——— #}
+    <div class="card-surface mb-4" id="alternativas-card">
+      <div class="card-header header-success">
+        <div class="flex items-center gap-2">
+          <i class="bi bi-list-check" style="font-size: 1.25rem; color: var(--color-success);"></i>
+          <span class="font-bold">2. Alternativas e Gabarito</span>
+        </div>
+        <button type="button" class="btn btn-gold" id="btn-add-alternativa" style="font-size: 0.825rem; padding: 0.45rem 1.1rem;">
+          <i class="bi bi-plus-lg"></i> Adicionar Alternativa
+        </button>
+      </div>
+      <div class="card-body" style="background: #FAFCFE;">
+
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+        <div class="alert-toast alert-toast-danger mb-3">
+          <div class="flex items-center gap-2">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            {% for error in formset.non_form_errors %}
+            <span class="font-bold">{{ error }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <div id="alternativas-container">
+          {% for alt_form in formset %}
+          {% include "banco_questoes/includes/alternativa_row.html" with form=alt_form %}
+          {% endfor %}
+        </div>
+
+        <div class="flex items-center gap-2 text-muted small mt-3 p-3" style="background: #FFFFFF; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+          <i class="bi bi-shield-check" style="color: var(--color-success); font-size: 1.15rem;"></i>
+          <span>Regra de validação: Mínimo <strong>2</strong> e máximo <strong>5</strong> alternativas. Exatamente <strong>1</strong> deve ser marcada como correta.</span>
+        </div>
+
+      </div>
+    </div>
+
+    {# ——— Template vazio para clonagem dinâmica via JS ——— #}
+    <div id="empty-form-template" class="d-none">
+      {% include "banco_questoes/includes/alternativa_row.html" with form=formset.empty_form %}
+    </div>
+
+    <!-- Barra de Ações -->
+    <div class="flex gap-3 mb-6">
+      <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
+        <i class="bi bi-floppy2-fill"></i> Salvar Questão
+      </button>
+      <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline" style="padding: 0.75rem 1.75rem;">
+        Cancelar
       </a>
     </div>
 
-    {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      {% for error in form.non_field_errors %}
-      <p class="mb-0">⚠ {{ error }}</p>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    <form method="post" novalidate>
-      {% csrf_token %}
-
-      {# ——— Dados da Questão ——— #}
-      <div class="card mb-4">
-        <div class="card-header bg-primary bg-opacity-10">
-          <strong>📋 Dados da Questão</strong>
-        </div>
-        <div class="card-body">
-          <div class="row g-3">
-
-            <div class="col-md-4">
-              <label for="{{ form.tipo.id_for_label }}" class="form-label">
-                {{ form.tipo.label }} <span class="text-danger">*</span>
-              </label>
-              {{ form.tipo }}
-              {% if form.tipo.errors %}
-              <div class="invalid-feedback d-block">{{ form.tipo.errors|join:", " }}</div>
-              {% endif %}
-            </div>
-
-            <div class="col-md-4">
-              <label for="{{ form.dificuldade.id_for_label }}" class="form-label">
-                {{ form.dificuldade.label }} <span class="text-danger">*</span>
-              </label>
-              {{ form.dificuldade }}
-              {% if form.dificuldade.errors %}
-              <div class="invalid-feedback d-block">{{ form.dificuldade.errors|join:", " }}</div>
-              {% endif %}
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label d-block">&nbsp;</label>
-              <div class="form-check">
-                {{ form.ativo }}
-                <label class="form-check-label" for="{{ form.ativo.id_for_label }}">
-                  {{ form.ativo.label }}
-                </label>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <label for="{{ form.disciplina.id_for_label }}" class="form-label">
-                {{ form.disciplina.label }} <span class="text-danger">*</span>
-              </label>
-              {{ form.disciplina }}
-              {% if form.disciplina.errors %}
-              <div class="invalid-feedback d-block">{{ form.disciplina.errors|join:", " }}</div>
-              {% endif %}
-            </div>
-
-            <div class="col-md-6">
-              <label for="{{ form.topico.id_for_label }}" class="form-label">
-                {{ form.topico.label }}
-              </label>
-              {{ form.topico }}
-              {% if form.topico.errors %}
-              <div class="invalid-feedback d-block">{{ form.topico.errors|join:", " }}</div>
-              {% endif %}
-              <div class="form-text">Opcional. Deve pertencer à disciplina selecionada.</div>
-            </div>
-
-            <div class="col-12">
-              <label for="{{ form.enunciado.id_for_label }}" class="form-label">
-                {{ form.enunciado.label }} <span class="text-danger">*</span>
-              </label>
-              {{ form.enunciado }}
-              {% if form.enunciado.errors %}
-              <div class="invalid-feedback d-block">{{ form.enunciado.errors|join:", " }}</div>
-              {% endif %}
-            </div>
-
-            <div class="col-12" id="criterios-wrapper">
-              <label for="{{ form.criterios_correcao.id_for_label }}" class="form-label">
-                {{ form.criterios_correcao.label }}
-              </label>
-              {{ form.criterios_correcao }}
-              <div class="form-text">Obrigatório para questões discursivas.</div>
-              {% if form.criterios_correcao.errors %}
-              <div class="invalid-feedback d-block">{{ form.criterios_correcao.errors|join:", " }}</div>
-              {% endif %}
-            </div>
-
-            <div class="col-12">
-              <label for="{{ form.tags.id_for_label }}" class="form-label">
-                {{ form.tags.label }}
-              </label>
-              {{ form.tags }}
-              <div class="form-text">Separe as tags por vírgula. Ex.: enem, geometria, 2024</div>
-              {% if form.tags.errors %}
-              <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
-              {% endif %}
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      {# ——— Alternativas (inline formset) ——— #}
-      <div class="card mb-4" id="alternativas-card">
-        <div class="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
-          <strong>✅ Alternativas</strong>
-          <button type="button" class="btn btn-success btn-sm" id="btn-add-alternativa">
-            + Adicionar alternativa
-          </button>
-        </div>
-        <div class="card-body">
-
-          {{ formset.management_form }}
-
-          {% if formset.non_form_errors %}
-          <div class="alert alert-danger">
-            {% for error in formset.non_form_errors %}
-            <p class="mb-0">{{ error }}</p>
-            {% endfor %}
-          </div>
-          {% endif %}
-
-          <div id="alternativas-container">
-            {% for alt_form in formset %}
-            {% include "banco_questoes/includes/alternativa_row.html" with form=alt_form %}
-            {% endfor %}
-          </div>
-
-          <div class="text-muted small mt-2">
-            Mínimo 2 alternativas · Máximo 5 · Exatamente 1 deve ser marcada como correta
-          </div>
-
-        </div>
-      </div>
-
-      {# ——— Template vazio (usado pelo JS para clonar) ——— #}
-      <div id="empty-form-template" class="d-none">
-        {% include "banco_questoes/includes/alternativa_row.html" with form=formset.empty_form %}
-      </div>
-
-      <div class="d-flex gap-2 mb-5">
-        <button type="submit" class="btn btn-primary px-4">💾 Salvar Questão</button>
-        <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline-secondary">Cancelar</a>
-      </div>
-
-    </form>
-  </div>
+  </form>
 </div>
 {% endblock %}
 
@@ -183,21 +213,19 @@
   const criteriosWrapper = document.getElementById('criterios-wrapper');
   const totalFormsInput = document.getElementById(`id_${PREFIX}-TOTAL_FORMS`);
 
-  // -----------------------------------------------------------------
-  // Adicionar alternativa
-  // -----------------------------------------------------------------
+  // Adicionar alternativa dinamicamente
   btnAdd.addEventListener('click', function () {
     const totalForms = parseInt(totalFormsInput.value, 10);
     const visibleCount = container.querySelectorAll(
-      '.alternativa-row:not([style*="display: none"])'
+      '.alternativa-card-item:not([style*="display: none"])'
     ).length;
 
     if (visibleCount >= MAX_ALTERNATIVAS) {
-      alert(`Máximo de ${MAX_ALTERNATIVAS} alternativas.`);
+      alert(`O limite máximo é de ${MAX_ALTERNATIVAS} alternativas.`);
       return;
     }
 
-    const newRow = template.querySelector('.alternativa-row').cloneNode(true);
+    const newRow = template.querySelector('.alternativa-card-item').cloneNode(true);
     newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, totalForms);
     newRow.querySelectorAll('[name*="__prefix__"], [id*="__prefix__"], [for*="__prefix__"]').forEach(function (el) {
       if (el.name) el.name = el.name.replace(/__prefix__/g, totalForms);
@@ -206,23 +234,17 @@
       if (forAttr) el.setAttribute('for', forAttr.replace(/__prefix__/g, totalForms));
     });
 
-    // Limpar classes de erro do template clonado
-    newRow.classList.remove('bg-danger', 'bg-opacity-10');
-    newRow.classList.add('bg-light');
-
     container.appendChild(newRow);
     totalFormsInput.value = totalForms + 1;
     updateRemoveButtons();
   });
 
-  // -----------------------------------------------------------------
   // Remover alternativa (soft delete)
-  // -----------------------------------------------------------------
   container.addEventListener('click', function (e) {
     const btn = e.target.closest('.btn-remove-alternativa');
     if (!btn) return;
 
-    const row = btn.closest('.alternativa-row');
+    const row = btn.closest('.alternativa-card-item');
     const deleteInput = row.querySelector('.alternativa-delete');
 
     if (deleteInput) deleteInput.value = 'on';
@@ -230,15 +252,13 @@
     updateRemoveButtons();
   });
 
-  // -----------------------------------------------------------------
-  // Controle de botões
-  // -----------------------------------------------------------------
+  // Atualizar estado dos botões
   function updateRemoveButtons() {
     const visibleRows = container.querySelectorAll(
-      '.alternativa-row:not([style*="display: none"])'
+      '.alternativa-card-item:not([style*="display: none"])'
     );
     const buttons = container.querySelectorAll(
-      '.alternativa-row:not([style*="display: none"]) .btn-remove-alternativa'
+      '.alternativa-card-item:not([style*="display: none"]) .btn-remove-alternativa'
     );
 
     buttons.forEach(function (btn) {
@@ -248,9 +268,7 @@
     btnAdd.disabled = visibleRows.length >= MAX_ALTERNATIVAS;
   }
 
-  // -----------------------------------------------------------------
-  // Toggle: alternativas e critérios conforme tipo
-  // -----------------------------------------------------------------
+  // Alternar conforme tipo da questão
   function toggleByTipo() {
     const tipo = tipoSelect ? tipoSelect.value : '';
 
@@ -271,10 +289,8 @@
     toggleByTipo();
   }
 
-  // -----------------------------------------------------------------
-  // Marcar campos com erro como is-invalid
-  // -----------------------------------------------------------------
-  document.querySelectorAll('.invalid-feedback.d-block').forEach(function (el) {
+  // Aplicar estilo de erro aos campos inválidos
+  document.querySelectorAll('.invalid-feedback').forEach(function (el) {
     const input = el.previousElementSibling;
     if (input && (input.tagName === 'SELECT' || input.tagName === 'TEXTAREA' || input.tagName === 'INPUT')) {
       input.classList.add('is-invalid');

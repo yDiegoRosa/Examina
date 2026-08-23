@@ -1,0 +1,769 @@
+/* ==========================================================================
+   Examina — Design System Vanilla CSS 100% Puro (Zero Bootstrap)
+   Padrão Visual SaaS 2026 • Identidade Institucional FAETERJ-Rio / FAETEC
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Design Tokens & Variáveis CSS
+   -------------------------------------------------------------------------- */
+:root {
+  /* Identidade FAETERJ-Rio */
+  --fae-navy-950: #030D18;
+  --fae-navy-900: #061729;
+  --fae-navy-800: #0B2542;
+  --fae-navy-700: #103B66;
+  --fae-blue-primary: #0066CC;
+  --fae-blue-electric: #0080FF;
+  --fae-cyan-glow: #00D2FF;
+  --fae-gold: #F59E0B;
+  --fae-gold-hover: #D97706;
+  --fae-gold-subtle: #FEF3C7;
+
+  /* Superfícies & Neutros */
+  --bg-app: #F6F8FB;
+  --bg-surface: #FFFFFF;
+  --bg-surface-glass: rgba(255, 255, 255, 0.85);
+  --border-color: #E2E8F0;
+  --border-subtle: #EDF2F7;
+  --border-glow: rgba(0, 128, 255, 0.35);
+
+  /* Tipografia */
+  --text-main: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --text-dim: #94A3B8;
+
+  /* Semânticas */
+  --color-success: #10B981;
+  --color-success-bg: #ECFDF5;
+  --color-success-border: #A7F3D0;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #FFFBEB;
+  --color-danger: #EF4444;
+  --color-danger-bg: #FEF2F2;
+
+  /* Sombras & Profundidade */
+  --shadow-xs: 0 1px 2px 0 rgba(6, 23, 41, 0.03);
+  --shadow-sm: 0 2px 4px 0 rgba(6, 23, 41, 0.04);
+  --shadow-card: 0 6px 24px -4px rgba(6, 23, 41, 0.06), 0 2px 8px -2px rgba(6, 23, 41, 0.03);
+  --shadow-hover: 0 16px 36px -6px rgba(6, 23, 41, 0.1), 0 6px 16px -4px rgba(6, 23, 41, 0.04);
+  --shadow-glow: 0 4px 20px rgba(0, 128, 255, 0.3);
+  --shadow-gold: 0 4px 18px rgba(245, 158, 11, 0.35);
+
+  /* Raio dos cantos */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
+
+  /* Transição elástica */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition: all 0.22s var(--ease);
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & Tipografia Global
+   -------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg-app);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(0, 128, 255, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.04) 0px, transparent 45%),
+    radial-gradient(at 50% 100%, rgba(0, 210, 255, 0.03) 0px, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-main);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+p {
+  margin-bottom: 0.5rem;
+}
+
+a {
+  color: var(--fae-blue-primary);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+a:hover {
+  color: var(--fae-blue-electric);
+}
+
+/* --------------------------------------------------------------------------
+   3. Grid & Flexbox Utilities Nativo
+   -------------------------------------------------------------------------- */
+.container {
+  width: 100%;
+  max-width: 1220px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.justify-end { justify-content: flex-end; }
+.flex-1 { flex: 1 1 0%; }
+.flex-grow { flex-grow: 1; }
+
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+
+.col-span-12 { grid-column: span 12 / span 12; }
+.col-span-8 { grid-column: span 8 / span 8; }
+.col-span-6 { grid-column: span 6 / span 6; }
+.col-span-4 { grid-column: span 4 / span 4; }
+.col-span-3 { grid-column: span 3 / span 3; }
+.col-span-2 { grid-column: span 2 / span 2; }
+
+@media (max-width: 992px) {
+  .grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .col-span-8, .col-span-6, .col-span-4, .col-span-3 { grid-column: span 12 / span 12; }
+}
+
+@media (max-width: 640px) {
+  .grid-cols-4, .grid-cols-3, .grid-cols-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .container { padding-left: 1rem; padding-right: 1rem; }
+}
+
+.w-full { width: 100%; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-danger { color: var(--color-danger); }
+.text-success { color: var(--color-success); }
+.font-bold { font-weight: 700; }
+.font-extrabold { font-weight: 800; }
+.font-mono { font-family: monospace; }
+.small { font-size: 0.825rem; }
+.d-none { display: none !important; }
+
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.my-4 { margin-top: 1rem; margin-bottom: 1rem; }
+
+/* --------------------------------------------------------------------------
+   4. Navbar Flutuante com Frosted Glass
+   -------------------------------------------------------------------------- */
+.navbar-wrapper {
+  padding: 1rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.glass-nav {
+  background: rgba(6, 23, 41, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 1.4rem;
+  box-shadow: 0 12px 32px -4px rgba(3, 13, 24, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand-container {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-decoration: none;
+}
+
+.brand-icon-box {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(135deg, var(--fae-blue-electric) 0%, var(--fae-cyan-glow) 100%);
+  color: #FFFFFF;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 2px 10px rgba(0, 128, 255, 0.4);
+}
+
+.brand-title {
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.brand-badge {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid var(--fae-gold);
+  color: #FDE68A;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  list-style: none;
+}
+
+.nav-item-link {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: var(--transition);
+}
+
+.nav-item-link:hover,
+.nav-item-link.active {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.user-capsule {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  font-size: 0.825rem;
+  font-weight: 600;
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mobile-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #FFFFFF;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .mobile-toggle { display: block; }
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 0.5rem;
+    background: var(--fae-navy-900);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .nav-links.open { display: flex; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Hero Banner & Cards de Métricas
+   -------------------------------------------------------------------------- */
+.hero-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 2.25rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.hero-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--fae-blue-electric) 0%, var(--fae-cyan-glow) 100%);
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: var(--fae-blue-primary);
+  background: #EFF6FF;
+  border: 1px solid rgba(0, 102, 204, 0.18);
+  padding: 0.25rem 0.8rem;
+  border-radius: var(--radius-pill);
+}
+
+.metric-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.35rem 1.5rem;
+  box-shadow: var(--shadow-card);
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-glow);
+}
+
+.metric-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  flex-shrink: 0;
+}
+
+.metric-icon-primary { background: #EFF6FF; color: var(--fae-blue-primary); }
+.metric-icon-obj { background: #F0F9FF; color: #0284C7; }
+.metric-icon-dis { background: var(--fae-gold-subtle); color: var(--fae-gold); }
+.metric-icon-active { background: var(--color-success-bg); color: var(--color-success); }
+
+.metric-num {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.metric-text {
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.2rem;
+}
+
+/* --------------------------------------------------------------------------
+   6. Botões Contemporâneos
+   -------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  padding: 0.65rem 1.4rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--fae-blue-primary) 0%, var(--fae-blue-electric) 100%);
+  color: #FFFFFF !important;
+  box-shadow: var(--shadow-glow);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 128, 255, 0.4);
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--fae-gold) 0%, #FBBF24 100%);
+  color: var(--fae-navy-950) !important;
+  box-shadow: var(--shadow-gold);
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.45);
+}
+
+.btn-outline {
+  background: #FFFFFF;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-color);
+}
+
+.btn-outline:hover {
+  background: #F8FAFC;
+  border-color: var(--fae-blue-electric);
+  color: var(--fae-blue-primary) !important;
+  transform: translateY(-1px);
+}
+
+.btn-icon-circle {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-icon-circle:hover {
+  background: #F1F5F9;
+  color: var(--fae-blue-primary);
+  border-color: var(--fae-blue-electric);
+}
+
+.btn-danger-circle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 1px solid #FECACA;
+  color: var(--color-danger);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-danger-circle:hover {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  transform: scale(1.05);
+}
+
+/* --------------------------------------------------------------------------
+   7. Form Controls Customizados (Inputs, Selects, Switches)
+   -------------------------------------------------------------------------- */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.45rem;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-main);
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  transition: var(--transition);
+}
+
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748B'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1.15em;
+  padding-right: 2.5rem;
+  cursor: pointer;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--fae-blue-electric);
+  box-shadow: 0 0 0 4px rgba(0, 128, 255, 0.15);
+  outline: none;
+}
+
+.form-input.is-invalid,
+.form-select.is-invalid,
+.form-textarea.is-invalid {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.invalid-feedback {
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+  display: block;
+}
+
+.form-help {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+}
+
+/* Custom Switch */
+.switch-container {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.form-checkbox {
+  width: 1.3rem;
+  height: 1.3rem;
+  accent-color: var(--color-success);
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   8. Cards & Superfícies Modulares
+   -------------------------------------------------------------------------- */
+.card-surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.card-surface:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.card-header {
+  padding: 1.25rem 1.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-header.header-primary {
+  background: linear-gradient(90deg, #F8FAFC 0%, #FFFFFF 100%);
+  border-left: 4px solid var(--fae-blue-electric);
+}
+
+.card-header.header-success {
+  background: linear-gradient(90deg, #F8FAFC 0%, #FFFFFF 100%);
+  border-left: 4px solid var(--color-success);
+}
+
+.card-body {
+  padding: 1.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   9. Alternativa Cards (Formset)
+   -------------------------------------------------------------------------- */
+.alternativa-card-item {
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  transition: var(--transition);
+}
+
+.alternativa-card-item:hover {
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow-card);
+}
+
+.alternativa-card-item.is-correct {
+  border-color: var(--color-success);
+  background: linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%);
+  box-shadow: 0 0 0 2px var(--color-success-border);
+}
+
+/* --------------------------------------------------------------------------
+   10. Badges Semânticos (Pills)
+   -------------------------------------------------------------------------- */
+.badge-pill {
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  letter-spacing: 0.02em;
+}
+
+.badge-pill-obj { background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+.badge-pill-dis { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+.badge-pill-facil { background: #DCFCE7; color: #15803D; border: 1px solid #BBF7D0; }
+.badge-pill-medio { background: #EFF6FF; color: #1D4ED8; border: 1px solid #DBEAFE; }
+.badge-pill-dificil { background: #FEE2E2; color: #B91C1C; border: 1px solid #FECACA; }
+.badge-pill-active { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
+.badge-pill-inactive { background: #F1F5F9; color: #64748B; border: 1px solid #E2E8F0; }
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* --------------------------------------------------------------------------
+   11. Tabela Minimalista Estilo SaaS
+   -------------------------------------------------------------------------- */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.saas-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.saas-table th {
+  background: #F8FAFC;
+  color: var(--text-secondary);
+  font-size: 0.775rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1.15rem 1.4rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.saas-table td {
+  padding: 1.25rem 1.4rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.925rem;
+  background-color: #FFFFFF;
+}
+
+.saas-table tbody tr {
+  transition: var(--transition);
+}
+
+.saas-table tbody tr:hover td {
+  background-color: #F8FAFC;
+}
+
+/* --------------------------------------------------------------------------
+   12. Alertas & Toasts
+   -------------------------------------------------------------------------- */
+.alert-toast {
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.4rem;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  transition: var(--transition);
+}
+
+.alert-toast-success { border-left: 5px solid var(--color-success); }
+.alert-toast-danger { border-left: 5px solid var(--color-danger); }
+.alert-toast-info { border-left: 5px solid var(--fae-blue-primary); }
+
+.alert-close {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   13. Footer Minimalista
+   -------------------------------------------------------------------------- */
+.footer-minimal {
+  background: transparent;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 2.25rem 0;
+  margin-top: auto;
+}

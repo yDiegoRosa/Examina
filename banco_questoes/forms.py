@@ -8,7 +8,7 @@ from .models import Alternativa, Questao
 # Alternativa — Form + FormSet
 # ---------------------------------------------------------------------------
 class AlternativaForm(forms.ModelForm):
-    """Form para cada alternativa individual."""
+    """Form para cada alternativa individual com widgets Vanilla CSS."""
 
     class Meta:
         model = Alternativa
@@ -16,17 +16,17 @@ class AlternativaForm(forms.ModelForm):
         widgets = {
             'letra': forms.Select(
                 choices=[('', '---')] + [(letra, letra) for letra in 'ABCDE'],
-                attrs={'class': 'form-select form-select-sm'},
+                attrs={'class': 'form-select select-letter'},
             ),
             'texto': forms.Textarea(
                 attrs={
-                    'class': 'form-control form-control-sm',
+                    'class': 'form-textarea textarea-sm',
                     'rows': 2,
-                    'placeholder': 'Texto da alternativa…',
+                    'placeholder': 'Digite o conteúdo desta alternativa…',
                 },
             ),
             'correta': forms.CheckboxInput(
-                attrs={'class': 'form-check-input'},
+                attrs={'class': 'form-checkbox'},
             ),
         }
 
@@ -72,11 +72,11 @@ class QuestaoForm(forms.ModelForm):
             'tipo': 'Tipo de questão',
             'dificuldade': 'Nível de dificuldade',
             'disciplina': 'Disciplina',
-            'topico': 'Tópico',
-            'enunciado': 'Enunciado',
-            'criterios_correcao': 'Critérios de correção',
-            'tags': 'Tags',
-            'ativo': 'Questão ativa',
+            'topico': 'Tópico curricular',
+            'enunciado': 'Enunciado da questão',
+            'criterios_correcao': 'Critérios de correção / Gabarito',
+            'tags': 'Tags e palavras-chave',
+            'ativo': 'Questão ativa no acervo',
         }
         widgets = {
             'tipo': forms.Select(attrs={'class': 'form-select'}),
@@ -85,29 +85,28 @@ class QuestaoForm(forms.ModelForm):
             'topico': forms.Select(attrs={'class': 'form-select'}),
             'enunciado': forms.Textarea(
                 attrs={
-                    'class': 'form-control',
-                    'rows': 5,
-                    'placeholder': 'Digite o enunciado da questão…',
+                    'class': 'form-textarea',
+                    'rows': 4,
+                    'placeholder': 'Redija aqui o enunciado completo da questão…',
                 },
             ),
             'criterios_correcao': forms.Textarea(
                 attrs={
-                    'class': 'form-control',
-                    'rows': 4,
-                    'placeholder': 'Descreva os critérios de correção…',
+                    'class': 'form-textarea',
+                    'rows': 3,
+                    'placeholder': 'Descreva detalhadamente os critérios de avaliação e pontuação…',
                 },
             ),
-            'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'ativo': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Tags widget vem do taggit — aplicar classe via init
         if 'tags' in self.fields:
             self.fields['tags'].widget.attrs.update(
                 {
-                    'class': 'form-control',
-                    'placeholder': 'ex.: enem, geometria, 2024',
+                    'class': 'form-input',
+                    'placeholder': 'Separe por vírgula. Ex.: enem, algoritmos, 2026',
                 }
             )
 

@@ -41,11 +41,23 @@ def questao_list(request):
     if busca:
         qs = qs.filter(enunciado__icontains=busca)
 
+    # Métricas gerais do acervo
+    total_geral = Questao.objects.count()
+    total_obj = Questao.objects.filter(tipo=Questao.Tipo.OBJETIVA).count()
+    total_dis = Questao.objects.filter(tipo=Questao.Tipo.DISCURSIVA).count()
+    total_ativas = Questao.objects.filter(ativo=True).count()
+
     return render(
         request,
         'banco_questoes/questao_list.html',
         {
             'questoes': qs,
+            'metricas': {
+                'total': total_geral,
+                'objetivas': total_obj,
+                'discursivas': total_dis,
+                'ativas': total_ativas,
+            },
             'filtros': {
                 'tipo': tipo or '',
                 'dificuldade': dificuldade or '',
