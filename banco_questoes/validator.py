@@ -1,7 +1,22 @@
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from .models import Questao
+
+
+def normalize_enunciado(text: str) -> str:
+    """
+    Normaliza o enunciado para comparação uniforme.
+
+    - Converte para minúsculas
+    - Comprime múltiplos espaços e quebras de linha em espaço único
+    - Remove espaços nas bordas
+    """
+    if not text:
+        return ''
+    cleaned = re.sub(r'\s+', ' ', text.strip())
+    return cleaned.lower()
 
 
 @dataclass
@@ -32,7 +47,7 @@ class CSVValidationReport:
 
 
 class CSVQuestaoValidator:
-    """Validador de regras de negócio e integridade para linhas de questões de CSV."""
+    """Validador de regras de negócio, integridade e duplicidade para questões de CSV."""
 
     TIPOS_VALIDOS = {
         'OBJ': Questao.Tipo.OBJETIVA,
@@ -56,7 +71,7 @@ class CSVQuestaoValidator:
     @classmethod
     def validate_row(cls, row: dict[str, Any]) -> RowValidationResult:
         """
-        Aplica todas as regras de validação a uma linha estruturada pelo parser.
+        Aplica todas as regras sintáticas e condicionais a uma linha estruturada pelo parser.
 
         Retorna uma instância de RowValidationResult contendo erros e dados limpos.
         """
@@ -70,6 +85,7 @@ class CSVQuestaoValidator:
             errors.append(f'Linha {linha_num}: O campo "enunciado" é obrigatório.')
         else:
             cleaned['enunciado'] = enunciado
+            cleaned['enunciado_normalizado'] = normalize_enunciado(enunciado)
 
         # 2. Validação de Disciplina
         disciplina = (row.get('disciplina') or '').strip()
@@ -186,17 +202,86 @@ class CSVQuestaoValidator:
         cleaned['correta'] = None
 
     @classmethod
-    def validate_rows(cls, parsed_rows: list[dict[str, Any]]) -> CSVValidationReport:
-        """Valida uma lista de linhas extraídas pelo parser e gera o relatório consolidado."""
+    def find_db_duplicate(cls, enunciado_normalizado: str) -> Questao | None:
+        """
+        Busca no banco de dados se já existe questão com enunciado idêntico normalizado.
+
+        Usa consulta case-insensitive direta e verificação de espaços.
+        """
+        if not enunciado_normalizado:
+            return None
+
+        # 1. Busca rápida exata/case-insensitive
+        match = Questao.objects.filter(enunciado__iexact=enunciado_normalizado).first()
+        if match:
+            return match
+
+        # 2. Busca por candidatos para comparar normalizados caso espaços variem
+        prefixo = enunciado_normalizado[:40] if len(enunciado_normalizado) >= 40 else enunciado_normalizado
+        candidatos = Questao.objects.filter(enunciado__icontains=prefixo).only('id', 'enunciado')[:20]
+        for c in candidatos:
+            if normalize_enunciado(c.enunciado) == enunciado_normalizado:
+                return c
+
+        return None
+
+    @classmethod
+    def validate_rows(
+        cls,
+        parsed_rows: list[dict[str, Any]],
+        check_db_duplicates: bool = True,
+    ) -> CSVValidationReport:
+        """
+        Valida uma lista de linhas extraídas pelo parser, aplicando:
+        1. Validação de formato e regras por linha.
+        2. Detecção de duplicidade intra-arquivo (mesmo CSV).
+        3. Detecção de duplicidade contra o banco de dados.
+
+        Gera o relatório consolidado de validação.
+        """
         report = CSVValidationReport(total_processadas=len(parsed_rows))
+        seen_enunciados_no_arquivo: dict[str, int] = {}
 
         for row in parsed_rows:
             result = cls.validate_row(row)
-            if result.is_valid:
-                report.total_validas += 1
-                report.linhas_validas.append(result)
-            else:
+
+            # Se a linha já tiver erros de sintaxe básicos, não valida duplicata
+            if not result.is_valid:
                 report.total_invalidas += 1
                 report.linhas_invalidas.append(result)
+                continue
+
+            enunciado_norm = result.cleaned_data.get('enunciado_normalizado', '')
+
+            # A. Verificação de duplicidade Intra-Arquivo
+            if enunciado_norm in seen_enunciados_no_arquivo:
+                linha_anterior = seen_enunciados_no_arquivo[enunciado_norm]
+                result.errors.append(
+                    f'Linha {result.linha}: Enunciado duplicado no próprio arquivo (idêntico ao da Linha {linha_anterior}).'
+                )
+                result.is_valid = False
+                result.cleaned_data = {}
+                report.total_invalidas += 1
+                report.linhas_invalidas.append(result)
+                continue
+
+            seen_enunciados_no_arquivo[enunciado_norm] = result.linha
+
+            # B. Verificação de duplicidade contra o Banco de Dados
+            if check_db_duplicates:
+                existente = cls.find_db_duplicate(enunciado_norm)
+                if existente:
+                    result.errors.append(
+                        f'Linha {result.linha}: Questão duplicada. Já existe uma questão cadastrada no banco com este mesmo enunciado (ID Q{existente.pk}).'
+                    )
+                    result.is_valid = False
+                    result.cleaned_data = {}
+                    report.total_invalidas += 1
+                    report.linhas_invalidas.append(result)
+                    continue
+
+            # Linha 100% válida e não-duplicada
+            report.total_validas += 1
+            report.linhas_validas.append(result)
 
         return report

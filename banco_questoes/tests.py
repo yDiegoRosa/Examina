@@ -264,3 +264,82 @@ class CSVQuestaoValidatorTest(TestCase):
         self.assertEqual(len(report.linhas_validas), 1)
         self.assertEqual(len(report.linhas_invalidas), 1)
         self.assertEqual(report.linhas_invalidas[0].linha, 3)
+
+    def test_intra_file_deduplication_blocks_repeated_rows(self):
+        """Verifica se linhas repetidas no mesmo CSV são detectadas e bloqueadas."""
+        rows = [
+            {
+                'linha': 2,
+                'enunciado': 'Qual é a velocidade da luz?',
+                'tipo': 'OBJ',
+                'disciplina': 'Física',
+                'dificuldade': 'M',
+                'alternativas': [
+                    {'letra': 'A', 'texto': '300.000 km/s', 'correta': True},
+                    {'letra': 'B', 'texto': '150.000 km/s', 'correta': False},
+                ],
+                'correta': 'A',
+            },
+            {
+                'linha': 3,
+                # Enunciado idêntico com espaços extras e maiúsculas variadas
+                'enunciado': '   QUAL É A   VELOCIDADE DA LUZ?   ',
+                'tipo': 'OBJ',
+                'disciplina': 'Física',
+                'dificuldade': 'M',
+                'alternativas': [
+                    {'letra': 'A', 'texto': '300.000 km/s', 'correta': True},
+                    {'letra': 'B', 'texto': '150.000 km/s', 'correta': False},
+                ],
+                'correta': 'A',
+            },
+        ]
+        report = CSVQuestaoValidator.validate_rows(rows, check_db_duplicates=False)
+
+        self.assertEqual(report.total_processadas, 2)
+        self.assertEqual(report.total_validas, 1)
+        self.assertEqual(report.total_invalidas, 1)
+        self.assertFalse(report.is_valid)
+
+        invalid_row = report.linhas_invalidas[0]
+        self.assertEqual(invalid_row.linha, 3)
+        self.assertTrue(any('Enunciado duplicado no próprio arquivo' in err for err in invalid_row.errors))
+        self.assertTrue(any('Linha 2' in err for err in invalid_row.errors))
+
+    def test_database_deduplication_blocks_existing_question(self):
+        """Verifica se questão cujo enunciado já existe no banco é bloqueada."""
+        from .models import Disciplina
+
+        disc = Disciplina.objects.create(nome='Física Geral')
+        questao_existente = Questao.objects.create(
+            disciplina=disc,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.MEDIO,
+            enunciado='Qual é a constante gravitacional na Terra?',
+        )
+
+        rows = [
+            {
+                'linha': 2,
+                # Enunciado idêntico ao já existente no banco (com espaços e case alterados)
+                'enunciado': '  qual é a constante gravitacional na terra?  ',
+                'tipo': 'OBJ',
+                'disciplina': 'Física Geral',
+                'dificuldade': 'M',
+                'alternativas': [
+                    {'letra': 'A', 'texto': '9.8 m/s²', 'correta': True},
+                    {'letra': 'B', 'texto': '10.5 m/s²', 'correta': False},
+                ],
+                'correta': 'A',
+            }
+        ]
+        report = CSVQuestaoValidator.validate_rows(rows, check_db_duplicates=True)
+
+        self.assertEqual(report.total_processadas, 1)
+        self.assertEqual(report.total_validas, 0)
+        self.assertEqual(report.total_invalidas, 1)
+        self.assertFalse(report.is_valid)
+
+        invalid_row = report.linhas_invalidas[0]
+        self.assertTrue(any('Já existe uma questão cadastrada no banco' in err for err in invalid_row.errors))
+        self.assertTrue(any(f'Q{questao_existente.pk}' in err for err in invalid_row.errors))
