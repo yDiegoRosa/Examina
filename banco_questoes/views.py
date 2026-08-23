@@ -1,7 +1,9 @@
+import csv
 import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import AlternativaFormSet, QuestaoForm
@@ -138,3 +140,65 @@ def questao_update(request, pk):
             'questao': questao,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Download do CSV Modelo
+# ---------------------------------------------------------------------------
+@login_required
+def download_modelo_csv(_request):
+    """Gera e faz o download do arquivo CSV modelo de importação de questões."""
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="modelo_importacao_questoes.csv"'
+
+    # BOM UTF-8 para compatibilidade direta com Microsoft Excel em PT-BR
+    response.write('\ufeff')
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'enunciado',
+        'tipo',
+        'disciplina',
+        'topico',
+        'dificuldade',
+        'tags',
+        'alt_a',
+        'alt_b',
+        'alt_c',
+        'alt_d',
+        'alt_e',
+        'correta',
+        'criterios_correcao',
+    ])
+    writer.writerow([
+        'Qual é o valor de x na equação 2x + 6 = 14?',
+        'OBJ',
+        'Matemática',
+        'Álgebra',
+        'F',
+        'enem;algebra;equacoes',
+        'x = 3',
+        'x = 4',
+        'x = 5',
+        'x = 6',
+        'x = 7',
+        'B',
+        '',
+    ])
+    writer.writerow([
+        'Explique o processo de fotossíntese destacando a fase clara e a fase escura.',
+        'DIS',
+        'Biologia',
+        'Botânica',
+        'M',
+        'biologia;fotossintese;fisiologia',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        'O aluno deve mencionar a absorção de luz pelos pigmentos fotossintetizantes na fase clara (tilacóides) e a fixação de CO2 no Ciclo de Calvin na fase escura (estroma).',
+    ])
+
+    return response

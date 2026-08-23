@@ -5,11 +5,16 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1 class="h3 mb-0">📚 Banco de Questões</h1>
-  {% if perms.banco_questoes.add_questao %}
-  <a href="{% url 'banco_questoes:questao_create' %}" class="btn btn-primary">
-    + Nova Questão
-  </a>
-  {% endif %}
+  <div class="d-flex gap-2">
+    <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline-secondary" title="Baixar planilha modelo para importação em lote">
+      📥 Baixar Modelo CSV
+    </a>
+    {% if perms.banco_questoes.add_questao %}
+    <a href="{% url 'banco_questoes:questao_create' %}" class="btn btn-primary">
+      + Nova Questão
+    </a>
+    {% endif %}
+  </div>
 </div>
 
 {# ——— Filtros ——— #}
