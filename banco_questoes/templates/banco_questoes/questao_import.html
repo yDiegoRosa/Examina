@@ -1,0 +1,236 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Importação em Lote — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div style="max-width: 1100px; margin: 0 auto;">
+
+  <!-- Hero Banner -->
+  <div class="hero-card mb-4">
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="hero-tag">
+          <i class="bi bi-file-earmark-arrow-up-fill"></i> Módulo 1 • Importação em Lote (RF02)
+        </span>
+      </div>
+      <h1 class="mb-1">Importação de Questões via CSV</h1>
+      <p class="text-secondary" style="max-width: 620px;">
+        Envie um arquivo formatado com questões objetivas e discursivas para inserção rápida e automatizada no acervo.
+      </p>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline">
+        <i class="bi bi-download" style="color: var(--fae-blue-primary);"></i> Baixar Modelo CSV
+      </a>
+      <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">
+        <i class="bi bi-arrow-left"></i> Voltar ao Acervo
+      </a>
+    </div>
+  </div>
+
+  {% if not relatorio %}
+  <!-- Card de Upload de Arquivo -->
+  <div class="card-surface mb-4">
+    <div class="card-header header-primary">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-cloud-arrow-up-fill text-primary" style="font-size: 1.2rem; color: var(--fae-blue-electric);"></i>
+        <span class="font-bold">Selecione o Arquivo CSV para Processamento</span>
+      </div>
+      <span class="badge-pill badge-pill-medio font-bold">Padrão 13 Colunas</span>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="form-import-csv">
+        {% csrf_token %}
+
+        <div style="border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 2.5rem 1.5rem; text-align: center; background: #FAFBFD; transition: var(--transition);" id="drop-zone">
+          <div class="text-primary mb-3" style="font-size: 3rem; color: var(--fae-blue-electric); opacity: 0.85;">
+            <i class="bi bi-filetype-csv"></i>
+          </div>
+          <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Arraste seu arquivo CSV ou clique para escolher</div>
+          <p class="text-muted small mb-4" style="max-width: 450px; margin-left: auto; margin-right: auto;">
+            Codificações suportadas: UTF-8 (com ou sem BOM) e Latin-1. Separadores aceitos: vírgula (<code>,</code>) ou ponto-e-vírgula (<code>;</code>).
+          </p>
+
+          <input type="file" name="csv_file" id="id_csv_file" accept=".csv" class="form-input" style="max-width: 380px; margin: 0 auto; display: block;" required>
+        </div>
+
+        <div class="flex items-center justify-between mt-4">
+          <div class="flex items-center gap-2 text-muted small">
+            <i class="bi bi-shield-check" style="color: var(--color-success); font-size: 1.1rem;"></i>
+            <span>Validação sintática e detecção de duplicidade são executadas automaticamente antes de salvar.</span>
+          </div>
+          <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
+            <i class="bi bi-upload"></i> Processar e Importar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Card com Diretrizes de Formatação do CSV -->
+  <div class="card-surface">
+    <div class="card-header">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-info-circle-fill" style="color: var(--fae-gold);"></i>
+        <span class="font-bold">Estrutura das 13 Colunas do CSV</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="grid grid-cols-2 gap-4">
+        <div style="background: #F8FAFC; padding: 1rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div class="font-bold text-main mb-1 flex items-center gap-2">
+            <span class="badge-pill badge-pill-obj">Objetivas</span> Questões de Múltipla Escolha
+          </div>
+          <p class="text-muted small mb-0">
+            Preencha <code>enunciado</code>, <code>tipo=OBJ</code>, <code>disciplina</code>, <code>dificuldade</code>, alternativas em <code>alt_a</code> até <code>alt_e</code> (mínimo 2) e indique a letra do gabarito em <code>correta</code>.
+          </p>
+        </div>
+
+        <div style="background: #F8FAFC; padding: 1rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div class="font-bold text-main mb-1 flex items-center gap-2">
+            <span class="badge-pill badge-pill-dis">Discursivas</span> Questões Abertas
+          </div>
+          <p class="text-muted small mb-0">
+            Preencha <code>enunciado</code>, <code>tipo=DIS</code>, <code>disciplina</code>, <code>dificuldade</code> e descreva os critérios pedagógicos de pontuação no campo <code>criterios_correcao</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- =====================================================================
+       RELATÓRIO PÓS-UPLOAD DE INCONSISTÊNCIAS E IMPORTAÇÃO
+       ===================================================================== -->
+  <div class="grid grid-cols-3 gap-4 mb-4">
+    <div class="metric-card">
+      <div class="metric-icon-box metric-icon-primary">
+        <i class="bi bi-file-earmark-spreadsheet-fill"></i>
+      </div>
+      <div>
+        <div class="metric-num">{{ relatorio.total_processadas }}</div>
+        <div class="metric-text">Linhas Processadas</div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-box metric-icon-active">
+        <i class="bi bi-check-circle-fill"></i>
+      </div>
+      <div>
+        <div class="metric-num text-success">{{ relatorio.total_sucesso }}</div>
+        <div class="metric-text">Importadas com Sucesso</div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-box" style="background: var(--color-danger-bg); color: var(--color-danger);">
+        <i class="bi bi-x-circle-fill"></i>
+      </div>
+      <div>
+        <div class="metric-num text-danger">{{ relatorio.total_rejeitadas }}</div>
+        <div class="metric-text">Rejeitadas / Inconsistentes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela Linha a Linha do Resultado -->
+  <div class="card-surface mb-4">
+    <div class="card-header header-primary">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-clipboard-data-fill" style="color: var(--fae-blue-electric);"></i>
+        <span class="font-bold">Relatório Detalhado Linha a Linha</span>
+      </div>
+      <div class="flex gap-2">
+        <a href="{% url 'banco_questoes:questao_import' %}" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">
+          <i class="bi bi-arrow-repeat"></i> Nova Importação
+        </a>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="saas-table">
+        <thead>
+          <tr>
+            <th style="width: 80px;">Linha</th>
+            <th style="width: 140px;">Status</th>
+            <th style="width: 110px;">Tipo</th>
+            <th style="width: 160px;">Disciplina</th>
+            <th>Enunciado</th>
+            <th style="min-width: 260px;">Resultado / Motivo de Rejeição</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in relatorio.linhas %}
+          <tr {% if item.status == 'REJEITADA' %}style="background: #FFFDFD;"{% endif %}>
+            <td>
+              <span class="font-bold font-mono text-muted">Linha {{ item.linha }}</span>
+            </td>
+            <td>
+              {% if item.status == 'SUCESSO' %}
+              <span class="badge-pill badge-pill-active">
+                <i class="bi bi-check-lg"></i> Importada
+              </span>
+              {% else %}
+              <span class="badge-pill badge-pill-dificil">
+                <i class="bi bi-x-lg"></i> Rejeitada
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.tipo == 'OBJ' %}
+              <span class="badge-pill badge-pill-obj">OBJ</span>
+              {% elif item.tipo == 'DIS' %}
+              <span class="badge-pill badge-pill-dis">DIS</span>
+              {% else %}
+              <span class="text-muted small">{{ item.tipo|default:"—" }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="font-bold" style="color: var(--text-main);">{{ item.disciplina|default:"—" }}</span>
+            </td>
+            <td>
+              <div class="font-bold text-main" style="max-width: 380px;">
+                {{ item.enunciado|default:"(Enunciado em branco)"|truncatewords:16 }}
+              </div>
+            </td>
+            <td>
+              {% if item.status == 'SUCESSO' %}
+              <div class="flex items-center gap-2">
+                <span class="badge-pill badge-pill-active">
+                  <i class="bi bi-check-all"></i> Cadastrada como <strong>Q{{ item.questao_id }}</strong>
+                </span>
+                <a href="{% url 'banco_questoes:questao_update' pk=item.questao_id %}" class="btn-icon-circle" style="width: 28px; height: 28px; font-size: 0.75rem;" title="Ver/Editar Questão">
+                  <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+              {% else %}
+              <div style="background: var(--color-danger-bg); border-left: 3px solid var(--color-danger); padding: 0.5rem 0.75rem; border-radius: var(--radius-xs);">
+                {% for err in item.erros %}
+                <div class="small text-danger font-bold flex items-start gap-1 mb-1">
+                  <i class="bi bi-exclamation-octagon-fill" style="flex-shrink: 0; margin-top: 2px;"></i>
+                  <span>{{ err }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flex gap-3 mb-6">
+    <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-primary">
+      <i class="bi bi-grid-fill"></i> Ir para o Acervo de Questões
+    </a>
+    <a href="{% url 'banco_questoes:questao_import' %}" class="btn btn-outline">
+      <i class="bi bi-upload"></i> Importar Outro Arquivo CSV
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

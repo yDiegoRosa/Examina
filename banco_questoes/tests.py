@@ -343,3 +343,80 @@ class CSVQuestaoValidatorTest(TestCase):
         invalid_row = report.linhas_invalidas[0]
         self.assertTrue(any('Já existe uma questão cadastrada no banco' in err for err in invalid_row.errors))
         self.assertTrue(any(f'Q{questao_existente.pk}' in err for err in invalid_row.errors))
+
+
+class QuestaoImportViewTest(TestCase):
+    """Testes de integração da view de importação e relatório pós-upload."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Permission, User
+
+        self.user = User.objects.create_user(username='docente_test', password='secret_password')  # noqa: S106
+        perm = Permission.objects.get(codename='add_questao')
+        self.user.user_permissions.add(perm)
+        self.client.login(username='docente_test', password='secret_password')  # noqa: S106
+
+    def test_import_page_renders_get(self):
+        """Verifica se a tela de upload é renderizada com sucesso via GET."""
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:questao_import')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Importação de Questões via CSV')
+        self.assertContains(response, 'Baixar Modelo CSV')
+
+    def test_import_csv_success_persists_and_renders_report(self):
+        """Verifica persistência de questões e exibição de relatório pós-upload."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        csv_content = (
+            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
+            'Qual é a capital da França?,OBJ,Geografia,Europa,F,geografia;europa,Londres,Paris,Berlim,Madrid,,B,\n'
+            'Discorra sobre a Revolução Industrial.,DIS,História,Idade Contemporânea,M,historia;revolucao,,,,,,,Destacar a transição da manufatura para maquinofatura.\n'
+        ).encode()
+
+        uploaded_file = SimpleUploadedFile(
+            'questoes_novas.csv',
+            csv_content,
+            content_type='text/csv',
+        )
+
+        url = reverse('banco_questoes:questao_import')
+        response = self.client.post(url, {'csv_file': uploaded_file})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Relatório Detalhado Linha a Linha')
+        self.assertContains(response, 'Importadas com Sucesso')
+        self.assertContains(response, 'Qual é a capital da França?')
+        self.assertContains(response, 'Discorra sobre a Revolução Industrial.')
+
+        # Confirma que foram salvas no banco
+        self.assertEqual(Questao.objects.filter(enunciado__icontains='França').count(), 1)
+        self.assertEqual(Questao.objects.filter(enunciado__icontains='Revolução Industrial').count(), 1)
+
+    def test_import_csv_with_inconsistencies_shows_rejection_reasons(self):
+        """Verifica se linhas inválidas geram relatório com motivos claros de rejeição."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        csv_content = (
+            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
+            'Questão Sem Disciplina,OBJ,,Geral,F,tag1,Alt A,Alt B,,,,A,\n'
+            'Questão Objetiva Sem Gabarito,OBJ,Matemática,Álgebra,F,tag2,Alt A,Alt B,,,,,\n'
+        ).encode()
+
+        uploaded_file = SimpleUploadedFile(
+            'questoes_invalidas.csv',
+            csv_content,
+            content_type='text/csv',
+        )
+
+        url = reverse('banco_questoes:questao_import')
+        response = self.client.post(url, {'csv_file': uploaded_file})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Rejeitadas / Inconsistentes')
+        self.assertContains(response, 'O campo &quot;disciplina&quot; é obrigatório')
+        self.assertContains(response, 'O campo &quot;correta&quot; é obrigatório')
