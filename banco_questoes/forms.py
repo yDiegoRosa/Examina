@@ -27,7 +27,7 @@ AlternativaFormSet = inlineformset_factory(
     form=AlternativaForm,
     min_num=2,
     max_num=5,
-    extra=4,
+    extra=2,
     validate_min=True,
     can_delete=True,
 )
