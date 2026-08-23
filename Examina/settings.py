@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     # Third-party
     'simple_history',
     'taggit',
+    'django_filters',
     # Local apps
     'banco_questoes',
 ]
