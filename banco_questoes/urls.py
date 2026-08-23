@@ -5,6 +5,7 @@ from . import views
 app_name = 'banco_questoes'
 
 urlpatterns = [
+    path('questoes/', views.questao_list, name='questao_list'),
     path('questoes/nova/', views.questao_create, name='questao_create'),
     path('questoes/<int:pk>/editar/', views.questao_update, name='questao_update'),
 ]

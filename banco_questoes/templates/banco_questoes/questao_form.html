@@ -5,12 +5,18 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-9">
-    <h1 class="h3 mb-4">{{ titulo }}</h1>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">{{ titulo }}</h1>
+      <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline-secondary btn-sm">
+        ← Voltar à lista
+      </a>
+    </div>
 
     {% if form.non_field_errors %}
     <div class="alert alert-danger">
       {% for error in form.non_field_errors %}
-      <p class="mb-0">{{ error }}</p>
+      <p class="mb-0">⚠ {{ error }}</p>
       {% endfor %}
     </div>
     {% endif %}
@@ -20,74 +26,92 @@
 
       {# ——— Dados da Questão ——— #}
       <div class="card mb-4">
-        <div class="card-header"><strong>Dados da Questão</strong></div>
+        <div class="card-header bg-primary bg-opacity-10">
+          <strong>📋 Dados da Questão</strong>
+        </div>
         <div class="card-body">
           <div class="row g-3">
 
             <div class="col-md-4">
-              <label for="{{ form.tipo.id_for_label }}" class="form-label">Tipo</label>
+              <label for="{{ form.tipo.id_for_label }}" class="form-label">
+                {{ form.tipo.label }} <span class="text-danger">*</span>
+              </label>
               {{ form.tipo }}
               {% if form.tipo.errors %}
-              <div class="text-danger small">{{ form.tipo.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.tipo.errors|join:", " }}</div>
               {% endif %}
             </div>
 
             <div class="col-md-4">
-              <label for="{{ form.dificuldade.id_for_label }}" class="form-label">Dificuldade</label>
+              <label for="{{ form.dificuldade.id_for_label }}" class="form-label">
+                {{ form.dificuldade.label }} <span class="text-danger">*</span>
+              </label>
               {{ form.dificuldade }}
               {% if form.dificuldade.errors %}
-              <div class="text-danger small">{{ form.dificuldade.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.dificuldade.errors|join:", " }}</div>
               {% endif %}
             </div>
 
             <div class="col-md-4">
-              <div class="form-check mt-4">
+              <label class="form-label d-block">&nbsp;</label>
+              <div class="form-check">
                 {{ form.ativo }}
-                <label class="form-check-label" for="{{ form.ativo.id_for_label }}">Ativo</label>
+                <label class="form-check-label" for="{{ form.ativo.id_for_label }}">
+                  {{ form.ativo.label }}
+                </label>
               </div>
             </div>
 
             <div class="col-md-6">
-              <label for="{{ form.disciplina.id_for_label }}" class="form-label">Disciplina</label>
+              <label for="{{ form.disciplina.id_for_label }}" class="form-label">
+                {{ form.disciplina.label }} <span class="text-danger">*</span>
+              </label>
               {{ form.disciplina }}
               {% if form.disciplina.errors %}
-              <div class="text-danger small">{{ form.disciplina.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.disciplina.errors|join:", " }}</div>
               {% endif %}
             </div>
 
             <div class="col-md-6">
-              <label for="{{ form.topico.id_for_label }}" class="form-label">Tópico</label>
+              <label for="{{ form.topico.id_for_label }}" class="form-label">
+                {{ form.topico.label }}
+              </label>
               {{ form.topico }}
               {% if form.topico.errors %}
-              <div class="text-danger small">{{ form.topico.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.topico.errors|join:", " }}</div>
               {% endif %}
+              <div class="form-text">Opcional. Deve pertencer à disciplina selecionada.</div>
             </div>
 
             <div class="col-12">
-              <label for="{{ form.enunciado.id_for_label }}" class="form-label">Enunciado</label>
+              <label for="{{ form.enunciado.id_for_label }}" class="form-label">
+                {{ form.enunciado.label }} <span class="text-danger">*</span>
+              </label>
               {{ form.enunciado }}
               {% if form.enunciado.errors %}
-              <div class="text-danger small">{{ form.enunciado.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.enunciado.errors|join:", " }}</div>
               {% endif %}
             </div>
 
             <div class="col-12" id="criterios-wrapper">
               <label for="{{ form.criterios_correcao.id_for_label }}" class="form-label">
-                Critérios de Correção
+                {{ form.criterios_correcao.label }}
               </label>
               {{ form.criterios_correcao }}
               <div class="form-text">Obrigatório para questões discursivas.</div>
               {% if form.criterios_correcao.errors %}
-              <div class="text-danger small">{{ form.criterios_correcao.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.criterios_correcao.errors|join:", " }}</div>
               {% endif %}
             </div>
 
             <div class="col-12">
-              <label for="{{ form.tags.id_for_label }}" class="form-label">Tags</label>
+              <label for="{{ form.tags.id_for_label }}" class="form-label">
+                {{ form.tags.label }}
+              </label>
               {{ form.tags }}
-              <div class="form-text">Separe as tags por vírgula.</div>
+              <div class="form-text">Separe as tags por vírgula. Ex.: enem, geometria, 2024</div>
               {% if form.tags.errors %}
-              <div class="text-danger small">{{ form.tags.errors|join:", " }}</div>
+              <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
               {% endif %}
             </div>
 
@@ -97,10 +121,10 @@
 
       {# ——— Alternativas (inline formset) ——— #}
       <div class="card mb-4" id="alternativas-card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>Alternativas</strong>
+        <div class="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
+          <strong>✅ Alternativas</strong>
           <button type="button" class="btn btn-success btn-sm" id="btn-add-alternativa">
-            + Adicionar
+            + Adicionar alternativa
           </button>
         </div>
         <div class="card-body">
@@ -121,6 +145,10 @@
             {% endfor %}
           </div>
 
+          <div class="text-muted small mt-2">
+            Mínimo 2 alternativas · Máximo 5 · Exatamente 1 deve ser marcada como correta
+          </div>
+
         </div>
       </div>
 
@@ -130,8 +158,8 @@
       </div>
 
       <div class="d-flex gap-2 mb-5">
-        <button type="submit" class="btn btn-primary">💾 Salvar Questão</button>
-        <a href="{% url 'banco_questoes:questao_create' %}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary px-4">💾 Salvar Questão</button>
+        <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline-secondary">Cancelar</a>
       </div>
 
     </form>
@@ -147,7 +175,6 @@
   const MAX_ALTERNATIVAS = 5;
   const PREFIX = 'alternativas';
 
-  // Elementos
   const container = document.getElementById('alternativas-container');
   const template = document.getElementById('empty-form-template');
   const btnAdd = document.getElementById('btn-add-alternativa');
@@ -161,8 +188,6 @@
   // -----------------------------------------------------------------
   btnAdd.addEventListener('click', function () {
     const totalForms = parseInt(totalFormsInput.value, 10);
-
-    // Contar linhas visíveis (não deletadas)
     const visibleCount = container.querySelectorAll(
       '.alternativa-row:not([style*="display: none"])'
     ).length;
@@ -172,13 +197,8 @@
       return;
     }
 
-    // Clonar o template vazio
     const newRow = template.querySelector('.alternativa-row').cloneNode(true);
-
-    // Substituir __prefix__ pelo índice correto
     newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, totalForms);
-
-    // Atualizar atributos de nível de elemento (name, id, for)
     newRow.querySelectorAll('[name*="__prefix__"], [id*="__prefix__"], [for*="__prefix__"]').forEach(function (el) {
       if (el.name) el.name = el.name.replace(/__prefix__/g, totalForms);
       if (el.id) el.id = el.id.replace(/__prefix__/g, totalForms);
@@ -186,9 +206,12 @@
       if (forAttr) el.setAttribute('for', forAttr.replace(/__prefix__/g, totalForms));
     });
 
+    // Limpar classes de erro do template clonado
+    newRow.classList.remove('bg-danger', 'bg-opacity-10');
+    newRow.classList.add('bg-light');
+
     container.appendChild(newRow);
     totalFormsInput.value = totalForms + 1;
-
     updateRemoveButtons();
   });
 
@@ -202,17 +225,13 @@
     const row = btn.closest('.alternativa-row');
     const deleteInput = row.querySelector('.alternativa-delete');
 
-    // Marcar para deleção e ocultar
-    if (deleteInput) {
-      deleteInput.value = 'on';
-    }
+    if (deleteInput) deleteInput.value = 'on';
     row.style.display = 'none';
-
     updateRemoveButtons();
   });
 
   // -----------------------------------------------------------------
-  // Desabilitar botão remover se só restam 2 visíveis
+  // Controle de botões
   // -----------------------------------------------------------------
   function updateRemoveButtons() {
     const visibleRows = container.querySelectorAll(
@@ -226,26 +245,22 @@
       btn.disabled = visibleRows.length <= 2;
     });
 
-    // Atualizar botão adicionar
     btnAdd.disabled = visibleRows.length >= MAX_ALTERNATIVAS;
   }
 
   // -----------------------------------------------------------------
-  // Toggle: mostrar/ocultar alternativas e critérios conforme tipo
+  // Toggle: alternativas e critérios conforme tipo
   // -----------------------------------------------------------------
   function toggleByTipo() {
     const tipo = tipoSelect ? tipoSelect.value : '';
 
     if (tipo === 'DIS') {
-      // Discursiva: ocultar alternativas, mostrar critérios
       alternativasCard.style.display = 'none';
       criteriosWrapper.style.display = '';
     } else if (tipo === 'OBJ') {
-      // Objetiva: mostrar alternativas, ocultar critérios
       alternativasCard.style.display = '';
       criteriosWrapper.style.display = 'none';
     } else {
-      // Nenhum selecionado: mostrar ambos
       alternativasCard.style.display = '';
       criteriosWrapper.style.display = '';
     }
@@ -253,31 +268,20 @@
 
   if (tipoSelect) {
     tipoSelect.addEventListener('change', toggleByTipo);
-    toggleByTipo(); // estado inicial
+    toggleByTipo();
   }
 
   // -----------------------------------------------------------------
-  // Adicionar classes Bootstrap aos widgets do Django
+  // Marcar campos com erro como is-invalid
   // -----------------------------------------------------------------
-  document.querySelectorAll('select:not(.form-select), input[type="text"]:not(.form-control)').forEach(function (el) {
-    if (el.tagName === 'SELECT') {
-      el.classList.add('form-select');
-    } else {
-      el.classList.add('form-control');
+  document.querySelectorAll('.invalid-feedback.d-block').forEach(function (el) {
+    const input = el.previousElementSibling;
+    if (input && (input.tagName === 'SELECT' || input.tagName === 'TEXTAREA' || input.tagName === 'INPUT')) {
+      input.classList.add('is-invalid');
     }
   });
 
-  document.querySelectorAll('textarea:not(.form-control)').forEach(function (el) {
-    el.classList.add('form-control');
-  });
-
-  document.querySelectorAll('input[type="checkbox"]:not(.form-check-input)').forEach(function (el) {
-    el.classList.add('form-check-input');
-  });
-
-  // Estado inicial dos botões
   updateRemoveButtons();
-
 })();
 </script>
 {% endblock %}

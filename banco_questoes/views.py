@@ -11,6 +11,53 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Lista de questões
+# ---------------------------------------------------------------------------
+@login_required
+def questao_list(request):
+    """Lista de questões com filtros básicos."""
+    qs = Questao.objects.select_related('disciplina', 'topico')
+
+    # Filtros via query string
+    tipo = request.GET.get('tipo')
+    if tipo:
+        qs = qs.filter(tipo=tipo)
+
+    dificuldade = request.GET.get('dificuldade')
+    if dificuldade:
+        qs = qs.filter(dificuldade=dificuldade)
+
+    disciplina_id = request.GET.get('disciplina')
+    if disciplina_id:
+        qs = qs.filter(disciplina_id=disciplina_id)
+
+    ativo = request.GET.get('ativo')
+    if ativo in ('1', '0'):
+        qs = qs.filter(ativo=ativo == '1')
+
+    busca = request.GET.get('q', '').strip()
+    if busca:
+        qs = qs.filter(enunciado__icontains=busca)
+
+    return render(
+        request,
+        'banco_questoes/questao_list.html',
+        {
+            'questoes': qs,
+            'filtros': {
+                'tipo': tipo or '',
+                'dificuldade': dificuldade or '',
+                'disciplina': disciplina_id or '',
+                'ativo': ativo or '',
+                'q': busca,
+            },
+            'tipos': Questao.Tipo.choices,
+            'dificuldades': Questao.Dificuldade.choices,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 def _save_questao_and_alternativas(request, form, formset):
@@ -39,7 +86,7 @@ def questao_create(request):
         if form_ok and formset_ok and cross_ok:
             questao = _save_questao_and_alternativas(request, form, formset)
             messages.success(request, f'Questão Q{questao.pk} cadastrada com sucesso.')
-            return redirect('banco_questoes:questao_update', pk=questao.pk)
+            return redirect('banco_questoes:questao_list')
     else:
         form = QuestaoForm()
         formset = AlternativaFormSet()
@@ -74,7 +121,7 @@ def questao_update(request, pk):
         if form_ok and formset_ok and cross_ok:
             _save_questao_and_alternativas(request, form, formset)
             messages.success(request, 'Questão atualizada com sucesso.')
-            return redirect('banco_questoes:questao_update', pk=questao.pk)
+            return redirect('banco_questoes:questao_list')
     else:
         form = QuestaoForm(instance=questao)
         formset = AlternativaFormSet(instance=questao)
