@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: examina_mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: examina_db
+      MYSQL_USER: examina_user
+      MYSQL_PASSWORD: sua_senha_aqui
+      MYSQL_ROOT_PASSWORD: root_password_aqui
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - examina_net
+    healthcheck:
+      # Testa se a porta 3306 realmente aceita conexão usando python embutido no container
+      test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 3306))"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    container_name: examina_django
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - examina_net
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+
+networks:
+  examina_net:
+    driver: bridge
