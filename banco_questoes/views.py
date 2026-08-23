@@ -155,50 +155,56 @@ def download_modelo_csv(_request):
     response.write('\ufeff')
 
     writer = csv.writer(response)
-    writer.writerow([
-        'enunciado',
-        'tipo',
-        'disciplina',
-        'topico',
-        'dificuldade',
-        'tags',
-        'alt_a',
-        'alt_b',
-        'alt_c',
-        'alt_d',
-        'alt_e',
-        'correta',
-        'criterios_correcao',
-    ])
-    writer.writerow([
-        'Qual é o valor de x na equação 2x + 6 = 14?',
-        'OBJ',
-        'Matemática',
-        'Álgebra',
-        'F',
-        'enem;algebra;equacoes',
-        'x = 3',
-        'x = 4',
-        'x = 5',
-        'x = 6',
-        'x = 7',
-        'B',
-        '',
-    ])
-    writer.writerow([
-        'Explique o processo de fotossíntese destacando a fase clara e a fase escura.',
-        'DIS',
-        'Biologia',
-        'Botânica',
-        'M',
-        'biologia;fotossintese;fisiologia',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'O aluno deve mencionar a absorção de luz pelos pigmentos fotossintetizantes na fase clara (tilacóides) e a fixação de CO2 no Ciclo de Calvin na fase escura (estroma).',
-    ])
+    writer.writerow(
+        [
+            'enunciado',
+            'tipo',
+            'disciplina',
+            'topico',
+            'dificuldade',
+            'tags',
+            'alt_a',
+            'alt_b',
+            'alt_c',
+            'alt_d',
+            'alt_e',
+            'correta',
+            'criterios_correcao',
+        ]
+    )
+    writer.writerow(
+        [
+            'Qual é o valor de x na equação 2x + 6 = 14?',
+            'OBJ',
+            'Matemática',
+            'Álgebra',
+            'F',
+            'enem;algebra;equacoes',
+            'x = 3',
+            'x = 4',
+            'x = 5',
+            'x = 6',
+            'x = 7',
+            'B',
+            '',
+        ]
+    )
+    writer.writerow(
+        [
+            'Explique o processo de fotossíntese destacando a fase clara e a fase escura.',
+            'DIS',
+            'Biologia',
+            'Botânica',
+            'M',
+            'biologia;fotossintese;fisiologia',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'O aluno deve mencionar a absorção de luz pelos pigmentos fotossintetizantes na fase clara (tilacóides) e a fixação de CO2 no Ciclo de Calvin na fase escura (estroma).',
+        ]
+    )
 
     return response
