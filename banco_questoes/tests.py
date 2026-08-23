@@ -489,3 +489,118 @@ class CSVImportServiceTest(TestCase):
         self.assertEqual(res2.total_sucesso, 0)
         self.assertEqual(res2.total_rejeitadas, 1)
         self.assertTrue(any('Já existe uma questão cadastrada no banco' in err for err in res2.linhas[0].erros))
+
+
+class QuestaoFilterTest(TestCase):
+    """Testes unitários para o FilterSet QuestaoFilter (django-filter)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from .models import Disciplina, Topico
+
+        user_model = get_user_model()
+        self.user1 = user_model.objects.create_user(username='prof_silva', password='secret_password')  # noqa: S106
+        self.user2 = user_model.objects.create_user(username='prof_souza', password='secret_password')  # noqa: S106
+
+        self.disc_mat = Disciplina.objects.create(nome='Matemática')
+        self.disc_fis = Disciplina.objects.create(nome='Física')
+
+        self.top_alg = Topico.objects.create(disciplina=self.disc_mat, nome='Álgebra')
+        self.top_geo = Topico.objects.create(disciplina=self.disc_mat, nome='Geometria')
+
+        # Questão 1: Matemática, Álgebra, Fácil, OBJ, Ativa, prof_silva, tag: 'enem'
+        self.q1 = Questao.objects.create(
+            disciplina=self.disc_mat,
+            topico=self.top_alg,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Calcule o valor de 2 + 2.',
+            ativo=True,
+            autor=self.user1,
+        )
+        self.q1.tags.add('enem', 'basica')
+
+        # Questão 2: Física, Difícil, DIS, Inativa, prof_souza, tag: 'quantica'
+        self.q2 = Questao.objects.create(
+            disciplina=self.disc_fis,
+            tipo=Questao.Tipo.DISCURSIVA,
+            dificuldade=Questao.Dificuldade.DIFICIL,
+            enunciado='Explique o experimento da dupla fenda.',
+            criterios_correcao='Abordar dualidade onda-partícula.',
+            ativo=False,
+            autor=self.user2,
+        )
+        self.q2.tags.add('quantica', 'moderna')
+
+    def test_filter_by_disciplina_and_topico(self):
+        """Verifica filtro por disciplina e tópico."""
+        from .filters import QuestaoFilter
+
+        # Filtra por Matemática
+        f = QuestaoFilter({'disciplina': self.disc_mat.pk}, queryset=Questao.objects.all())
+        self.assertEqual(f.qs.count(), 1)
+        self.assertEqual(f.qs.first(), self.q1)
+
+        # Filtra por Física
+        f_fis = QuestaoFilter({'disciplina': self.disc_fis.pk}, queryset=Questao.objects.all())
+        self.assertEqual(f_fis.qs.count(), 1)
+        self.assertEqual(f_fis.qs.first(), self.q2)
+
+    def test_filter_by_tipo_and_dificuldade(self):
+        """Verifica filtro por tipo e dificuldade."""
+        from .filters import QuestaoFilter
+
+        f_obj = QuestaoFilter({'tipo': 'OBJ'}, queryset=Questao.objects.all())
+        self.assertEqual(f_obj.qs.count(), 1)
+        self.assertEqual(f_obj.qs.first(), self.q1)
+
+        f_dif = QuestaoFilter({'dificuldade': 'D'}, queryset=Questao.objects.all())
+        self.assertEqual(f_dif.qs.count(), 1)
+        self.assertEqual(f_dif.qs.first(), self.q2)
+
+    def test_filter_by_tags(self):
+        """Verifica filtro por tags."""
+        from .filters import QuestaoFilter
+
+        f_tag = QuestaoFilter({'tags': 'enem'}, queryset=Questao.objects.all())
+        self.assertEqual(f_tag.qs.count(), 1)
+        self.assertEqual(f_tag.qs.first(), self.q1)
+
+        f_tag2 = QuestaoFilter({'tags': 'quantica'}, queryset=Questao.objects.all())
+        self.assertEqual(f_tag2.qs.count(), 1)
+        self.assertEqual(f_tag2.qs.first(), self.q2)
+
+    def test_filter_by_autor(self):
+        """Verifica filtro por docente criador da questão."""
+        from .filters import QuestaoFilter
+
+        f_autor = QuestaoFilter({'autor': self.user1.pk}, queryset=Questao.objects.all())
+        self.assertEqual(f_autor.qs.count(), 1)
+        self.assertEqual(f_autor.qs.first(), self.q1)
+
+    def test_filter_by_ativo(self):
+        """Verifica filtro por status ativo/inativo."""
+        from .filters import QuestaoFilter
+
+        f_ativas = QuestaoFilter({'ativo': 'true'}, queryset=Questao.objects.all())
+        self.assertEqual(f_ativas.qs.count(), 1)
+        self.assertEqual(f_ativas.qs.first(), self.q1)
+
+        f_inativas = QuestaoFilter({'ativo': 'false'}, queryset=Questao.objects.all())
+        self.assertEqual(f_inativas.qs.count(), 1)
+        self.assertEqual(f_inativas.qs.first(), self.q2)
+
+    def test_filter_by_q_text_search(self):
+        """Verifica busca textual ampla no enunciado e critérios."""
+        from .filters import QuestaoFilter
+
+        # Busca por palavra no enunciado
+        f_busca1 = QuestaoFilter({'q': 'dupla fenda'}, queryset=Questao.objects.all())
+        self.assertEqual(f_busca1.qs.count(), 1)
+        self.assertEqual(f_busca1.qs.first(), self.q2)
+
+        # Busca por palavra nos critérios de correção
+        f_busca2 = QuestaoFilter({'q': 'onda-partícula'}, queryset=Questao.objects.all())
+        self.assertEqual(f_busca2.qs.count(), 1)
+        self.assertEqual(f_busca2.qs.first(), self.q2)

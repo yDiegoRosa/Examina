@@ -32,7 +32,7 @@
   </div>
 </div>
 
-<!-- Grid de Métricas Tecnológicas -->
+<!-- Grid de Métricas Globais -->
 <div class="grid grid-cols-4 gap-4 mb-4">
   <div class="metric-card">
     <div class="metric-icon-box metric-icon-primary">
@@ -75,14 +75,14 @@
   </div>
 </div>
 
-<!-- Painel de Busca e Filtros -->
+<!-- Painel de Busca e Filtros Avançados (django-filter) -->
 <div class="card-surface mb-4">
   <div class="card-header">
     <div class="flex items-center gap-2">
       <i class="bi bi-sliders" style="color: var(--fae-blue-electric);"></i>
-      <span class="font-bold">Filtros e Pesquisa</span>
+      <span class="font-bold">Filtros e Pesquisa Avançada</span>
     </div>
-    {% if filtros.tipo or filtros.dificuldade or filtros.ativo or filtros.q %}
+    {% if has_active_filters %}
     <span class="badge-pill badge-pill-dis">
       <i class="bi bi-funnel-fill"></i> Filtros Ativos
     </span>
@@ -91,46 +91,53 @@
   <div class="card-body">
     <form method="get" class="grid grid-cols-12 gap-3 items-end">
 
-      <div class="col-span-2">
-        <label class="form-label">Tipo</label>
-        <select name="tipo" class="form-select">
-          <option value="">Todos os tipos</option>
-          {% for value, label in tipos %}
-          <option value="{{ value }}" {% if filtros.tipo == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
+      <!-- Linha 1 de Filtros -->
+      <div class="col-span-3">
+        <label class="form-label">{{ filter.form.disciplina.label|default:"Disciplina" }}</label>
+        {{ filter.form.disciplina }}
+      </div>
+
+      <div class="col-span-3">
+        <label class="form-label">{{ filter.form.topico.label|default:"Tópico" }}</label>
+        {{ filter.form.topico }}
       </div>
 
       <div class="col-span-2">
-        <label class="form-label">Dificuldade</label>
-        <select name="dificuldade" class="form-select">
-          <option value="">Todas</option>
-          {% for value, label in dificuldades %}
-          <option value="{{ value }}" {% if filtros.dificuldade == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
+        <label class="form-label">{{ filter.form.dificuldade.label|default:"Dificuldade" }}</label>
+        {{ filter.form.dificuldade }}
       </div>
 
       <div class="col-span-2">
-        <label class="form-label">Status</label>
-        <select name="ativo" class="form-select">
-          <option value="">Todos</option>
-          <option value="1" {% if filtros.ativo == "1" %}selected{% endif %}>Ativa</option>
-          <option value="0" {% if filtros.ativo == "0" %}selected{% endif %}>Inativa</option>
-        </select>
+        <label class="form-label">{{ filter.form.tipo.label|default:"Tipo" }}</label>
+        {{ filter.form.tipo }}
+      </div>
+
+      <div class="col-span-2">
+        <label class="form-label">{{ filter.form.ativo.label|default:"Status" }}</label>
+        {{ filter.form.ativo }}
+      </div>
+
+      <!-- Linha 2 de Filtros -->
+      <div class="col-span-3">
+        <label class="form-label">{{ filter.form.autor.label|default:"Autor / Docente" }}</label>
+        {{ filter.form.autor }}
+      </div>
+
+      <div class="col-span-3">
+        <label class="form-label">{{ filter.form.tags.label|default:"Tags" }}</label>
+        {{ filter.form.tags }}
       </div>
 
       <div class="col-span-4">
-        <label class="form-label">Buscar no Enunciado</label>
-        <input type="text" name="q" class="form-input"
-               value="{{ filtros.q }}" placeholder="Buscar por palavra-chave…">
+        <label class="form-label">{{ filter.form.q.label|default:"Busca Livre" }}</label>
+        {{ filter.form.q }}
       </div>
 
       <div class="col-span-2 flex gap-2">
         <button type="submit" class="btn btn-primary flex-1">
           <i class="bi bi-search"></i> Filtrar
         </button>
-        {% if filtros.tipo or filtros.dificuldade or filtros.ativo or filtros.q %}
+        {% if has_active_filters %}
         <a href="{% url 'banco_questoes:questao_list' %}" class="btn-icon-circle" title="Limpar Filtros">
           <i class="bi bi-x-lg"></i>
         </a>
@@ -150,8 +157,9 @@
           <th style="width: 80px;">ID</th>
           <th style="width: 130px;">Tipo</th>
           <th style="width: 120px;">Dificuldade</th>
-          <th style="width: 200px;">Disciplina / Tópico</th>
+          <th style="width: 180px;">Disciplina / Tópico</th>
           <th>Enunciado & Tags</th>
+          <th style="width: 130px;">Autor</th>
           <th style="width: 110px;">Status</th>
           <th style="width: 110px;" class="text-right">Ações</th>
         </tr>
@@ -197,8 +205,8 @@
             {% endif %}
           </td>
           <td>
-            <div class="font-bold text-main mb-1" style="max-width: 520px;">
-              {{ q.enunciado|truncatewords:24 }}
+            <div class="font-bold text-main mb-1" style="max-width: 480px;">
+              {{ q.enunciado|truncatewords:22 }}
             </div>
             {% if q.tags.all %}
             <div class="flex flex-wrap gap-1 mt-1">
@@ -206,6 +214,15 @@
               <span class="badge-pill badge-pill-inactive small font-mono">#{{ tag.name }}</span>
               {% endfor %}
             </div>
+            {% endif %}
+          </td>
+          <td>
+            {% if q.autor %}
+            <span class="badge-pill badge-pill-inactive">
+              <i class="bi bi-person-fill"></i> {{ q.autor.username }}
+            </span>
+            {% else %}
+            <span class="text-muted small">—</span>
             {% endif %}
           </td>
           <td>
@@ -232,13 +249,17 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center" style="padding: 4rem 1.5rem;">
+          <td colspan="8" class="text-center" style="padding: 4rem 1.5rem;">
             <div class="text-muted mb-3" style="font-size: 2.5rem; opacity: 0.4;">
-              <i class="bi bi-journal-x"></i>
+              <i class="bi bi-funnel"></i>
             </div>
-            <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Nenhuma questão encontrada</div>
-            <p class="text-muted small mb-3">Tente ajustar os termos da pesquisa ou cadastre uma nova questão.</p>
-            {% if perms.banco_questoes.add_questao %}
+            <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Nenhuma questão corresponde aos filtros</div>
+            <p class="text-muted small mb-3">Tente ajustar os critérios de pesquisa ou limpar os filtros aplicados.</p>
+            {% if has_active_filters %}
+            <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">
+              <i class="bi bi-x-circle"></i> Limpar Filtros
+            </a>
+            {% elif perms.banco_questoes.add_questao %}
             <a href="{% url 'banco_questoes:questao_create' %}" class="btn btn-primary">
               <i class="bi bi-plus-lg"></i> Cadastrar Nova Questão
             </a>
@@ -253,7 +274,7 @@
   <div class="card-header" style="background: #F8FAFC; font-size: 0.825rem; color: var(--text-muted);">
     <div class="flex items-center gap-2">
       <i class="bi bi-info-circle" style="color: var(--fae-blue-electric);"></i>
-      <span>Total de <strong>{{ questoes|length }}</strong> questão(ões) listada(s).</span>
+      <span>Total de <strong>{{ questoes|length }}</strong> questão(ões) encontrada(s) com os critérios atuais.</span>
     </div>
   </div>
   {% endif %}

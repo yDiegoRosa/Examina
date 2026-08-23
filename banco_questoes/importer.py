@@ -50,7 +50,7 @@ class CSVImportService:
     """
 
     @classmethod
-    def import_csv(cls, file_or_content: Any) -> ImportExecutionResult:
+    def import_csv(cls, file_or_content: Any, autor: Any = None) -> ImportExecutionResult:
         """
         Executa o pipeline completo de importação a partir de um arquivo ou conteúdo CSV.
 
@@ -96,6 +96,7 @@ class CSVImportService:
                             enunciado=data['enunciado'],
                             criterios_correcao=data.get('criterios_correcao', ''),
                             ativo=True,
+                            autor=autor,
                         )
 
                         # Associa tags

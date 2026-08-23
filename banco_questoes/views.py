@@ -7,6 +7,7 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from .filters import QuestaoFilter
 from .forms import AlternativaFormSet, QuestaoForm
 from .importer import CSVImportService
 from .models import Questao
@@ -16,58 +17,47 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Lista de questões
+# Lista de questões (com django-filter)
 # ---------------------------------------------------------------------------
 @login_required
 def questao_list(request):
-    """Lista de questões com filtros básicos e métricas."""
-    questoes = Questao.objects.select_related('disciplina', 'topico').prefetch_related('tags').order_by('-criado_em')
+    """Lista de questões com filtros avançados via django-filter e métricas."""
+    base_qs = (
+        Questao.objects.select_related('disciplina', 'topico', 'autor').prefetch_related('tags').order_by('-criado_em')
+    )
 
-    # Métricas agregadas
+    # Aplicação do FilterSet
+    questao_filter = QuestaoFilter(request.GET, queryset=base_qs)
+    questoes = questao_filter.qs
+
+    # Métricas globais do acervo
+    all_questoes = Questao.objects.all()
     metricas = {
-        'total': questoes.count(),
-        'objetivas': questoes.filter(tipo=Questao.Tipo.OBJETIVA).count(),
-        'discursivas': questoes.filter(tipo=Questao.Tipo.DISCURSIVA).count(),
-        'ativas': questoes.filter(ativo=True).count(),
+        'total': all_questoes.count(),
+        'objetivas': all_questoes.filter(tipo=Questao.Tipo.OBJETIVA).count(),
+        'discursivas': all_questoes.filter(tipo=Questao.Tipo.DISCURSIVA).count(),
+        'ativas': all_questoes.filter(ativo=True).count(),
     }
 
-    # Filtros
-    tipo = request.GET.get('tipo')
-    dificuldade = request.GET.get('dificuldade')
-    ativo = request.GET.get('ativo')
-    q = request.GET.get('q')
-
-    if tipo:
-        questoes = questoes.filter(tipo=tipo)
-    if dificuldade:
-        questoes = questoes.filter(dificuldade=dificuldade)
-    if ativo in ('1', 'true', 'True'):
-        questoes = questoes.filter(ativo=True)
-    elif ativo in ('0', 'false', 'False'):
-        questoes = questoes.filter(ativo=False)
-    if q:
-        questoes = questoes.filter(enunciado__icontains=q)
+    # Verifica se há filtros ativos aplicados pelo usuário
+    has_active_filters = any(
+        request.GET.get(key) for key in ('disciplina', 'topico', 'dificuldade', 'tipo', 'tags', 'ativo', 'autor', 'q')
+    )
 
     return render(
         request,
         'banco_questoes/questao_list.html',
         {
+            'filter': questao_filter,
             'questoes': questoes,
             'metricas': metricas,
-            'filtros': {
-                'tipo': tipo or '',
-                'dificuldade': dificuldade or '',
-                'ativo': ativo or '',
-                'q': q or '',
-            },
-            'tipos': Questao.Tipo.choices,
-            'dificuldades': Questao.Dificuldade.choices,
+            'has_active_filters': has_active_filters,
         },
     )
 
 
 # ---------------------------------------------------------------------------
-# Criar questão (com formset inline)
+# Criar questão (com formset inline e autor)
 # ---------------------------------------------------------------------------
 @login_required
 @permission_required('banco_questoes.add_questao', raise_exception=True)
@@ -78,15 +68,18 @@ def questao_create(request):
         formset = AlternativaFormSet(request.POST)
 
         if form.is_valid() and formset.is_valid():
-            # Validação cruzada
             if form.validate_with_alternativas(formset):
                 try:
                     with transaction.atomic():
-                        questao = form.save()
-                        # Salva alternativas apenas para questões objetivas
+                        questao = form.save(commit=False)
+                        questao.autor = request.user
+                        questao.save()
+                        form.save_m2m()
+
                         if questao.is_objetiva:
                             formset.instance = questao
                             formset.save()
+
                     messages.success(
                         request,
                         f'Questão Q{questao.pk} ({questao.get_tipo_display()}) cadastrada com sucesso!',
@@ -136,8 +129,8 @@ def questao_update(request, pk):
                         if questao.is_objetiva:
                             formset.save()
                         else:
-                            # Se mudou para discursiva, remove alternativas existentes
                             questao.alternativas.all().delete()
+
                     messages.success(
                         request,
                         f'Questão Q{questao.pk} atualizada com sucesso!',
@@ -255,7 +248,7 @@ def questao_import(request):
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
         try:
-            relatorio = CSVImportService.import_csv(csv_file)
+            relatorio = CSVImportService.import_csv(csv_file, autor=request.user)
         except CSVParseError as err:
             logger.warning('Erro de formato CSV durante importação: %s', err)
             messages.error(request, f'Erro ao ler o arquivo CSV: {err}')

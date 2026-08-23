@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.db import models
 from simple_history.models import HistoricalRecords
 from taggit.managers import TaggableManager
@@ -92,6 +93,14 @@ class Questao(models.Model):
     )
     tags = TaggableManager(blank=True, help_text='Tags de classificação livre.')
     ativo = models.BooleanField(default=True)
+    autor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='questoes_criadas',
+        verbose_name='autor',
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
