@@ -1,7 +1,7 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import AlternativaFormSet, QuestaoForm
@@ -73,6 +73,7 @@ def _save_questao_and_alternativas(request, form, formset):
 # Criar questão
 # ---------------------------------------------------------------------------
 @login_required
+@permission_required('banco_questoes.add_questao', raise_exception=True)
 def questao_create(request):
     """Cadastro de nova questão com alternativas inline."""
     if request.method == 'POST':
@@ -106,6 +107,7 @@ def questao_create(request):
 # Editar questão
 # ---------------------------------------------------------------------------
 @login_required
+@permission_required('banco_questoes.change_questao', raise_exception=True)
 def questao_update(request, pk):
     """Edição de questão existente com alternativas inline."""
     questao = get_object_or_404(Questao, pk=pk)
