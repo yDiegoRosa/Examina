@@ -1,4 +1,5 @@
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import Alternativa, Disciplina, Questao, Topico
 
@@ -38,7 +39,7 @@ class TopicoAdmin(admin.ModelAdmin):
 
 
 @admin.register(Questao)
-class QuestaoAdmin(admin.ModelAdmin):
+class QuestaoAdmin(SimpleHistoryAdmin):
     list_display = ['__str__', 'tipo', 'dificuldade', 'disciplina', 'ativo', 'criado_em']
     list_filter = ['tipo', 'dificuldade', 'disciplina', 'ativo']
     search_fields = ['enunciado', 'disciplina__nome', 'topico__nome']

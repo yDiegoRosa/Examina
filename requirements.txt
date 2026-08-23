@@ -1,5 +1,6 @@
 Django>=5.0
 django-environ>=0.11.0
+django-simple-history>=3.7.0
 django-taggit>=6.1.0
 mysqlclient>=2.2.0
 asgiref

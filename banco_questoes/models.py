@@ -1,6 +1,7 @@
 import logging
 
 from django.db import models
+from simple_history.models import HistoricalRecords
 from taggit.managers import TaggableManager
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,8 @@ class Questao(models.Model):
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['-criado_em']
