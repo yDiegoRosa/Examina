@@ -8,9 +8,9 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import AlternativaFormSet, QuestaoForm
-from .models import Alternativa, Disciplina, Questao, Topico
-from .parser import CSVParseError, CSVQuestaoParser
-from .validator import CSVQuestaoValidator
+from .importer import CSVImportService
+from .models import Questao
+from .parser import CSVParseError
 
 logger = logging.getLogger(__name__)
 
@@ -236,12 +236,12 @@ def download_modelo_csv(_request):
 
 
 # ---------------------------------------------------------------------------
-# Importação em Lote via CSV & Relatório de Inconsistências
+# Importação em Lote via CSV & Commit (RF02)
 # ---------------------------------------------------------------------------
 @login_required
 @permission_required('banco_questoes.add_questao', raise_exception=True)
 def questao_import(request):
-    """View para upload de CSV e exibição do relatório de inconsistências linha a linha."""
+    """View para upload, commit e relatório de inconsistências linha a linha."""
     relatorio = None
 
     if request.method == 'POST':
@@ -255,111 +255,29 @@ def questao_import(request):
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
         try:
-            parsed_rows = CSVQuestaoParser.parse(csv_file)
+            relatorio = CSVImportService.import_csv(csv_file)
         except CSVParseError as err:
+            logger.warning('Erro de formato CSV durante importação: %s', err)
             messages.error(request, f'Erro ao ler o arquivo CSV: {err}')
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
-
-        if not parsed_rows:
-            messages.warning(request, 'O arquivo CSV enviado não contém linhas de dados.')
+        except Exception as exc:
+            logger.exception('Erro inesperado durante importação de CSV: %s', exc)
+            messages.error(request, f'Ocorreu um erro interno durante o processamento: {exc}')
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
-        validation_report = CSVQuestaoValidator.validate_rows(parsed_rows, check_db_duplicates=True)
-        resultados_linhas = []
+        if relatorio.total_processadas == 0:
+            messages.warning(request, 'O arquivo CSV enviado não contém linhas de dados para importação.')
+            return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
-        for row in parsed_rows:
-            line_num = row['linha']
-            val_res = next((r for r in validation_report.linhas_validas if r.linha == line_num), None)
-
-            if val_res and val_res.is_valid:
-                data = val_res.cleaned_data
-                try:
-                    with transaction.atomic():
-                        disc, _ = Disciplina.objects.get_or_create(nome=data['disciplina'])
-                        topico_obj = None
-                        if data.get('topico'):
-                            topico_obj, _ = Topico.objects.get_or_create(disciplina=disc, nome=data['topico'])
-
-                        questao = Questao.objects.create(
-                            disciplina=disc,
-                            topico=topico_obj,
-                            tipo=data['tipo'],
-                            dificuldade=data['dificuldade'],
-                            enunciado=data['enunciado'],
-                            criterios_correcao=data.get('criterios_correcao', ''),
-                            ativo=True,
-                        )
-
-                        if data.get('tags'):
-                            questao.tags.add(*data['tags'])
-
-                        if data['tipo'] == Questao.Tipo.OBJETIVA:
-                            for alt in data.get('alternativas', []):
-                                Alternativa.objects.create(
-                                    questao=questao,
-                                    letra=alt['letra'],
-                                    texto=alt['texto'],
-                                    correta=alt['correta'],
-                                )
-
-                        resultados_linhas.append(
-                            {
-                                'linha': line_num,
-                                'status': 'SUCESSO',
-                                'enunciado': data['enunciado'],
-                                'tipo': data['tipo'],
-                                'disciplina': data['disciplina'],
-                                'questao_id': questao.pk,
-                                'erros': [],
-                            }
-                        )
-                except Exception as exc:
-                    logger.exception('Erro ao persistir questão da linha %s: %s', line_num, exc)
-                    resultados_linhas.append(
-                        {
-                            'linha': line_num,
-                            'status': 'REJEITADA',
-                            'enunciado': row.get('enunciado', ''),
-                            'tipo': row.get('tipo', ''),
-                            'disciplina': row.get('disciplina', ''),
-                            'questao_id': None,
-                            'erros': [f'Erro interno de persistência: {exc}'],
-                        }
-                    )
-            else:
-                inval_res = next((r for r in validation_report.linhas_invalidas if r.linha == line_num), None)
-                erros = inval_res.errors if inval_res else ['Linha com inconsistências não identificadas.']
-                resultados_linhas.append(
-                    {
-                        'linha': line_num,
-                        'status': 'REJEITADA',
-                        'enunciado': row.get('enunciado', ''),
-                        'tipo': row.get('tipo', ''),
-                        'disciplina': row.get('disciplina', ''),
-                        'questao_id': None,
-                        'erros': erros,
-                    }
-                )
-
-        total_sucesso = sum(1 for r in resultados_linhas if r['status'] == 'SUCESSO')
-        total_rejeitadas = sum(1 for r in resultados_linhas if r['status'] == 'REJEITADA')
-
-        relatorio = {
-            'total_processadas': len(resultados_linhas),
-            'total_sucesso': total_sucesso,
-            'total_rejeitadas': total_rejeitadas,
-            'linhas': resultados_linhas,
-        }
-
-        if total_sucesso > 0:
+        if relatorio.total_sucesso > 0:
             messages.success(
                 request,
-                f'Importação processada: {total_sucesso} questão(ões) importada(s) com sucesso.',
+                f'Importação concluída: {relatorio.total_sucesso} questão(ões) importada(s) e comitadas no acervo.',
             )
-        if total_rejeitadas > 0:
+        if relatorio.total_rejeitadas > 0:
             messages.warning(
                 request,
-                f'Atenção: {total_rejeitadas} questão(ões) foram rejeitadas devido a inconsistências/duplicidade.',
+                f'Atenção: {relatorio.total_rejeitadas} questão(ões) foram rejeitadas devido a inconsistências/duplicidade.',
             )
 
     return render(

@@ -420,3 +420,72 @@ class QuestaoImportViewTest(TestCase):
         self.assertContains(response, 'Rejeitadas / Inconsistentes')
         self.assertContains(response, 'O campo &quot;disciplina&quot; é obrigatório')
         self.assertContains(response, 'O campo &quot;correta&quot; é obrigatório')
+
+
+class CSVImportServiceTest(TestCase):
+    """Testes unitários dedicados ao serviço CSVImportService."""
+
+    def test_import_service_commits_valid_questions_with_relations(self):
+        """Verifica se CSVImportService comita disciplinas, tópicos, tags e alternativas."""
+        from .importer import CSVImportService
+
+        csv_text = (
+            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
+            'Qual a fórmula da fotossíntese?,DIS,Biologia,Fisiologia,M,"bio,celular",,,,,,,Explicar fase clara e escura.\n'
+            'O que é 5 x 5?,OBJ,Matemática,Aritmética,F,"matematica,tabuada",10,20,25,30,,C,\n'
+        )
+
+        res = CSVImportService.import_csv(csv_text)
+
+        self.assertEqual(res.total_processadas, 2)
+        self.assertEqual(res.total_sucesso, 2)
+        self.assertEqual(res.total_rejeitadas, 0)
+        self.assertFalse(res.has_errors)
+
+        # Verifica criação no banco
+        q_obj = Questao.objects.get(enunciado='O que é 5 x 5?')
+        self.assertEqual(q_obj.disciplina.nome, 'Matemática')
+        self.assertEqual(q_obj.topico.nome, 'Aritmética')
+        self.assertEqual(q_obj.alternativas.count(), 4)
+        self.assertEqual(q_obj.alternativas.get(correta=True).letra, 'C')
+        self.assertEqual(q_obj.alternativas.get(correta=True).texto, '25')
+        self.assertEqual(set(q_obj.tags.names()), {'matematica', 'tabuada'})
+
+    def test_import_service_partial_commits_only_valid_rows(self):
+        """Verifica que linhas com erro são rejeitadas sem bloquear as linhas válidas."""
+        from .importer import CSVImportService
+
+        csv_text = (
+            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
+            'Questão Sem Enunciado,,Matemática,,F,,,,,,,,,\n'  # Inválida
+            'Capital de SP?,OBJ,Geografia,Sudeste,F,sp,Santos,São Paulo,Campinas,,,B,\n'  # Válida
+        )
+
+        res = CSVImportService.import_csv(csv_text)
+
+        self.assertEqual(res.total_processadas, 2)
+        self.assertEqual(res.total_sucesso, 1)
+        self.assertEqual(res.total_rejeitadas, 1)
+        self.assertTrue(res.has_errors)
+
+        self.assertEqual(Questao.objects.filter(enunciado='Capital de SP?').count(), 1)
+        self.assertEqual(Questao.objects.count(), 1)
+
+    def test_import_service_reimport_blocks_as_database_duplicates(self):
+        """Verifica se reimportar o mesmo CSV bloqueia as questões como duplicadas no banco."""
+        from .importer import CSVImportService
+
+        csv_text = (
+            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
+            'Questão Unica 2026,OBJ,Sociologia,,F,socio,Opcao 1,Opcao 2,,,,A,\n'
+        )
+
+        # 1ª Importação: Sucesso
+        res1 = CSVImportService.import_csv(csv_text)
+        self.assertEqual(res1.total_sucesso, 1)
+
+        # 2ª Importação: Bloqueada por duplicidade contra o banco
+        res2 = CSVImportService.import_csv(csv_text)
+        self.assertEqual(res2.total_sucesso, 0)
+        self.assertEqual(res2.total_rejeitadas, 1)
+        self.assertTrue(any('Já existe uma questão cadastrada no banco' in err for err in res2.linhas[0].erros))
