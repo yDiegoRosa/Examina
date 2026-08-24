@@ -64,7 +64,7 @@ def questao_list(request):
 def questao_create(request):
     """Cadastro de questão via formulário completo + formset inline de alternativas."""
     if request.method == 'POST':
-        form = QuestaoForm(request.POST)
+        form = QuestaoForm(request.POST, request.FILES)
         formset = AlternativaFormSet(request.POST)
 
         if form.is_valid():
@@ -127,7 +127,7 @@ def questao_update(request, pk):
     questao = get_object_or_404(Questao, pk=pk)
 
     if request.method == 'POST':
-        form = QuestaoForm(request.POST, instance=questao)
+        form = QuestaoForm(request.POST, request.FILES, instance=questao)
         formset = AlternativaFormSet(request.POST, instance=questao)
 
         if form.is_valid():

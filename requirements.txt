@@ -3,6 +3,7 @@ django-environ>=0.11.0
 django-simple-history>=3.7.0
 django-taggit>=6.1.0
 mysqlclient>=2.2.0
+Pillow>=10.0.0
 asgiref
 sqlparse
 tzdata

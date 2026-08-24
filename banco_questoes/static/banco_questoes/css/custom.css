@@ -152,19 +152,32 @@ a:hover {
 .grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 
 .col-span-12 { grid-column: span 12 / span 12; }
+.col-span-11 { grid-column: span 11 / span 11; }
+.col-span-10 { grid-column: span 10 / span 10; }
+.col-span-9 { grid-column: span 9 / span 9; }
 .col-span-8 { grid-column: span 8 / span 8; }
+.col-span-7 { grid-column: span 7 / span 7; }
 .col-span-6 { grid-column: span 6 / span 6; }
+.col-span-5 { grid-column: span 5 / span 5; }
 .col-span-4 { grid-column: span 4 / span 4; }
 .col-span-3 { grid-column: span 3 / span 3; }
 .col-span-2 { grid-column: span 2 / span 2; }
+.col-span-1 { grid-column: span 1 / span 1; }
 
 @media (max-width: 992px) {
   .grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .col-span-8, .col-span-6, .col-span-4, .col-span-3 { grid-column: span 12 / span 12; }
+  .col-span-11, .col-span-10, .col-span-9, .col-span-8, .col-span-7,
+  .col-span-6, .col-span-5, .col-span-4, .col-span-3, .col-span-2, .col-span-1 {
+    grid-column: span 12 / span 12;
+  }
 }
 
 @media (max-width: 640px) {
-  .grid-cols-4, .grid-cols-3, .grid-cols-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .grid-cols-4, .grid-cols-3, .grid-cols-2, .grid-cols-12 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .col-span-12, .col-span-11, .col-span-10, .col-span-9, .col-span-8, .col-span-7,
+  .col-span-6, .col-span-5, .col-span-4, .col-span-3, .col-span-2, .col-span-1 {
+    grid-column: span 1 / span 1;
+  }
   .container { padding-left: 1rem; padding-right: 1rem; }
 }
 
@@ -552,6 +565,31 @@ a:hover {
   cursor: pointer;
 }
 
+.form-file-input {
+  padding: 0.55rem 0.85rem;
+  background: #FFFFFF;
+  cursor: pointer;
+  height: auto;
+  font-size: 0.875rem;
+}
+
+.form-file-input::file-selector-button {
+  background: var(--fae-blue-primary);
+  color: #FFFFFF;
+  border: none;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-xs);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-right: 0.75rem;
+  transition: var(--transition);
+}
+
+.form-file-input::file-selector-button:hover {
+  background: var(--fae-blue-electric);
+}
+
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
@@ -725,6 +763,41 @@ a:hover {
 
 .saas-table tbody tr:hover td {
   background-color: #F8FAFC;
+}
+
+/* --------------------------------------------------------------------------
+   11.1 Material de Apoio e Upload de Imagem
+   -------------------------------------------------------------------------- */
+.support-material-box {
+  background: #F8FAFC;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  transition: var(--transition);
+}
+
+.support-material-box:focus-within {
+  border-color: rgba(0, 128, 255, 0.4);
+  box-shadow: 0 4px 18px rgba(0, 128, 255, 0.06);
+}
+
+.image-preview-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.image-preview-thumbnail {
+  max-width: 160px;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: #F1F5F9;
 }
 
 /* --------------------------------------------------------------------------

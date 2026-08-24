@@ -85,6 +85,18 @@ class Questao(models.Model):
         null=True,
         blank=True,
     )
+    texto_auxiliar = models.TextField(
+        'texto auxiliar / contextualização',
+        blank=True,
+        help_text='Texto de apoio, contextualização, trecho de código ou citação motivadora.',
+    )
+    imagem = models.ImageField(
+        'imagem de apoio',
+        upload_to='questoes/imagens/',
+        blank=True,
+        null=True,
+        help_text='Diagrama, gráfico, figura ilustrativa ou esquema visual de apoio.',
+    )
     enunciado = models.TextField()
     criterios_correcao = models.TextField(
         'critérios de correção',

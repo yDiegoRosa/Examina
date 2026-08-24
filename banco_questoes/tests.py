@@ -993,3 +993,120 @@ class AuthenticationViewsTest(TestCase):
 
         response = self.client.post(url)
         self.assertRedirects(response, reverse('login'))
+
+
+class QuestaoMediaSupportTest(TestCase):
+    """Testes para o suporte a texto auxiliar e imagem de apoio nas questões."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Permission
+
+        from .models import Disciplina
+
+        user_model = get_user_model()
+        self.docente = user_model.objects.create_user(username='docente_media', password='secret_password')  # noqa: S106
+        for perm_name in ('add_questao', 'change_questao'):
+            perm = Permission.objects.get(codename=perm_name)
+            self.docente.user_permissions.add(perm)
+
+        self.client.login(username='docente_media', password='secret_password')  # noqa: S106
+        self.disc, _ = Disciplina.objects.get_or_create(nome='Organização de Computadores (ORG)')
+
+    def test_create_questao_with_texto_auxiliar_and_image(self):
+        """Verifica cadastro com sucesso de questão contendo texto auxiliar e imagem anexada."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        tiny_gif = (
+            b'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00'
+            b'!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+        )
+        imagem_upload = SimpleUploadedFile('circuito.gif', tiny_gif, content_type='image/gif')
+
+        url = reverse('banco_questoes:questao_create')
+        post_data = {
+            'tipo': Questao.Tipo.OBJETIVA,
+            'dificuldade': Questao.Dificuldade.MEDIO,
+            'disciplina': self.disc.pk,
+            'texto_auxiliar': 'Considere a arquitetura Von Neumann apresentada no diagrama a seguir.',
+            'imagem': imagem_upload,
+            'enunciado': 'Qual componente é responsável pelo controle de ciclo de instrução?',
+            'ativo': 'on',
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '0',
+            'alternativas-MIN_NUM_FORMS': '0',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-letra': 'A',
+            'alternativas-0-texto': 'Unidade de Controle (UC)',
+            'alternativas-0-correta': 'on',
+            'alternativas-1-letra': 'B',
+            'alternativas-1-texto': 'Unidade Lógica e Aritmética (ULA)',
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        q = Questao.objects.get(enunciado='Qual componente é responsável pelo controle de ciclo de instrução?')
+        self.assertEqual(q.texto_auxiliar, 'Considere a arquitetura Von Neumann apresentada no diagrama a seguir.')
+        self.assertTrue(bool(q.imagem))
+        self.assertIn('circuito', q.imagem.name)
+
+        # Limpeza do arquivo criado no teste
+        if q.imagem:
+            q.imagem.delete(save=False)
+
+    def test_update_questao_modify_texto_auxiliar_and_clear_image(self):
+        """Verifica atualização de questão modificando texto auxiliar e removendo imagem."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        from .models import Alternativa
+
+        tiny_gif = (
+            b'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00'
+            b'!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+        )
+        imagem_upload = SimpleUploadedFile('diagrama_inicial.gif', tiny_gif, content_type='image/gif')
+
+        questao = Questao.objects.create(
+            disciplina=self.disc,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            texto_auxiliar='Texto original',
+            imagem=imagem_upload,
+            enunciado='Pergunta inicial sobre registradores.',
+            ativo=True,
+            autor=self.docente,
+        )
+        alt1 = Alternativa.objects.create(questao=questao, letra='A', texto='PC', correta=True)
+        alt2 = Alternativa.objects.create(questao=questao, letra='B', texto='MAR', correta=False)
+
+        url = reverse('banco_questoes:questao_update', kwargs={'pk': questao.pk})
+        post_data = {
+            'tipo': Questao.Tipo.OBJETIVA,
+            'dificuldade': Questao.Dificuldade.FACIL,
+            'disciplina': self.disc.pk,
+            'texto_auxiliar': 'Texto auxiliar revisado e enriquecido.',
+            'imagem-clear': 'on',  # Solicita remoção da imagem
+            'enunciado': 'Pergunta inicial sobre registradores.',
+            'ativo': 'on',
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '2',
+            'alternativas-MIN_NUM_FORMS': '0',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-id': str(alt1.pk),
+            'alternativas-0-letra': 'A',
+            'alternativas-0-texto': 'PC',
+            'alternativas-0-correta': 'on',
+            'alternativas-1-id': str(alt2.pk),
+            'alternativas-1-letra': 'B',
+            'alternativas-1-texto': 'MAR',
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        questao.refresh_from_db()
+        self.assertEqual(questao.texto_auxiliar, 'Texto auxiliar revisado e enriquecido.')
+        self.assertFalse(bool(questao.imagem))  # Imagem removida com sucesso

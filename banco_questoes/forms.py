@@ -63,6 +63,8 @@ class QuestaoForm(forms.ModelForm):
             'dificuldade',
             'disciplina',
             'topico',
+            'texto_auxiliar',
+            'imagem',
             'enunciado',
             'criterios_correcao',
             'tags',
@@ -73,6 +75,8 @@ class QuestaoForm(forms.ModelForm):
             'dificuldade': 'Nível de dificuldade',
             'disciplina': 'Disciplina',
             'topico': 'Tópico curricular',
+            'texto_auxiliar': 'Texto auxiliar / Contextualização (Opcional)',
+            'imagem': 'Imagem / Diagrama de apoio (Opcional)',
             'enunciado': 'Enunciado da questão',
             'criterios_correcao': 'Critérios de correção / Gabarito',
             'tags': 'Tags e palavras-chave',
@@ -83,6 +87,19 @@ class QuestaoForm(forms.ModelForm):
             'dificuldade': forms.Select(attrs={'class': 'form-select'}),
             'disciplina': forms.Select(attrs={'class': 'form-select'}),
             'topico': forms.Select(attrs={'class': 'form-select'}),
+            'texto_auxiliar': forms.Textarea(
+                attrs={
+                    'class': 'form-textarea',
+                    'rows': 3,
+                    'placeholder': 'Texto motivador, trecho de código, contextualização ou artigo base…',
+                },
+            ),
+            'imagem': forms.ClearableFileInput(
+                attrs={
+                    'class': 'form-input form-file-input',
+                    'accept': 'image/*',
+                },
+            ),
             'enunciado': forms.Textarea(
                 attrs={
                     'class': 'form-textarea',
