@@ -767,3 +767,322 @@ a:hover {
   padding: 2.25rem 0;
   margin-top: auto;
 }
+
+/* --------------------------------------------------------------------------
+   14. Módulo de Autenticação / Tela de Login Split-Screen (Zero Bootstrap)
+   -------------------------------------------------------------------------- */
+.auth-split-wrapper {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  background: #FFFFFF;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Painel Esquerdo: Vitrine Institucional FAETERJ-Rio */
+.auth-showcase-panel {
+  background: radial-gradient(circle at 20% 30%, #0F3B66 0%, #071A2E 70%, #030E1A 100%);
+  color: #FFFFFF;
+  padding: 4rem 4.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-showcase-panel::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  right: -120px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 128, 255, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.auth-showcase-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -100px;
+  left: -100px;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.auth-brand-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 0.45rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.02em;
+  width: fit-content;
+}
+
+.auth-showcase-content {
+  position: relative;
+  z-index: 5;
+  margin: 3rem 0;
+}
+
+.auth-showcase-title {
+  font-size: 2.35rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.25rem;
+  color: #FFFFFF;
+}
+
+.auth-showcase-title span {
+  background: linear-gradient(135deg, var(--fae-gold) 0%, #FDE68A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-showcase-desc {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.6;
+  max-width: 520px;
+  margin-bottom: 2.5rem;
+}
+
+/* Vitrine de Recursos em Cards de Vidro */
+.auth-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 520px;
+}
+
+.auth-feature-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.15rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 1.1rem 1.35rem;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.auth-feature-card:hover {
+  transform: translateX(6px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 128, 255, 0.4);
+}
+
+.auth-feature-icon-box {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+}
+
+.auth-feature-icon-blue {
+  background: rgba(0, 128, 255, 0.2);
+  color: var(--fae-blue-electric);
+  border: 1px solid rgba(0, 128, 255, 0.35);
+}
+
+.auth-feature-icon-gold {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--fae-gold);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.auth-feature-icon-emerald {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.auth-feature-text h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0 0 0.2rem 0;
+}
+
+.auth-feature-text p {
+  font-size: 0.825rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.auth-showcase-footer {
+  position: relative;
+  z-index: 5;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Painel Direito: Formulário Interativo de Login */
+.auth-form-panel {
+  background: #F8FAFC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2.5rem;
+}
+
+.auth-box {
+  width: 100%;
+  max-width: 440px;
+  background: #FFFFFF;
+  border-radius: 22px;
+  padding: 2.75rem 2.25rem;
+  box-shadow: 0 20px 45px -10px rgba(11, 59, 96, 0.08), 0 0 0 1px #EDF2F7;
+  animation: fadeIn 0.35s ease-out;
+}
+
+.auth-box-header {
+  margin-bottom: 2rem;
+}
+
+.auth-box-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--fae-navy-900) 0%, var(--fae-blue-primary) 50%, var(--fae-blue-electric) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 1.65rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 8px 20px rgba(0, 128, 255, 0.35);
+}
+
+.auth-box-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--fae-navy-950);
+  letter-spacing: -0.03em;
+  margin: 0 0 0.35rem 0;
+}
+
+.auth-box-subtitle {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Inputs com Ícones e Foco */
+.input-with-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-icon-wrapper .input-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  pointer-events: none;
+  transition: var(--transition);
+}
+
+.input-with-icon-wrapper .form-input {
+  padding-left: 2.85rem;
+  padding-right: 2.85rem;
+  height: 48px;
+  font-size: 0.95rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: #FFFFFF;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-with-icon-wrapper .form-input:focus {
+  border-color: var(--fae-blue-electric);
+  box-shadow: 0 0 0 3px rgba(0, 128, 255, 0.15);
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--fae-blue-primary);
+}
+
+/* Botão de Preenchimento Rápido de Teste */
+.btn-autofill-test {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #FEF3C7;
+  border: 1px dashed #F59E0B;
+  border-radius: var(--radius-md);
+  color: #92400E;
+  font-size: 0.825rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.btn-autofill-test:hover {
+  background: #FDE68A;
+  transform: translateY(-1px);
+}
+
+/* Responsividade Mobile / Tablet */
+@media (max-width: 992px) {
+  .auth-split-wrapper {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-showcase-panel {
+    display: none;
+  }
+
+  .auth-form-panel {
+    padding: 2rem 1.25rem;
+    min-height: 100vh;
+    background: radial-gradient(circle at 50% 20%, #0F3B66 0%, #071A2E 70%, #030E1A 100%);
+  }
+
+  .auth-box {
+    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+

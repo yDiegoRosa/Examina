@@ -60,6 +60,16 @@
             <i class="bi bi-person-fill-check text-warning" style="color: var(--fae-gold);"></i>
             <span>{{ user.username }}</span>
           </div>
+          <form method="post" action="{% url 'logout' %}" style="display: inline; margin: 0;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Encerrar Sessão">
+              <i class="bi bi-box-arrow-right"></i> Sair
+            </button>
+          </form>
+          {% else %}
+          <a href="{% url 'login' %}" class="btn btn-primary" style="padding: 0.35rem 0.9rem; font-size: 0.825rem;">
+            <i class="bi bi-box-arrow-in-right"></i> Entrar
+          </a>
           {% endif %}
           <button class="mobile-toggle" aria-label="Abrir Menu">
             <i class="bi bi-list"></i>

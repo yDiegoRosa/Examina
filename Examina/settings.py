@@ -162,6 +162,13 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ---------------------------------------------------------------------------
+# Autenticação
+# ---------------------------------------------------------------------------
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'banco_questoes:questao_list'
+LOGOUT_REDIRECT_URL = 'login'
+
 
 # ---------------------------------------------------------------------------
 # Logging

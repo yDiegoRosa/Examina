@@ -925,3 +925,71 @@ class CSVExportViewTest(TestCase):
 
         self.assertIn('Qual a complexidade de inserção numa árvore AVL balanceada?', content)
         self.assertNotIn('Explique o ciclo de vida de uma requisição HTTP.', content)
+
+
+class AuthenticationViewsTest(TestCase):
+    """Testes de integração para as rotas e templates de login e logout."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username='docente_login_test',
+            password='my_secret_password',  # noqa: S106
+        )
+
+    def test_login_page_renders_get(self):
+        """Verifica se a tela de login renderiza com sucesso e com identidade visual."""
+        from django.urls import reverse
+
+        url = reverse('login')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'registration/login.html')
+        self.assertContains(response, 'Examina')
+        self.assertContains(response, 'FAETERJ-Rio')
+        self.assertContains(response, 'Acessar a Plataforma')
+        self.assertContains(response, 'id_username')
+        self.assertContains(response, 'id_password')
+
+    def test_login_post_success_redirects_to_questoes(self):
+        """Verifica autenticação com credenciais corretas e redirecionamento."""
+        from django.urls import reverse
+
+        url = reverse('login')
+        post_data = {
+            'username': 'docente_login_test',
+            'password': 'my_secret_password',  # noqa: S106
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        # Confirma que a sessão foi autenticada
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
+
+    def test_login_post_invalid_credentials_shows_error(self):
+        """Verifica falha de autenticação com senha incorreta e exibição de alerta."""
+        from django.urls import reverse
+
+        url = reverse('login')
+        post_data = {
+            'username': 'docente_login_test',
+            'password': 'wrong_password',  # noqa: S106
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usuário ou senha incorretos')
+
+    def test_logout_post_redirects_to_login(self):
+        """Verifica logout via POST e redirecionamento para tela de login."""
+        from django.urls import reverse
+
+        self.client.login(username='docente_login_test', password='my_secret_password')  # noqa: S106
+        url = reverse('logout')
+
+        response = self.client.post(url)
+        self.assertRedirects(response, reverse('login'))

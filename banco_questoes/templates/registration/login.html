@@ -1,0 +1,232 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acesso Institucional — Examina FAETERJ-Rio</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap Icons (Apenas ícones vetoriais) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <!-- Design System Vanilla CSS (Zero Bootstrap) -->
+  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}">
+</head>
+<body style="margin: 0; padding: 0; background: #FFFFFF;">
+
+  <div class="auth-split-wrapper">
+
+    <!-- ====================================================================
+         PAINEL ESQUERDO: Vitrine Institucional & Recursos Pedagógicos
+         ==================================================================== -->
+    <aside class="auth-showcase-panel">
+      
+      <!-- Topo: Marca e Unidade -->
+      <div>
+        <div class="auth-brand-badge-pill mb-4">
+          <i class="bi bi-mortarboard-fill" style="color: var(--fae-gold);"></i>
+          <span>FAETERJ-Rio • FAETEC</span>
+        </div>
+      </div>
+
+      <!-- Centro: Apresentação Principal & Pilares -->
+      <div class="auth-showcase-content">
+        <h2 class="auth-showcase-title">
+          Gestão Inteligente de <span>Avaliações & Acervo</span> Pedagógico.
+        </h2>
+        <p class="auth-showcase-desc">
+          Ambiente centralizado para o corpo docente estruturar, revisar e versionar questões de excelência acadêmica nos cursos superiores de tecnologia.
+        </p>
+
+        <!-- Vitrine de Funcionalidades em Cards de Vidro -->
+        <div class="auth-features-list">
+          
+          <div class="auth-feature-card">
+            <div class="auth-feature-icon-box auth-feature-icon-blue">
+              <i class="bi bi-layers-fill"></i>
+            </div>
+            <div class="auth-feature-text">
+              <h4>Acervo Curricular Estruturado</h4>
+              <p>Grade com 34 disciplinas da FAETERJ-Rio catalogadas, com tópicos e tags livres.</p>
+            </div>
+          </div>
+
+          <div class="auth-feature-card">
+            <div class="auth-feature-icon-box auth-feature-icon-gold">
+              <i class="bi bi-file-earmark-arrow-up-fill"></i>
+            </div>
+            <div class="auth-feature-text">
+              <h4>Importação em Lote via CSV (RF02)</h4>
+              <p>Validação sintática automática e bloqueio em tempo real de questões duplicadas.</p>
+            </div>
+          </div>
+
+          <div class="auth-feature-card">
+            <div class="auth-feature-icon-box auth-feature-icon-emerald">
+              <i class="bi bi-shield-check"></i>
+            </div>
+            <div class="auth-feature-text">
+              <h4>Governança e Auditoria (RF05)</h4>
+              <p>Histórico completo de alterações por questão com rastreamento integral de autoria.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Rodapé Institucional do Painel Esquerdo -->
+      <div class="auth-showcase-footer">
+        <i class="bi bi-patch-check-fill" style="color: var(--fae-blue-electric);"></i>
+        <span>Faculdade de Educação Tecnológica do Estado do Rio de Janeiro</span>
+      </div>
+
+    </aside>
+
+
+    <!-- ====================================================================
+         PAINEL DIREITO: Formulário de Autenticação Interativo
+         ==================================================================== -->
+    <main class="auth-form-panel">
+      <div class="auth-box">
+
+        <!-- Header do Card de Login -->
+        <div class="auth-box-header">
+          <div class="auth-box-logo">
+            <i class="bi bi-cpu-fill"></i>
+          </div>
+          <div class="flex items-center gap-2 mb-1">
+            <h1 class="auth-box-title">Examina</h1>
+            <span class="brand-badge">Acesso Docente</span>
+          </div>
+          <p class="auth-box-subtitle">
+            Informe suas credenciais para gerenciar o acervo pedagógico.
+          </p>
+        </div>
+
+        <!-- Alerta de Falha de Login -->
+        {% if form.errors %}
+        <div class="alert-toast alert-toast-danger mb-4" role="alert">
+          <div class="flex items-center gap-2">
+            <i class="bi bi-exclamation-triangle-fill" style="color: var(--color-danger); font-size: 1.25rem;"></i>
+            <div>
+              <div class="font-bold small" style="color: var(--color-danger);">Credenciais Inválidas</div>
+              <div class="small text-muted">Usuário ou senha incorretos. Por favor, tente novamente.</div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Formulário Django Auth -->
+        <form method="post" action="{% url 'login' %}" novalidate id="login-form">
+          {% csrf_token %}
+
+          {% if request.GET.next %}
+          <input type="hidden" name="next" value="{{ request.GET.next }}">
+          {% endif %}
+
+          <!-- Campo Usuário -->
+          <div class="form-group mb-3">
+            <label for="id_username" class="form-label font-bold">
+              <i class="bi bi-person-fill" style="color: var(--fae-blue-primary);"></i> Usuário
+            </label>
+            <div class="input-with-icon-wrapper">
+              <i class="bi bi-person input-icon"></i>
+              <input type="text" name="username" id="id_username" class="form-input"
+                     placeholder="Ex.: docente" required autofocus
+                     value="{{ form.username.value|default:'' }}">
+            </div>
+          </div>
+
+          <!-- Campo Senha -->
+          <div class="form-group mb-4">
+            <div class="flex justify-between items-center mb-1">
+              <label for="id_password" class="form-label font-bold" style="margin-bottom: 0;">
+                <i class="bi bi-shield-lock-fill" style="color: var(--fae-blue-primary);"></i> Senha
+              </label>
+            </div>
+            <div class="input-with-icon-wrapper">
+              <i class="bi bi-lock input-icon"></i>
+              <input type="password" name="password" id="id_password" class="form-input"
+                     placeholder="Sua senha institucional" required>
+              <button type="button" id="btn-toggle-password" class="password-toggle-btn"
+                      title="Mostrar / Ocultar senha" aria-label="Mostrar ou ocultar senha">
+                <i class="bi bi-eye" id="icon-toggle-password"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Botão CTA Principal -->
+          <button type="submit" id="btn-submit-login" class="btn btn-primary w-full" style="padding: 0.85rem; font-size: 1rem; border-radius: var(--radius-md);">
+            <i class="bi bi-box-arrow-in-right"></i> Acessar a Plataforma
+          </button>
+
+          <!-- Botão Interativo com 1 Clique para Preenchimento de Teste -->
+          <button type="button" id="btn-autofill" class="btn-autofill-test" title="Clique para preencher as credenciais de teste">
+            <div class="flex items-center gap-2">
+              <i class="bi bi-lightning-charge-fill" style="color: #D97706; font-size: 1.1rem;"></i>
+              <div>
+                <span class="font-bold">Acesso de Demonstração:</span>
+                <span class="small font-mono ml-1">docente / faetec</span>
+              </div>
+            </div>
+            <span class="small font-bold" style="text-decoration: underline;">Preencher</span>
+          </button>
+
+        </form>
+
+        <!-- Rodapé do Card -->
+        <div class="text-center mt-4">
+          <span class="text-muted small">
+            Governo do Estado do Rio de Janeiro • FAETEC
+          </span>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Script Interativo Vanilla JS (Zero Dependências) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const toggleBtn = document.getElementById('btn-toggle-password');
+      const passwordInput = document.getElementById('id_password');
+      const toggleIcon = document.getElementById('icon-toggle-password');
+      const usernameInput = document.getElementById('id_username');
+      const autoFillBtn = document.getElementById('btn-autofill');
+      const submitBtn = document.getElementById('btn-submit-login');
+
+      // Alternar visualização de senha
+      if (toggleBtn && passwordInput && toggleIcon) {
+        toggleBtn.addEventListener('click', function () {
+          const isPassword = passwordInput.type === 'password';
+          passwordInput.type = isPassword ? 'text' : 'password';
+          toggleIcon.className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
+          passwordInput.focus();
+        });
+      }
+
+      // Preenchimento de credenciais com 1 clique
+      if (autoFillBtn && usernameInput && passwordInput) {
+        autoFillBtn.addEventListener('click', function () {
+          usernameInput.value = 'docente';
+          passwordInput.value = 'faetec';
+          
+          // Efeito visual no botão de login
+          if (submitBtn) {
+            submitBtn.classList.add('pulse-glow');
+            setTimeout(() => submitBtn.classList.remove('pulse-glow'), 1200);
+            submitBtn.focus();
+          }
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>
