@@ -18,8 +18,8 @@
   </div>
 
   <div class="flex flex-wrap gap-2">
-    <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline" title="Baixar planilha modelo para importação em lote">
-      <i class="bi bi-file-earmark-arrow-down-fill" style="color: var(--fae-blue-primary);"></i> Modelo CSV
+    <a href="{% url 'banco_questoes:download_modelo_csv' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-outline" title="Exportar questões do acervo no formato CSV">
+      <i class="bi bi-file-earmark-arrow-down-fill" style="color: var(--fae-blue-primary);"></i> Exportar CSV
     </a>
     {% if perms.banco_questoes.add_questao %}
     <a href="{% url 'banco_questoes:questao_import' %}" class="btn btn-outline" title="Importar questões em lote a partir de arquivo CSV">

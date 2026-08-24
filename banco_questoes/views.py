@@ -67,8 +67,12 @@ def questao_create(request):
         form = QuestaoForm(request.POST)
         formset = AlternativaFormSet(request.POST)
 
-        if form.is_valid() and formset.is_valid():
-            if form.validate_with_alternativas(formset):
+        if form.is_valid():
+            is_obj = form.cleaned_data.get('tipo') == Questao.Tipo.OBJETIVA
+            formset_valid = formset.is_valid() if is_obj else True
+            cross_valid = form.validate_with_alternativas(formset) if is_obj else True
+
+            if formset_valid and cross_valid:
                 try:
                     with transaction.atomic():
                         questao = form.save(commit=False)
@@ -76,7 +80,7 @@ def questao_create(request):
                         questao.save()
                         form.save_m2m()
 
-                        if questao.is_objetiva:
+                        if is_obj:
                             formset.instance = questao
                             formset.save()
 
@@ -88,6 +92,11 @@ def questao_create(request):
                 except Exception as exc:
                     logger.exception('Erro ao salvar questão: %s', exc)
                     messages.error(request, f'Erro interno ao cadastrar questão: {exc}')
+            else:
+                messages.error(
+                    request,
+                    'Por favor, corrija os erros apontados no formulário de alternativas.',
+                )
         else:
             messages.error(
                 request,
@@ -121,12 +130,20 @@ def questao_update(request, pk):
         form = QuestaoForm(request.POST, instance=questao)
         formset = AlternativaFormSet(request.POST, instance=questao)
 
-        if form.is_valid() and formset.is_valid():
-            if form.validate_with_alternativas(formset):
+        if form.is_valid():
+            is_obj = form.cleaned_data.get('tipo') == Questao.Tipo.OBJETIVA
+            formset_valid = formset.is_valid() if is_obj else True
+            cross_valid = form.validate_with_alternativas(formset) if is_obj else True
+
+            if formset_valid and cross_valid:
                 try:
                     with transaction.atomic():
-                        questao = form.save()
-                        if questao.is_objetiva:
+                        questao = form.save(commit=False)
+                        questao._history_user = request.user
+                        questao.save()
+                        form.save_m2m()
+
+                        if is_obj:
                             formset.save()
                         else:
                             questao.alternativas.all().delete()
@@ -137,8 +154,13 @@ def questao_update(request, pk):
                     )
                     return redirect('banco_questoes:questao_list')
                 except Exception as exc:
-                    logger.exception('Erro ao atualizar questão: %s', exc)
-                    messages.error(request, f'Erro interno ao atualizar: {exc}')
+                    logger.exception('Erro ao atualizar questão Q%s: %s', pk, exc)
+                    messages.error(request, f'Erro interno ao atualizar questão: {exc}')
+            else:
+                messages.error(
+                    request,
+                    'Por favor, corrija os erros apontados no formulário de alternativas.',
+                )
         else:
             messages.error(
                 request,
@@ -161,13 +183,19 @@ def questao_update(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# Download do CSV Modelo
+# Download / Exportação do Acervo em CSV
 # ---------------------------------------------------------------------------
 @login_required
-def download_modelo_csv(_request):
-    """Gera e faz o download do arquivo CSV modelo de importação de questões."""
+def download_modelo_csv(request):
+    """
+    Exporta o acervo de questões no formato CSV padrão com 13 colunas.
+
+    Caso existam filtros na requisição GET, exporta o conjunto filtrado.
+    Se não houver questões cadastradas, gera registros modelo baseados nas
+    disciplinas reais da FAETERJ-Rio.
+    """
     response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = 'attachment; filename="modelo_importacao_questoes.csv"'
+    response['Content-Disposition'] = 'attachment; filename="acervo_questoes_faeterj.csv"'
 
     # BOM UTF-8 para compatibilidade direta com Microsoft Excel em PT-BR
     response.write('\ufeff')
@@ -190,40 +218,79 @@ def download_modelo_csv(_request):
             'criterios_correcao',
         ]
     )
-    writer.writerow(
-        [
-            'Qual é o valor de x na equação 2x + 6 = 14?',
-            'OBJ',
-            'Matemática',
-            'Álgebra',
-            'F',
-            'enem;algebra;equacoes',
-            'x = 3',
-            'x = 4',
-            'x = 5',
-            'x = 6',
-            'x = 7',
-            'B',
-            '',
-        ]
+
+    base_qs = (
+        Questao.objects.select_related('disciplina', 'topico')
+        .prefetch_related('tags', 'alternativas')
+        .order_by('-criado_em')
     )
-    writer.writerow(
-        [
-            'Explique o processo de fotossíntese destacando a fase clara e a fase escura.',
-            'DIS',
-            'Biologia',
-            'Botânica',
-            'M',
-            'biologia;fotossintese;fisiologia',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            'O aluno deve mencionar a absorção de luz pelos pigmentos fotossintetizantes na fase clara (tilacóides) e a fixação de CO2 no Ciclo de Calvin na fase escura (estroma).',
-        ]
-    )
+
+    # Aplica filtros se houver parâmetros GET
+    if request.GET:
+        questao_filter = QuestaoFilter(request.GET, queryset=base_qs)
+        questoes = questao_filter.qs
+    else:
+        questoes = base_qs
+
+    if questoes.exists():
+        for q in questoes:
+            alt_map = {alt.letra: alt.texto for alt in q.alternativas.all()}
+            correta_letra = next((alt.letra for alt in q.alternativas.all() if alt.correta), '')
+            tags_str = ';'.join(tag.name for tag in q.tags.all())
+
+            writer.writerow(
+                [
+                    q.enunciado,
+                    q.tipo,
+                    q.disciplina.nome,
+                    q.topico.nome if q.topico else '',
+                    q.dificuldade,
+                    tags_str,
+                    alt_map.get('A', ''),
+                    alt_map.get('B', ''),
+                    alt_map.get('C', ''),
+                    alt_map.get('D', ''),
+                    alt_map.get('E', ''),
+                    correta_letra,
+                    q.criterios_correcao or '',
+                ]
+            )
+    else:
+        # Exemplo modelo baseado na grade da FAETERJ
+        writer.writerow(
+            [
+                'Em uma árvore binária de busca (BST), qual é a complexidade temporal média para busca?',
+                'OBJ',
+                'Estrutura de Dados (ESD)',
+                'Árvores Binárias',
+                'M',
+                'arvores;bst;complexidade',
+                'O(1)',
+                'O(log n)',
+                'O(n)',
+                'O(n log n)',
+                'O(n^2)',
+                'B',
+                '',
+            ]
+        )
+        writer.writerow(
+            [
+                'Explique o funcionamento do protocolo HTTP e diferencie os métodos GET e POST.',
+                'DIS',
+                'Construção de Aplicações WEB (CAW)',
+                'Protocolo HTTP',
+                'F',
+                'web;http;get;post',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                'O aluno deve conceituar requisição/resposta stateless, indicar que GET trafega dados na URL/idempotente e POST no corpo da requisição/criação de recursos.',
+            ]
+        )
 
     return response
 

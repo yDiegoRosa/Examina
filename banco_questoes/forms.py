@@ -35,10 +35,10 @@ AlternativaFormSet = inlineformset_factory(
     Questao,
     Alternativa,
     form=AlternativaForm,
-    min_num=2,
+    min_num=0,
     max_num=5,
     extra=2,
-    validate_min=True,
+    validate_min=False,
     can_delete=True,
 )
 

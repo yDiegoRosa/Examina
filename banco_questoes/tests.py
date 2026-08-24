@@ -604,3 +604,324 @@ class QuestaoFilterTest(TestCase):
         f_busca2 = QuestaoFilter({'q': 'onda-partícula'}, queryset=Questao.objects.all())
         self.assertEqual(f_busca2.qs.count(), 1)
         self.assertEqual(f_busca2.qs.first(), self.q2)
+
+
+class QuestaoUpdateViewTest(TestCase):
+    """Testes de integração da view de edição de questão (questao_update)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Permission
+
+        from .models import Alternativa, Disciplina
+
+        user_model = get_user_model()
+        self.docente = user_model.objects.create_user(username='docente_editor', password='secret_password')  # noqa: S106
+        perm_change = Permission.objects.get(codename='change_questao')
+        self.docente.user_permissions.add(perm_change)
+
+        self.user_sem_perm = user_model.objects.create_user(username='sem_perm', password='secret_password')  # noqa: S106
+
+        self.disc = Disciplina.objects.create(nome='Programação')
+        self.questao = Questao.objects.create(
+            disciplina=self.disc,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Qual a extensão padrão de arquivos Python?',
+            ativo=True,
+            autor=self.docente,
+        )
+        self.alt_a = Alternativa.objects.create(questao=self.questao, letra='A', texto='.pt', correta=False)
+        self.alt_b = Alternativa.objects.create(questao=self.questao, letra='B', texto='.py', correta=True)
+
+    def test_questao_update_get_renders_form_and_data(self):
+        """Verifica se a view de edição renderiza os dados atuais da questão."""
+        from django.urls import reverse
+
+        self.client.login(username='docente_editor', password='secret_password')  # noqa: S106
+        url = reverse('banco_questoes:questao_update', kwargs={'pk': self.questao.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'Editar Questão Q{self.questao.pk}')
+        self.assertContains(response, 'Qual a extensão padrão de arquivos Python?')
+        self.assertContains(response, '.py')
+
+    def test_questao_update_post_modifies_objective_question(self):
+        """Verifica atualização de enunciado e alteração da alternativa correta."""
+        from django.urls import reverse
+
+        self.client.login(username='docente_editor', password='secret_password')  # noqa: S106
+        url = reverse('banco_questoes:questao_update', kwargs={'pk': self.questao.pk})
+
+        post_data = {
+            'tipo': Questao.Tipo.OBJETIVA,
+            'dificuldade': Questao.Dificuldade.MEDIO,
+            'disciplina': self.disc.pk,
+            'enunciado': 'Qual a extensão correta de arquivos Python 3?',
+            'ativo': 'on',
+            'tags': 'python, extensao, 2026',
+            # Formset
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '2',
+            'alternativas-MIN_NUM_FORMS': '2',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-id': str(self.alt_a.pk),
+            'alternativas-0-letra': 'A',
+            'alternativas-0-texto': '.py',
+            'alternativas-0-correta': 'on',  # Mudou A para correta
+            'alternativas-1-id': str(self.alt_b.pk),
+            'alternativas-1-letra': 'B',
+            'alternativas-1-texto': '.java',
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        self.questao.refresh_from_db()
+        self.assertEqual(self.questao.enunciado, 'Qual a extensão correta de arquivos Python 3?')
+        self.assertEqual(self.questao.dificuldade, Questao.Dificuldade.MEDIO)
+        self.assertEqual(self.questao.history.count(), 2)  # Criou histórico simple-history
+
+        self.alt_a.refresh_from_db()
+        self.alt_b.refresh_from_db()
+        self.assertTrue(self.alt_a.correta)
+        self.assertFalse(self.alt_b.correta)
+
+    def test_questao_update_post_converts_objective_to_discursive(self):
+        """Verifica conversão de objetiva para discursiva com deleção das alternativas."""
+        from django.urls import reverse
+
+        self.client.login(username='docente_editor', password='secret_password')  # noqa: S106
+        url = reverse('banco_questoes:questao_update', kwargs={'pk': self.questao.pk})
+
+        post_data = {
+            'tipo': Questao.Tipo.DISCURSIVA,
+            'dificuldade': Questao.Dificuldade.DIFICIL,
+            'disciplina': self.disc.pk,
+            'enunciado': 'Explique o paradigma de programação funcional em Python.',
+            'criterios_correcao': 'Explicar funções puras, imutabilidade e lambda.',
+            'ativo': 'on',
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '2',
+            'alternativas-MIN_NUM_FORMS': '2',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-id': str(self.alt_a.pk),
+            'alternativas-0-letra': 'A',
+            'alternativas-0-texto': '.pt',
+            'alternativas-1-id': str(self.alt_b.pk),
+            'alternativas-1-letra': 'B',
+            'alternativas-1-texto': '.py',
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        self.questao.refresh_from_db()
+        self.assertEqual(self.questao.tipo, Questao.Tipo.DISCURSIVA)
+        self.assertEqual(self.questao.alternativas.count(), 0)  # Alternativas removidas
+
+    def test_questao_update_cross_validation_blocks_objective_without_correct(self):
+        """Verifica que regra cruzada (exatamente 1 correta) bloqueia atualização incorreta."""
+        from django.urls import reverse
+
+        self.client.login(username='docente_editor', password='secret_password')  # noqa: S106
+        url = reverse('banco_questoes:questao_update', kwargs={'pk': self.questao.pk})
+
+        post_data = {
+            'tipo': Questao.Tipo.OBJETIVA,
+            'dificuldade': Questao.Dificuldade.FACIL,
+            'disciplina': self.disc.pk,
+            'enunciado': 'Qual a extensão padrão de arquivos Python?',
+            'ativo': 'on',
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '2',
+            'alternativas-MIN_NUM_FORMS': '2',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-id': str(self.alt_a.pk),
+            'alternativas-0-letra': 'A',
+            'alternativas-0-texto': '.pt',
+            'alternativas-1-id': str(self.alt_b.pk),
+            'alternativas-1-letra': 'B',
+            'alternativas-1-texto': '.py',
+            # Nenhuma marcada como correta
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'devem ter exatamente 1 alternativa correta')
+
+    def test_questao_update_permission_denied_for_unauthorized_user(self):
+        """Verifica que usuário sem permissão change_questao recebe 403 Forbidden."""
+        from django.urls import reverse
+
+        self.client.login(username='sem_perm', password='secret_password')  # noqa: S106
+        url = reverse('banco_questoes:questao_update', kwargs={'pk': self.questao.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 403)
+
+
+class QuestaoCreateViewTest(TestCase):
+    """Testes de integração da view de cadastro de questão (questao_create)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Permission
+
+        from .models import Disciplina
+
+        user_model = get_user_model()
+        self.docente = user_model.objects.create_user(username='docente_criador', password='secret_password')  # noqa: S106
+        perm_add = Permission.objects.get(codename='add_questao')
+        self.docente.user_permissions.add(perm_add)
+
+        self.disc = Disciplina.objects.create(nome='Engenharia de Software')
+        self.client.login(username='docente_criador', password='secret_password')  # noqa: S106
+
+    def test_questao_create_discursive_without_alternatives_success(self):
+        """Verifica que questão discursiva é cadastrada com sucesso sem exigir formset de alternativas."""
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:questao_create')
+        post_data = {
+            'tipo': Questao.Tipo.DISCURSIVA,
+            'dificuldade': Questao.Dificuldade.MEDIO,
+            'disciplina': self.disc.pk,
+            'enunciado': 'Descreva as vantagens do padrão arquitetural MVC.',
+            'criterios_correcao': 'Explicar separação de responsabilidades (Model, View, Controller).',
+            'tags': 'mvc, arquitetura',
+            'ativo': 'on',
+            # Formset management form básico sem formulários preenchidos
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '0',
+            'alternativas-MIN_NUM_FORMS': '0',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-letra': '',
+            'alternativas-0-texto': '',
+            'alternativas-1-letra': '',
+            'alternativas-1-texto': '',
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        # Confirma persistência
+        q = Questao.objects.get(enunciado='Descreva as vantagens do padrão arquitetural MVC.')
+        self.assertEqual(q.tipo, Questao.Tipo.DISCURSIVA)
+        self.assertEqual(q.dificuldade, Questao.Dificuldade.MEDIO)
+        self.assertEqual(q.autor, self.docente)
+        self.assertEqual(q.alternativas.count(), 0)
+
+    def test_questao_create_objective_success(self):
+        """Verifica cadastro com sucesso de questão objetiva com alternativas."""
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:questao_create')
+        post_data = {
+            'tipo': Questao.Tipo.OBJETIVA,
+            'dificuldade': Questao.Dificuldade.FACIL,
+            'disciplina': self.disc.pk,
+            'enunciado': 'O que significa MVC?',
+            'tags': 'mvc, sigla',
+            'ativo': 'on',
+            'alternativas-TOTAL_FORMS': '2',
+            'alternativas-INITIAL_FORMS': '0',
+            'alternativas-MIN_NUM_FORMS': '0',
+            'alternativas-MAX_NUM_FORMS': '5',
+            'alternativas-0-letra': 'A',
+            'alternativas-0-texto': 'Model-View-Controller',
+            'alternativas-0-correta': 'on',
+            'alternativas-1-letra': 'B',
+            'alternativas-1-texto': 'Main-Virtual-Core',
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+
+        q = Questao.objects.get(enunciado='O que significa MVC?')
+        self.assertEqual(q.tipo, Questao.Tipo.OBJETIVA)
+        self.assertEqual(q.alternativas.count(), 2)
+        self.assertEqual(q.alternativas.get(correta=True).letra, 'A')
+
+
+class CSVExportViewTest(TestCase):
+    """Testes de integração para o download e exportação de dados reais em CSV."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from .models import Alternativa, Disciplina, Topico
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_export', password='secret_password')  # noqa: S106
+        self.client.login(username='docente_export', password='secret_password')  # noqa: S106
+
+        self.disc_esd, _ = Disciplina.objects.get_or_create(nome='Estrutura de Dados (ESD)')
+        self.disc_caw, _ = Disciplina.objects.get_or_create(nome='Construção de Aplicações WEB (CAW)')
+
+        self.topico_arv = Topico.objects.create(disciplina=self.disc_esd, nome='Árvores Binárias')
+
+        # Questão 1: Objetiva real
+        self.q_obj = Questao.objects.create(
+            disciplina=self.disc_esd,
+            topico=self.topico_arv,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.MEDIO,
+            enunciado='Qual a complexidade de inserção numa árvore AVL balanceada?',
+            ativo=True,
+            autor=self.user,
+        )
+        self.q_obj.tags.add('avl', 'arvores')
+        Alternativa.objects.create(questao=self.q_obj, letra='A', texto='O(log n)', correta=True)
+        Alternativa.objects.create(questao=self.q_obj, letra='B', texto='O(n)', correta=False)
+
+        # Questão 2: Discursiva real
+        self.q_dis = Questao.objects.create(
+            disciplina=self.disc_caw,
+            tipo=Questao.Tipo.DISCURSIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Explique o ciclo de vida de uma requisição HTTP.',
+            criterios_correcao='DNS, handshake TCP, requisição HTTP, resposta do servidor.',
+            ativo=True,
+            autor=self.user,
+        )
+        self.q_dis.tags.add('http', 'web')
+
+    def test_export_csv_contains_real_database_records(self):
+        """Verifica se o CSV exporta os registros reais cadastrados no banco de dados."""
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:download_modelo_csv')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('attachment; filename="acervo_questoes_faeterj.csv"', response['Content-Disposition'])
+
+        content = response.content.decode('utf-8')
+        # Verifica cabeçalho BOM UTF-8
+        self.assertTrue(content.startswith('\ufeff'))
+
+        # Verifica presença das questões reais
+        self.assertIn('Qual a complexidade de inserção numa árvore AVL balanceada?', content)
+        self.assertIn('Estrutura de Dados (ESD)', content)
+        self.assertIn('Árvores Binárias', content)
+        self.assertIn('O(log n)', content)
+        self.assertIn('Explique o ciclo de vida de uma requisição HTTP.', content)
+        self.assertIn('Construção de Aplicações WEB (CAW)', content)
+        self.assertIn('DNS, handshake TCP, requisição HTTP, resposta do servidor.', content)
+
+    def test_export_csv_respects_active_filters(self):
+        """Verifica se o CSV exporta apenas os registros que atendem aos filtros ativos da query string."""
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:download_modelo_csv')
+        # Filtra apenas pela disciplina ESD
+        response = self.client.get(url, {'disciplina': self.disc_esd.pk})
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+
+        self.assertIn('Qual a complexidade de inserção numa árvore AVL balanceada?', content)
+        self.assertNotIn('Explique o ciclo de vida de uma requisição HTTP.', content)
