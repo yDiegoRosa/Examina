@@ -950,9 +950,33 @@ class AuthenticationViewsTest(TestCase):
         self.assertTemplateUsed(response, 'registration/login.html')
         self.assertContains(response, 'Examina')
         self.assertContains(response, 'FAETERJ-Rio')
-        self.assertContains(response, 'Acessar a Plataforma')
+        self.assertContains(response, 'Entrar no Examina')
         self.assertContains(response, 'id_username')
         self.assertContains(response, 'id_password')
+
+    def test_unauthenticated_access_redirects_to_login(self):
+        """Garante que funções internas e rota raiz exigem autenticação prévia."""
+        from django.urls import reverse
+
+        # Teste na rota raiz '/'
+        resp_root = self.client.get('/')
+        self.assertEqual(resp_root.status_code, 302)
+        self.assertIn('/login/', resp_root.url)
+
+        # Teste em '/questoes/'
+        resp_list = self.client.get(reverse('banco_questoes:questao_list'))
+        self.assertEqual(resp_list.status_code, 302)
+        self.assertIn('/login/', resp_list.url)
+
+        # Teste em '/questoes/nova/'
+        resp_create = self.client.get(reverse('banco_questoes:questao_create'))
+        self.assertEqual(resp_create.status_code, 302)
+        self.assertIn('/login/', resp_create.url)
+
+        # Teste em '/questoes/importar/'
+        resp_import = self.client.get(reverse('banco_questoes:questao_import'))
+        self.assertEqual(resp_import.status_code, 302)
+        self.assertIn('/login/', resp_import.url)
 
     def test_login_post_success_redirects_to_questoes(self):
         """Verifica autenticação com credenciais corretas e redirecionamento."""
