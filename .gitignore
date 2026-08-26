@@ -10,6 +10,9 @@ logs/
 # C extensions
 *.so
 
+#Test
+media/csv_test/*
+
 # Distribution / packaging
 .Python
 build/
