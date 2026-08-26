@@ -10,8 +10,8 @@ logs/
 # C extensions
 *.so
 
-#Test
-media/csv_test/*
+# Media uploads
+media/
 
 # Distribution / packaging
 .Python
