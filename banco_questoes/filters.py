@@ -1,7 +1,6 @@
 import django_filters
 from django import forms
 from django.contrib.auth import get_user_model
-from django.db.models import Q
 
 from .models import Disciplina, Questao, Topico
 
@@ -17,10 +16,9 @@ class QuestaoFilter(django_filters.FilterSet):
     - topico: subdivisão temática
     - dificuldade: Fácil (F), Médio (M), Difícil (D)
     - tipo: Objetiva (OBJ), Discursiva (DIS)
-    - tags: filtro por tags livres
+    - origem: exame ou concurso de origem (ex.: ENADE, POSCOMP)
     - ativo: ativas / inativas
     - autor: docente ou usuário criador
-    - q: busca textual livre no enunciado e critérios de correção
     """
 
     disciplina = django_filters.ModelChoiceFilter(
@@ -43,9 +41,9 @@ class QuestaoFilter(django_filters.FilterSet):
         empty_label='Todos os tipos',
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    tags = django_filters.CharFilter(
-        method='filter_by_tags',
-        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ex.: enem, matrizes'}),
+    origem = django_filters.CharFilter(
+        lookup_expr='icontains',
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ex.: ENADE ADS, POSCOMP'}),
     )
     ativo = django_filters.ChoiceFilter(
         choices=[
@@ -61,10 +59,6 @@ class QuestaoFilter(django_filters.FilterSet):
         empty_label='Todos os autores',
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    q = django_filters.CharFilter(
-        method='filter_by_q',
-        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Buscar no enunciado ou critérios…'}),
-    )
 
     class Meta:
         model = Questao
@@ -73,18 +67,10 @@ class QuestaoFilter(django_filters.FilterSet):
             'topico',
             'dificuldade',
             'tipo',
-            'tags',
+            'origem',
             'ativo',
             'autor',
-            'q',
         ]
-
-    def filter_by_tags(self, queryset, _name, value):
-        """Filtra questões que possuam a tag informada (case-insensitive)."""
-        if not value or not value.strip():
-            return queryset
-        tag_clean = value.strip()
-        return queryset.filter(tags__name__icontains=tag_clean).distinct()
 
     def filter_by_ativo(self, queryset, _name, value):
         """Filtra questões por status ativo (true) ou inativo (false)."""
@@ -93,10 +79,3 @@ class QuestaoFilter(django_filters.FilterSet):
         if value == 'false':
             return queryset.filter(ativo=False)
         return queryset
-
-    def filter_by_q(self, queryset, _name, value):
-        """Busca textual ampla no enunciado e nos critérios de correção."""
-        if not value or not value.strip():
-            return queryset
-        term = value.strip()
-        return queryset.filter(Q(enunciado__icontains=term) | Q(criterios_correcao__icontains=term)).distinct()

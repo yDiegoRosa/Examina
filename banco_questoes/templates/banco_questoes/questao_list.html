@@ -121,22 +121,17 @@
       </div>
 
       <!-- Linha 2 de Filtros -->
-      <div class="col-span-3">
+      <div class="col-span-4">
         <label class="form-label">{{ filter.form.autor.label|default:"Autor / Docente" }}</label>
         {{ filter.form.autor }}
       </div>
 
-      <div class="col-span-3">
-        <label class="form-label">{{ filter.form.tags.label|default:"Tags" }}</label>
-        {{ filter.form.tags }}
+      <div class="col-span-5">
+        <label class="form-label">{{ filter.form.origem.label|default:"Origem / Exame" }}</label>
+        {{ filter.form.origem }}
       </div>
 
-      <div class="col-span-4">
-        <label class="form-label">{{ filter.form.q.label|default:"Busca Livre" }}</label>
-        {{ filter.form.q }}
-      </div>
-
-      <div class="col-span-2 flex gap-2">
+      <div class="col-span-3 flex gap-2">
         <button type="submit" class="btn btn-primary flex-1">
           <i class="bi bi-search"></i> Filtrar
         </button>
@@ -161,7 +156,7 @@
           <th style="width: 130px;">Tipo</th>
           <th style="width: 120px;">Dificuldade</th>
           <th style="width: 180px;">Disciplina / Tópico</th>
-          <th>Enunciado & Tags</th>
+          <th>Enunciado & Origem</th>
           <th style="width: 130px;">Autor</th>
           <th style="width: 110px;">Status</th>
           <th style="width: 110px;" class="text-right">Ações</th>
@@ -211,18 +206,13 @@
             <div class="font-bold text-main mb-1" style="max-width: 480px;">
               {{ q.enunciado|truncatewords:22 }}
             </div>
+            {% if q.origem %}
             <div class="flex flex-wrap gap-1 mt-1 items-center">
-              {% if q.origem %}
               <span class="badge-pill badge-pill-inactive small" title="Origem do exame">
                 <i class="bi bi-journal-bookmark-fill" style="color: var(--fae-blue-primary);"></i> {{ q.origem }}{% if q.numero_questao %} • Q{{ q.numero_questao }}{% endif %}
               </span>
-              {% endif %}
-              {% if q.tags.all %}
-                {% for tag in q.tags.all %}
-                <span class="badge-pill badge-pill-inactive small font-mono">#{{ tag.name }}</span>
-                {% endfor %}
-              {% endif %}
             </div>
+            {% endif %}
           </td>
           <td>
             {% if q.autor %}

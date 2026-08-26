@@ -69,7 +69,6 @@ class QuestaoForm(forms.ModelForm):
             'imagem',
             'enunciado',
             'criterios_correcao',
-            'tags',
             'ativo',
         ]
         labels = {
@@ -82,8 +81,7 @@ class QuestaoForm(forms.ModelForm):
             'texto_auxiliar': 'Texto auxiliar / Contextualização (Opcional)',
             'imagem': 'Imagem / Diagrama de apoio (Opcional)',
             'enunciado': 'Enunciado da questão',
-            'criterios_correcao': 'Comentários / Justificativa do Gabarito',
-            'tags': 'Tags e palavras-chave',
+            'criterios_correcao': 'Comentários / Justificativa da Resposta (Opcional)',
             'ativo': 'Questão ativa no acervo',
         }
         widgets = {
@@ -127,21 +125,11 @@ class QuestaoForm(forms.ModelForm):
                 attrs={
                     'class': 'form-textarea',
                     'rows': 3,
-                    'placeholder': 'Justificativa analítica fundamentando o gabarito e detalhando eventuais erros nas demais alternativas…',
+                    'placeholder': 'Justificativa analítica fundamentando o gabarito e detalhando a resposta da questão…',
                 },
             ),
             'ativo': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if 'tags' in self.fields:
-            self.fields['tags'].widget.attrs.update(
-                {
-                    'class': 'form-input',
-                    'placeholder': 'Separe por vírgula. Ex.: enem, algoritmos, 2026',
-                }
-            )
 
     # ------------------------------------------------------------------
     # Field-level validation
@@ -154,21 +142,6 @@ class QuestaoForm(forms.ModelForm):
         if topico and disciplina and topico.disciplina_id != disciplina.pk:
             raise forms.ValidationError('O tópico selecionado não pertence à disciplina informada.')
         return topico
-
-    # ------------------------------------------------------------------
-    # Form-level validation
-    # ------------------------------------------------------------------
-    def clean(self):
-        cleaned = super().clean()
-        tipo = cleaned.get('tipo')
-
-        if tipo == Questao.Tipo.DISCURSIVA and not cleaned.get('criterios_correcao', '').strip():
-            self.add_error(
-                'criterios_correcao',
-                'Critérios de correção são obrigatórios para questões discursivas.',
-            )
-
-        return cleaned
 
     # ------------------------------------------------------------------
     # Validação cruzada com o formset de alternativas

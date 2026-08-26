@@ -764,29 +764,31 @@ class QuestaoFilterTest(TestCase):
         self.top_alg = Topico.objects.create(disciplina=self.disc_mat, nome='Álgebra')
         self.top_geo = Topico.objects.create(disciplina=self.disc_mat, nome='Geometria')
 
-        # Questão 1: Matemática, Álgebra, Fácil, OBJ, Ativa, prof_silva, tag: 'enem'
+        # Questão 1: Matemática, Álgebra, Fácil, OBJ, Ativa, prof_silva, origem: ENADE ADS 2021
         self.q1 = Questao.objects.create(
             disciplina=self.disc_mat,
             topico=self.top_alg,
             tipo=Questao.Tipo.OBJETIVA,
             dificuldade=Questao.Dificuldade.FACIL,
+            origem='ENADE ADS 2021',
+            numero_questao='26',
             enunciado='Calcule o valor de 2 + 2.',
             ativo=True,
             autor=self.user1,
         )
-        self.q1.tags.add('enem', 'basica')
 
-        # Questão 2: Física, Difícil, DIS, Inativa, prof_souza, tag: 'quantica'
+        # Questão 2: Física, Difícil, DIS, Inativa, prof_souza, origem: POSCOMP 2025
         self.q2 = Questao.objects.create(
             disciplina=self.disc_fis,
             tipo=Questao.Tipo.DISCURSIVA,
             dificuldade=Questao.Dificuldade.DIFICIL,
+            origem='POSCOMP 2025',
+            numero_questao='15',
             enunciado='Explique o experimento da dupla fenda.',
             criterios_correcao='Abordar dualidade onda-partícula.',
             ativo=False,
             autor=self.user2,
         )
-        self.q2.tags.add('quantica', 'moderna')
 
     def test_filter_by_disciplina_and_topico(self):
         """Verifica filtro por disciplina e tópico."""
@@ -814,17 +816,17 @@ class QuestaoFilterTest(TestCase):
         self.assertEqual(f_dif.qs.count(), 1)
         self.assertEqual(f_dif.qs.first(), self.q2)
 
-    def test_filter_by_tags(self):
-        """Verifica filtro por tags."""
+    def test_filter_by_origem(self):
+        """Verifica filtro por exame de origem (case-insensitive icontains)."""
         from .filters import QuestaoFilter
 
-        f_tag = QuestaoFilter({'tags': 'enem'}, queryset=Questao.objects.all())
-        self.assertEqual(f_tag.qs.count(), 1)
-        self.assertEqual(f_tag.qs.first(), self.q1)
+        f_enade = QuestaoFilter({'origem': 'ENADE'}, queryset=Questao.objects.all())
+        self.assertEqual(f_enade.qs.count(), 1)
+        self.assertEqual(f_enade.qs.first(), self.q1)
 
-        f_tag2 = QuestaoFilter({'tags': 'quantica'}, queryset=Questao.objects.all())
-        self.assertEqual(f_tag2.qs.count(), 1)
-        self.assertEqual(f_tag2.qs.first(), self.q2)
+        f_poscomp = QuestaoFilter({'origem': 'poscomp'}, queryset=Questao.objects.all())
+        self.assertEqual(f_poscomp.qs.count(), 1)
+        self.assertEqual(f_poscomp.qs.first(), self.q2)
 
     def test_filter_by_autor(self):
         """Verifica filtro por docente criador da questão."""
@@ -845,20 +847,6 @@ class QuestaoFilterTest(TestCase):
         f_inativas = QuestaoFilter({'ativo': 'false'}, queryset=Questao.objects.all())
         self.assertEqual(f_inativas.qs.count(), 1)
         self.assertEqual(f_inativas.qs.first(), self.q2)
-
-    def test_filter_by_q_text_search(self):
-        """Verifica busca textual ampla no enunciado e critérios."""
-        from .filters import QuestaoFilter
-
-        # Busca por palavra no enunciado
-        f_busca1 = QuestaoFilter({'q': 'dupla fenda'}, queryset=Questao.objects.all())
-        self.assertEqual(f_busca1.qs.count(), 1)
-        self.assertEqual(f_busca1.qs.first(), self.q2)
-
-        # Busca por palavra nos critérios de correção
-        f_busca2 = QuestaoFilter({'q': 'onda-partícula'}, queryset=Questao.objects.all())
-        self.assertEqual(f_busca2.qs.count(), 1)
-        self.assertEqual(f_busca2.qs.first(), self.q2)
 
 
 class QuestaoUpdateViewTest(TestCase):
@@ -1098,6 +1086,57 @@ class QuestaoCreateViewTest(TestCase):
         self.assertEqual(q.tipo, Questao.Tipo.OBJETIVA)
         self.assertEqual(q.alternativas.count(), 2)
         self.assertEqual(q.alternativas.get(correta=True).letra, 'A')
+
+
+class QuestaoFormUnitTest(TestCase):
+    """Testes unitários para o formulário QuestaoForm."""
+
+    def setUp(self):
+        from .models import Disciplina
+
+        self.disc = Disciplina.objects.create(nome='Banco de Dados (UBD)')
+
+    def test_form_fields_does_not_contain_tags(self):
+        """Verifica que o campo tags foi removido do QuestaoForm."""
+        from .forms import QuestaoForm
+
+        form = QuestaoForm()
+        self.assertNotIn('tags', form.fields)
+        self.assertIn('criterios_correcao', form.fields)
+        self.assertIn('origem', form.fields)
+        self.assertIn('numero_questao', form.fields)
+
+    def test_form_discursive_valid_without_criterios_correcao(self):
+        """Verifica que questão discursiva é válida mesmo sem comentários/justificativa (opcional)."""
+        from .forms import QuestaoForm
+
+        form_data = {
+            'tipo': Questao.Tipo.DISCURSIVA,
+            'dificuldade': Questao.Dificuldade.FACIL,
+            'disciplina': self.disc.pk,
+            'enunciado': 'Explique o que é chave primária.',
+            'criterios_correcao': '',  # Opcional
+            'ativo': 'on',
+        }
+        form = QuestaoForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_objective_with_comentarios_justificativa(self):
+        """Verifica que questão objetiva aceita e valida comentários/justificativa da resposta."""
+        from .forms import QuestaoForm
+
+        form_data = {
+            'tipo': Questao.Tipo.OBJETIVA,
+            'dificuldade': Questao.Dificuldade.MEDIO,
+            'disciplina': self.disc.pk,
+            'enunciado': 'Qual comando SQL consulta registros?',
+            'criterios_correcao': 'O comando SELECT é utilizado para DQL.',
+            'ativo': 'on',
+        }
+        form = QuestaoForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        questao = form.save()
+        self.assertEqual(questao.criterios_correcao, 'O comando SELECT é utilizado para DQL.')
 
 
 class CSVExportViewTest(TestCase):

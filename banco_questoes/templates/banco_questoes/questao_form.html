@@ -206,28 +206,6 @@
             {% endif %}
           </div>
 
-          <div class="col-span-12" id="criterios-wrapper">
-            <label for="{{ form.criterios_correcao.id_for_label }}" class="form-label" style="color: var(--fae-gold-hover);">
-              <i class="bi bi-check2-all me-1"></i> {{ form.criterios_correcao.label }}
-            </label>
-            {{ form.criterios_correcao }}
-            <div class="form-help">Obrigatório para questões discursivas (critérios pedagógicos de pontuação).</div>
-            {% if form.criterios_correcao.errors %}
-            <div class="invalid-feedback">{{ form.criterios_correcao.errors|join:", " }}</div>
-            {% endif %}
-          </div>
-
-          <div class="col-span-12">
-            <label for="{{ form.tags.id_for_label }}" class="form-label">
-              <i class="bi bi-tags-fill me-1"></i> {{ form.tags.label }}
-            </label>
-            {{ form.tags }}
-            <div class="form-help">Separe as palavras-chave por vírgula (ex.: <code>algoritmos, matrizes, av2</code>).</div>
-            {% if form.tags.errors %}
-            <div class="invalid-feedback">{{ form.tags.errors|join:", " }}</div>
-            {% endif %}
-          </div>
-
         </div>
       </div>
     </div>
@@ -272,6 +250,28 @@
       </div>
     </div>
 
+    {# ——— Seção 3: Comentários / Justificativa da Resposta (Opcional) ——— #}
+    <div class="card-surface mb-4" id="comentarios-card">
+      <div class="card-header header-primary">
+        <div class="flex items-center gap-2">
+          <i class="bi bi-chat-left-text-fill text-primary" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
+          <span class="font-bold">Comentários / Justificativa da Resposta</span>
+        </div>
+        <span class="badge-pill badge-pill-inactive small">Opcional</span>
+      </div>
+      <div class="card-body">
+        <label for="{{ form.criterios_correcao.id_for_label }}" class="form-label font-bold">
+          <i class="bi bi-card-text me-1" style="color: var(--fae-blue-primary);"></i>
+          {{ form.criterios_correcao.label }}
+        </label>
+        {{ form.criterios_correcao }}
+        {% if form.criterios_correcao.errors %}
+        <div class="invalid-feedback">{{ form.criterios_correcao.errors|join:", " }}</div>
+        {% endif %}
+        <div class="form-help">Justificativa pedagógica ou analítica fundamentando o gabarito e detalhando a resolução da questão.</div>
+      </div>
+    </div>
+
     {# ——— Template vazio para clonagem dinâmica via JS ——— #}
     <div id="empty-form-template" class="d-none">
       {% include "banco_questoes/includes/alternativa_row.html" with form=formset.empty_form %}
@@ -308,7 +308,6 @@
   const btnAdd = document.getElementById('btn-add-alternativa');
   const tipoSelect = document.getElementById('id_tipo');
   const alternativasCard = document.getElementById('alternativas-card');
-  const criteriosWrapper = document.getElementById('criterios-wrapper');
   const totalFormsInput = document.getElementById(`id_${PREFIX}-TOTAL_FORMS`);
 
   // Adicionar alternativa dinamicamente
@@ -366,19 +365,14 @@
     btnAdd.disabled = visibleRows.length >= MAX_ALTERNATIVAS;
   }
 
-  // Alternar conforme tipo da questão
+  // Alternar visibilidade das alternativas conforme tipo da questão
   function toggleByTipo() {
     const tipo = tipoSelect ? tipoSelect.value : '';
 
     if (tipo === 'DIS') {
       alternativasCard.style.display = 'none';
-      criteriosWrapper.style.display = '';
-    } else if (tipo === 'OBJ') {
-      alternativasCard.style.display = '';
-      criteriosWrapper.style.display = 'none';
     } else {
       alternativasCard.style.display = '';
-      criteriosWrapper.style.display = '';
     }
   }
 
