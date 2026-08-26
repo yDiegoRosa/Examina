@@ -127,10 +127,10 @@
               <span style="color: var(--color-danger);">{{ m.percentual_dificil }}%</span>
             </div>
             <!-- Barra de Dificuldade -->
-            <div style="display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #E2E8F0; width: 100%;">
-              <div style="width: {{ m.percentual_facil }}%; background: var(--color-success);"></div>
-              <div style="width: {{ m.percentual_medio }}%; background: var(--fae-blue-primary);"></div>
-              <div style="width: {{ m.percentual_dificil }}%; background: var(--color-danger);"></div>
+            <div class="difficulty-bar">
+              <div class="difficulty-bar-segment facil" style="--w: {{ m.percentual_facil }}%;"></div>
+              <div class="difficulty-bar-segment medio" style="--w: {{ m.percentual_medio }}%;"></div>
+              <div class="difficulty-bar-segment dificil" style="--w: {{ m.percentual_dificil }}%;"></div>
             </div>
           </td>
           <td>
@@ -176,5 +176,8 @@
       </tbody>
     </table>
   </div>
+  {% if page_obj %}
+  {% include "banco_questoes/includes/pagination.html" %}
+  {% endif %}
 </div>
 {% endblock %}

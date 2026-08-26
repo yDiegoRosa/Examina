@@ -154,10 +154,10 @@
             <span>Composição Visual:</span>
             <span id="resumo-qtd-dif" class="font-bold text-main font-mono">4 Fáceis | 4 Médias | 2 Difíceis</span>
           </div>
-          <div style="display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #E2E8F0; width: 100%;">
-            <div id="bar-facil" style="width: 40%; background: var(--color-success); transition: width 0.2s ease;"></div>
-            <div id="bar-medio" style="width: 40%; background: var(--fae-blue-primary); transition: width 0.2s ease;"></div>
-            <div id="bar-dificil" style="width: 20%; background: var(--color-danger); transition: width 0.2s ease;"></div>
+          <div class="difficulty-bar xl">
+            <div id="bar-facil" class="difficulty-bar-segment facil" style="--w: 40%;"></div>
+            <div id="bar-medio" class="difficulty-bar-segment medio" style="--w: 40%;"></div>
+            <div id="bar-dificil" class="difficulty-bar-segment dificil" style="--w: 20%;"></div>
           </div>
         </div>
 

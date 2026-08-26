@@ -2,6 +2,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
@@ -22,8 +23,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 @login_required
 def mascara_list(request):
-    """Exibe o painel de Máscaras de Prova cadastradas com métricas e filtros."""
-    mascaras = (
+    """Exibe o painel de Máscaras de Prova cadastradas com métricas, filtros e paginação."""
+    mascaras_qs = (
         MascaraProva.objects.select_related('disciplina', 'autor')
         .prefetch_related('topicos_distribuicao__topico')
         .all()
@@ -31,21 +32,35 @@ def mascara_list(request):
 
     disciplina_id = request.GET.get('disciplina')
     if disciplina_id:
-        mascaras = mascaras.filter(disciplina_id=disciplina_id)
+        mascaras_qs = mascaras_qs.filter(disciplina_id=disciplina_id)
 
     disciplinas = Disciplina.objects.filter(ativo=True)
 
     metricas = {
-        'total': mascaras.count(),
-        'ativas': mascaras.filter(ativo=True).count(),
-        'inativas': mascaras.filter(ativo=False).count(),
+        'total': mascaras_qs.count(),
+        'ativas': mascaras_qs.filter(ativo=True).count(),
+        'inativas': mascaras_qs.filter(ativo=False).count(),
     }
+
+    # Paginação (10 itens por página)
+    paginator = Paginator(mascaras_qs, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    page_range = paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1)
+
+    # Query string preservando filtros para navegação entre páginas
+    get_params = request.GET.copy()
+    get_params.pop('page', None)
+    querystring = get_params.urlencode()
 
     return render(
         request,
         'provas/mascara_list.html',
         {
-            'mascaras': mascaras,
+            'mascaras': page_obj,
+            'page_obj': page_obj,
+            'page_range': page_range,
+            'querystring': querystring,
             'disciplinas': disciplinas,
             'disciplina_selecionada': disciplina_id,
             'metricas': metricas,

@@ -1676,3 +1676,74 @@ class QuestaoToggleAtivoViewTests(TestCase):
         ultima_revisao = self.questao_ativa.history.first()
         self.assertFalse(ultima_revisao.ativo)
         self.assertEqual(ultima_revisao.history_user, self.editor)
+
+
+class QuestaoListPaginationTest(TestCase):
+    """Testes unitários para a paginação da listagem de questões no acervo."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        from banco_questoes.models import Disciplina
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_pag', password='secret_password')  # noqa: S106
+        self.client.login(username='docente_pag', password='secret_password')  # noqa: S106
+        self.url = reverse('banco_questoes:questao_list')
+
+        self.disc = Disciplina.objects.create(nome='Matemática Discreta')
+
+        # Cria 25 questões para testar a paginação (limite de 15 por página)
+        self.questoes = [
+            Questao.objects.create(
+                disciplina=self.disc,
+                tipo=Questao.Tipo.OBJETIVA,
+                dificuldade=Questao.Dificuldade.FACIL,
+                enunciado=f'Enunciado de teste da questão #{i}',
+                ativo=True,
+            )
+            for i in range(1, 26)
+        ]
+
+    def test_pagination_page_1_contains_15_items(self):
+        """Verifica se a primeira página retorna exatamente 15 questões e possui próxima página."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        page_obj = response.context['page_obj']
+        self.assertEqual(len(page_obj), 15)
+        self.assertEqual(page_obj.number, 1)
+        self.assertEqual(page_obj.paginator.num_pages, 2)
+        self.assertTrue(page_obj.has_next())
+        self.assertFalse(page_obj.has_previous())
+        self.assertContains(response, 'Página 1 de 2')
+
+    def test_pagination_page_2_contains_10_items(self):
+        """Verifica se a segunda página retorna as 10 questões restantes."""
+        response = self.client.get(f'{self.url}?page=2')
+        self.assertEqual(response.status_code, 200)
+
+        page_obj = response.context['page_obj']
+        self.assertEqual(len(page_obj), 10)
+        self.assertEqual(page_obj.number, 2)
+        self.assertFalse(page_obj.has_next())
+        self.assertTrue(page_obj.has_previous())
+        self.assertContains(response, 'Página 2 de 2')
+
+    def test_pagination_preserves_filter_query_params(self):
+        """Verifica se a querystring preserva parâmetros de filtro sem o parâmetro page."""
+        response = self.client.get(f'{self.url}?disciplina={self.disc.pk}&page=2')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('disciplina=', response.context['querystring'])
+        self.assertNotIn('page=', response.context['querystring'])
+
+    def test_invalid_page_number_fallback(self):
+        """Verifica se páginas inválidas ou fora do intervalo usam fallback seguro (página 1 ou última)."""
+        response_invalid = self.client.get(f'{self.url}?page=invalido')
+        self.assertEqual(response_invalid.status_code, 200)
+        self.assertEqual(response_invalid.context['page_obj'].number, 1)
+
+        response_overflow = self.client.get(f'{self.url}?page=999')
+        self.assertEqual(response_overflow.status_code, 200)
+        self.assertEqual(response_overflow.context['page_obj'].number, 2)

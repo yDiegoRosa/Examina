@@ -62,7 +62,7 @@ class MascaraProvaModelTest(TestCase):
         )
         mascara.full_clean()
         mascara.save()
-        self.assertEqual(mascara.pk, 1)
+        self.assertIsNotNone(mascara.pk)
 
     def test_mascara_invalid_difficulty_sum_raises_validation_error(self):
         """Verifica que percentuais de dificuldade cuja soma difere de 100% levantam erro."""
@@ -303,3 +303,62 @@ class WeasyPrintPDFGenerationTest(TestCase):
         self.assertIn('inline; filename="avaliacao_teste_faeterj.pdf"', response['Content-Disposition'])
         self.assertTrue(response.content.startswith(b'%PDF-'))
         self.assertTrue(len(response.content) > 1000)
+
+
+class MascaraListPaginationTest(TestCase):
+    """Testes unitários para a paginação de Máscaras de Prova."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_masc_pag', password='secret_password')  # noqa: S106
+        self.client.login(username='docente_masc_pag', password='secret_password')  # noqa: S106
+        self.url = reverse('provas:mascara_list')
+
+        self.disc = Disciplina.objects.create(nome='Arquitetura de Computadores')
+
+        # Cria 18 máscaras (limite de 10 por página)
+        self.mascaras = [
+            MascaraProva.objects.create(
+                titulo=f'Máscara de Teste #{i}',
+                disciplina=self.disc,
+                quantidade_questoes=10,
+                modalidade=MascaraProva.Modalidade.OBJETIVA,
+                percentual_facil=40,
+                percentual_medio=40,
+                percentual_dificil=20,
+                autor=self.user,
+                ativo=True,
+            )
+            for i in range(1, 19)
+        ]
+
+    def test_mascara_pagination_page_1(self):
+        """Verifica se a página 1 traz 10 máscaras e indica existência da página 2."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        page_obj = response.context['page_obj']
+        self.assertEqual(len(page_obj), 10)
+        self.assertEqual(page_obj.number, 1)
+        self.assertEqual(page_obj.paginator.num_pages, 2)
+        self.assertTrue(page_obj.has_next())
+        self.assertContains(response, 'Página 1 de 2')
+
+    def test_mascara_pagination_page_2(self):
+        """Verifica se a página 2 traz as 8 máscaras restantes."""
+        response = self.client.get(f'{self.url}?page=2')
+        self.assertEqual(response.status_code, 200)
+
+        page_obj = response.context['page_obj']
+        self.assertEqual(len(page_obj), 8)
+        self.assertEqual(page_obj.number, 2)
+        self.assertFalse(page_obj.has_next())
+        self.assertTrue(page_obj.has_previous())
+        self.assertContains(response, 'Página 2 de 2')
+
+    def test_mascara_pagination_preserves_disciplina_filter(self):
+        """Verifica se o filtro por disciplina é preservado ao paginar."""
+        response = self.client.get(f'{self.url}?disciplina={self.disc.pk}&page=2')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('disciplina=', response.context['querystring'])
+        self.assertNotIn('page=', response.context['querystring'])

@@ -39,10 +39,10 @@
     </h3>
 
     <div class="mb-3">
-      <div style="display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #E2E8F0; width: 100%;">
-        <div style="width: {{ mascara.percentual_facil }}%; background: var(--color-success);"></div>
-        <div style="width: {{ mascara.percentual_medio }}%; background: var(--fae-blue-primary);"></div>
-        <div style="width: {{ mascara.percentual_dificil }}%; background: var(--color-danger);"></div>
+      <div class="difficulty-bar lg">
+        <div class="difficulty-bar-segment facil" style="--w: {{ mascara.percentual_facil }}%;"></div>
+        <div class="difficulty-bar-segment medio" style="--w: {{ mascara.percentual_medio }}%;"></div>
+        <div class="difficulty-bar-segment dificil" style="--w: {{ mascara.percentual_dificil }}%;"></div>
       </div>
     </div>
 
@@ -125,19 +125,19 @@
     </div>
     <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
       <div class="small text-muted font-bold">Saldo Fácil</div>
-      <div class="font-bold font-mono" style="font-size: 1.15rem; color: {% if diagnostico.facil.ok %}var(--color-success){% else %}var(--color-danger){% endif %};">
+      <div class="font-bold font-mono {% if diagnostico.facil.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.15rem;">
         {{ diagnostico.facil.estoque }}/{{ diagnostico.facil.demanda }}
       </div>
     </div>
     <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
       <div class="small text-muted font-bold">Saldo Médio</div>
-      <div class="font-bold font-mono" style="font-size: 1.15rem; color: {% if diagnostico.medio.ok %}var(--color-success){% else %}var(--color-danger){% endif %};">
+      <div class="font-bold font-mono {% if diagnostico.medio.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.15rem;">
         {{ diagnostico.medio.estoque }}/{{ diagnostico.medio.demanda }}
       </div>
     </div>
     <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
       <div class="small text-muted font-bold">Saldo Difícil</div>
-      <div class="font-bold font-mono" style="font-size: 1.15rem; color: {% if diagnostico.dificil.ok %}var(--color-success){% else %}var(--color-danger){% endif %};">
+      <div class="font-bold font-mono {% if diagnostico.dificil.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.15rem;">
         {{ diagnostico.dificil.estoque }}/{{ diagnostico.dificil.demanda }}
       </div>
     </div>

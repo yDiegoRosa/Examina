@@ -1153,4 +1153,137 @@ a:hover {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Barra Multi-Segmentada de Dificuldade / Progresso
+   -------------------------------------------------------------------------- */
+.difficulty-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--border-color, #E2E8F0);
+  width: 100%;
+}
 
+.difficulty-bar.lg {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.difficulty-bar.xl {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.difficulty-bar-segment {
+  width: var(--w, 0%);
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.difficulty-bar-segment.facil {
+  background: var(--color-success);
+}
+
+.difficulty-bar-segment.medio {
+  background: var(--fae-blue-primary);
+}
+
+.difficulty-bar-segment.dificil {
+  background: var(--color-danger);
+}
+
+/* --------------------------------------------------------------------------
+   12. Paginação Moderna SaaS (Examina Design System)
+   -------------------------------------------------------------------------- */
+.pagination-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.15rem 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+  background-color: #FFFFFF;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.pagination-nav {
+  display: flex;
+  align-items: center;
+}
+
+.pagination-list {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-sm);
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: var(--transition);
+  cursor: pointer;
+  user-select: none;
+}
+
+.pagination-btn:hover:not(.disabled):not(.active) {
+  background-color: #F1F5F9;
+  border-color: var(--fae-blue-electric);
+  color: var(--fae-blue-primary);
+  transform: translateY(-1px);
+}
+
+.pagination-btn.active {
+  background: linear-gradient(135deg, var(--fae-blue-primary) 0%, var(--fae-blue-electric) 100%);
+  border-color: transparent;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+}
+
+.pagination-btn.disabled {
+  background-color: #F8FAFC;
+  border-color: var(--border-subtle);
+  color: var(--text-dim);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 36px;
+  color: var(--text-muted);
+  font-weight: 800;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .pagination-wrapper {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+  }
+}
