@@ -239,6 +239,4 @@ class MascaraTopico(models.Model):
         if topico and mascara:
             disc_mascara_id = getattr(mascara, 'disciplina_id', None)
             if disc_mascara_id and topico.disciplina_id != disc_mascara_id:
-                raise ValidationError(
-                    f'O tópico "{topico.nome}" não pertence à disciplina da máscara.'
-                )
+                raise ValidationError(f'O tópico "{topico.nome}" não pertence à disciplina da máscara.')
