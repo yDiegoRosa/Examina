@@ -33,6 +33,7 @@ urlpatterns = [
         auth_views.LogoutView.as_view(),
         name='logout',
     ),
+    path('provas/', include('provas.urls')),
     path('', include('banco_questoes.urls')),
 ]
 

@@ -1,0 +1,39 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Módulo de Provas — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-file-earmark-ruled-fill"></i> Módulo 2 • Geração de Provas e Avaliações
+      </span>
+    </div>
+    <h1 class="mb-1">Provas e Avaliações</h1>
+    <p class="text-secondary" style="max-width: 580px;">
+      Composição, formatação e geração automatizada de avaliações acadêmicas e gabaritos para a FAETERJ-Rio.
+    </p>
+  </div>
+  <div class="flex gap-2 mt-3">
+    <a href="{% url 'provas:pdf_teste' %}" target="_blank" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-file-earmark-pdf-fill"></i> Testar Geração de PDF (WeasyPrint)
+    </a>
+  </div>
+</div>
+
+<div class="card-surface p-4 text-center">
+  <div class="text-muted mb-2" style="font-size: 3rem; color: var(--fae-blue-electric);">
+    <i class="bi bi-journal-bookmark-fill"></i>
+  </div>
+  <h3 class="font-bold text-main mb-2">Motor WeasyPrint Configurado</h3>
+  <p class="text-secondary mb-4" style="max-width: 500px; margin: 0 auto;">
+    O motor de geração de PDFs está ativo com suporte completo a CSS Paged Media (<code>@page</code>), contadores de página, cabeçalhos institucionais e quebras de página automáticas.
+  </p>
+  <div>
+    <a href="{% url 'provas:pdf_teste' %}" target="_blank" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+      <i class="bi bi-file-pdf"></i> Visualizar PDF Modelo de Teste
+    </a>
+  </div>
+</div>
+{% endblock %}
