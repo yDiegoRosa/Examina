@@ -41,7 +41,7 @@ def questao_list(request):
 
     # Verifica se há filtros ativos aplicados pelo usuário
     has_active_filters = any(
-        request.GET.get(key) for key in ('disciplina', 'topico', 'dificuldade', 'tipo', 'tags', 'ativo', 'autor', 'q')
+        request.GET.get(key) for key in ('disciplina', 'topico', 'dificuldade', 'tipo', 'origem', 'ativo', 'autor')
     )
 
     return render(
