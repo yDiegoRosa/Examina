@@ -1,86 +1,82 @@
 import io
 from pathlib import Path
+from typing import Any
 
+import openpyxl
 from django.test import TestCase
 
 from .models import Questao
-from .parser import CSVParseError, CSVQuestaoParser
+from .parser import CSVParseError, CSVQuestaoParser, ExcelQuestaoParser, FileQuestaoParser
 from .validator import CSVQuestaoValidator
 
 
 class CSVQuestaoParserTest(TestCase):
-    """Testes unitários para o parser de leitura de CSV de questões."""
+    """Testes unitários para o parser de leitura de CSV de questões (formato 10 colunas)."""
 
-    def test_parse_valid_objective_question(self):
-        """Verifica a estruturação correta de uma questão objetiva."""
+    def test_parse_valid_objective_question_10col(self):
+        """Verifica a estruturação correta de uma questão objetiva no formato de 10 colunas."""
         csv_content = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Qual é a capital do RJ?,OBJ,Geografia,Sudeste,F,rio;geografia,Niterói,Rio de Janeiro,Petrópolis,Cabo Frio,,B,\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE ADS 2021,26,Qual é a capital do RJ?,Niterói,Rio de Janeiro,Petrópolis,Cabo Frio,,B,Alternativa correta é B.\n'
         )
         result = CSVQuestaoParser.parse(csv_content)
 
         self.assertEqual(len(result), 1)
         row = result[0]
         self.assertEqual(row['linha'], 2)
+        self.assertEqual(row['origem'], 'ENADE ADS 2021')
+        self.assertEqual(row['numero_questao'], '26')
         self.assertEqual(row['enunciado'], 'Qual é a capital do RJ?')
-        self.assertEqual(row['tipo'], 'OBJ')
-        self.assertEqual(row['disciplina'], 'Geografia')
-        self.assertEqual(row['topico'], 'Sudeste')
-        self.assertEqual(row['dificuldade'], 'F')
-        self.assertEqual(row['tags'], ['rio', 'geografia'])
+        self.assertEqual(row['tipo'], 'OBJ')  # Inferido automaticamente
         self.assertEqual(row['correta'], 'B')
+        self.assertEqual(row['criterios_correcao'], 'Alternativa correta é B.')
         self.assertEqual(len(row['alternativas']), 4)
         self.assertEqual(row['alternativas'][0], {'letra': 'A', 'texto': 'Niterói', 'correta': False})
         self.assertEqual(row['alternativas'][1], {'letra': 'B', 'texto': 'Rio de Janeiro', 'correta': True})
-        self.assertEqual(row['alternativas'][2], {'letra': 'C', 'texto': 'Petrópolis', 'correta': False})
-        self.assertEqual(row['alternativas'][3], {'letra': 'D', 'texto': 'Cabo Frio', 'correta': False})
 
-    def test_parse_valid_discursive_question(self):
-        """Verifica a estruturação correta de uma questão discursiva."""
+    def test_parse_valid_discursive_question_10col(self):
+        """Verifica inferência automática de tipo DIS quando não há alternativas."""
         csv_content = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            '"Explique o conceito de polimorfismo em POO.",DIS,Programação,POO,M,"poo,computacao",,,,,,,O aluno deve conceituar sobrescrita e sobrecarga.\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'POSCOMP 2025,15,Explique o conceito de polimorfismo em POO.,,,,,,, O aluno deve conceituar sobrescrita e sobrecarga.\n'
         )
         result = CSVQuestaoParser.parse(csv_content)
 
         self.assertEqual(len(result), 1)
         row = result[0]
         self.assertEqual(row['enunciado'], 'Explique o conceito de polimorfismo em POO.')
-        self.assertEqual(row['tipo'], 'DIS')
-        self.assertEqual(row['disciplina'], 'Programação')
-        self.assertEqual(row['topico'], 'POO')
-        self.assertEqual(row['dificuldade'], 'M')
-        self.assertEqual(row['tags'], ['poo', 'computacao'])
-        self.assertEqual(row['criterios_correcao'], 'O aluno deve conceituar sobrescrita e sobrecarga.')
+        self.assertEqual(row['tipo'], 'DIS')  # Inferido automaticamente
+        self.assertEqual(row['origem'], 'POSCOMP 2025')
+        self.assertEqual(row['numero_questao'], '15')
         self.assertEqual(len(row['alternativas']), 0)
 
-    def test_parse_semicolon_delimiter(self):
+    def test_parse_semicolon_delimiter_10col(self):
         """Verifica suporte automático a arquivos delimitados por ponto-e-vírgula (;)."""
         csv_content = (
-            'enunciado;tipo;disciplina;topico;dificuldade;tags;alt_a;alt_b;alt_c;alt_d;alt_e;correta;criterios_correcao\n'
-            '2 + 2 = ?;OBJ;Matemática;;F;soma;3;4;;;;B;\n'
+            'origem;questao;enunciado;opcao_a;opcao_b;opcao_c;opcao_d;opcao_e;gabarito;comentarios\n'
+            'ENADE 2022;10;2 + 2 = ?;3;4;;;;B;\n'
         )
         result = CSVQuestaoParser.parse(csv_content)
 
         self.assertEqual(len(result), 1)
         row = result[0]
         self.assertEqual(row['enunciado'], '2 + 2 = ?')
-        self.assertEqual(row['disciplina'], 'Matemática')
-        self.assertIsNone(row['topico'])
+        self.assertEqual(row['origem'], 'ENADE 2022')
         self.assertEqual(len(row['alternativas']), 2)
         self.assertEqual(row['correta'], 'B')
 
-    def test_parse_with_utf8_bom(self):
+    def test_parse_with_utf8_bom_10col(self):
         """Verifica remoção correta do BOM UTF-8 (\ufeff) gerado pelo Microsoft Excel."""
         csv_bytes = (
             '\ufeff'
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Questão com BOM,OBJ,História,Brasil,M,historia,Alt A,Alt B,,,A,\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE 2023,5,Questão com BOM,Alt A,Alt B,,,,A,\n'
         ).encode('utf-8')
 
         result = CSVQuestaoParser.parse(csv_bytes)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['enunciado'], 'Questão com BOM')
+        self.assertEqual(result[0]['origem'], 'ENADE 2023')
 
     def test_parse_sample_file(self):
         """Verifica a leitura do arquivo modelo de exemplo modelo_questoes.csv."""
@@ -89,12 +85,13 @@ class CSVQuestaoParserTest(TestCase):
             result = CSVQuestaoParser.parse(f)
 
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]['tipo'], 'OBJ')
-        self.assertEqual(result[1]['tipo'], 'DIS')
+        self.assertEqual(result[0]['tipo'], 'OBJ')  # Inferido pois tem alternativas
+        self.assertEqual(result[1]['tipo'], 'OBJ')  # Inferido pois tem alternativas
+        self.assertEqual(result[0]['origem'], 'ENADE ADS 2021')
 
     def test_parse_missing_mandatory_headers_raises_error(self):
-        """Verifica se erro específico é levantado quando cabeçalhos obrigatórios estão ausentes."""
-        csv_invalid = 'enunciado,disciplina,tags\nTexto,Matemática,tag1\n'
+        """Verifica se erro específico é levantado quando o cabeçalho 'enunciado' está ausente."""
+        csv_invalid = 'origem,questao,opcao_a\nENADE,5,Texto\n'
         with self.assertRaises(CSVParseError) as ctx:
             CSVQuestaoParser.parse(csv_invalid)
 
@@ -105,6 +102,166 @@ class CSVQuestaoParserTest(TestCase):
         self.assertEqual(CSVQuestaoParser.parse(''), [])
         self.assertEqual(CSVQuestaoParser.parse(io.StringIO('')), [])
 
+    def test_parse_legacy_13col_format_still_works(self):
+        """Verifica retrocompatibilidade: o parser aceita o formato antigo de 13 colunas."""
+        csv_content = (
+            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
+            'Qual é 2+2?,OBJ,Matemática,Aritmética,F,soma,3,4,,,,B,\n'
+        )
+        result = CSVQuestaoParser.parse(csv_content)
+
+        self.assertEqual(len(result), 1)
+        row = result[0]
+        self.assertEqual(row['enunciado'], 'Qual é 2+2?')
+        self.assertEqual(row['tipo'], 'OBJ')
+        self.assertEqual(row['disciplina'], 'Matemática')
+        self.assertEqual(row['correta'], 'B')
+
+
+class ExcelQuestaoParserTest(TestCase):
+    """Testes unitários para o parser de planilhas Excel (.xlsx) de questões."""
+
+    def _create_sample_workbook_bytes(self, rows: list[list[Any]]) -> bytes:
+        """Helper para criar um arquivo .xlsx em memória com as linhas especificadas."""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        for row in rows:
+            ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    def test_parse_valid_excel_with_numeric_options_and_newlines(self):
+        """Verifica a leitura correta de planilha Excel com números, quebras de linha e colunas residuais."""
+        headers = [
+            'Origem',
+            'Questão',
+            'Enunciado',
+            'Opção A',
+            'Opção B',
+            'Opção C',
+            'Opção D',
+            'Opção E',
+            'Gabarito',
+            'Comentários / Justificativa',
+            'Coluna_K_Vazia',  # Coluna residual vazia além de J
+        ]
+        row_obj_text = [
+            'ENADE ADS 2021',
+            26,  # Número inteiro
+            'Em relação ao serviço DNS,\nqual alternativa é correta?',  # Com quebra de linha
+            'Opção A texto',
+            'Opção B texto',
+            'Opção C texto',
+            'Opção D texto',
+            'Opção E texto',
+            'C',
+            'Justificativa detalhada da questão C.',
+            None,
+        ]
+        row_obj_calc = [
+            'ENADE 2023',
+            31.0,  # Float que representa inteiro
+            'Calcule o valor da expressão matemática.',
+            10,  # Opção numérica inteira
+            20.5,  # Opção numérica decimal
+            30,
+            40,
+            50,
+            'B',
+            None,  # Comentário vazio
+            None,
+        ]
+        row_discursive = [
+            'POSCOMP 2025',
+            15,
+            'Explique o funcionamento do algoritmo Dijkstra.',
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            'Critérios: grafo ponderado, fila de prioridade.',
+            None,
+        ]
+        empty_trailing_row = [None] * 11  # Linha residual vazia
+
+        raw_bytes = self._create_sample_workbook_bytes(
+            [
+                headers,
+                row_obj_text,
+                row_obj_calc,
+                row_discursive,
+                empty_trailing_row,
+            ]
+        )
+
+        result = ExcelQuestaoParser.parse(raw_bytes)
+
+        # Deve descartar a linha residual vazia e retornar exatamente 3 questões
+        self.assertEqual(len(result), 3)
+
+        # Questão 1 (Objetiva com texto e número 26)
+        q1 = result[0]
+        self.assertEqual(q1['linha'], 2)
+        self.assertEqual(q1['origem'], 'ENADE ADS 2021')
+        self.assertEqual(q1['numero_questao'], '26')
+        self.assertIn('\n', q1['enunciado'])
+        self.assertEqual(q1['tipo'], 'OBJ')
+        self.assertEqual(q1['correta'], 'C')
+        self.assertEqual(len(q1['alternativas']), 5)
+        self.assertTrue(q1['alternativas'][2]['correta'])
+
+        # Questão 2 (Objetiva com opções numéricas convertidas para string)
+        q2 = result[1]
+        self.assertEqual(q2['linha'], 3)
+        self.assertEqual(q2['origem'], 'ENADE 2023')
+        self.assertEqual(q2['numero_questao'], '31')  # 31.0 -> '31'
+        self.assertEqual(q2['tipo'], 'OBJ')
+        self.assertEqual(q2['alternativas'][0]['texto'], '10')
+        self.assertEqual(q2['alternativas'][1]['texto'], '20.5')
+        self.assertEqual(q2['criterios_correcao'], '')  # None -> ''
+
+        # Questão 3 (Discursiva sem alternativas)
+        q3 = result[2]
+        self.assertEqual(q3['linha'], 4)
+        self.assertEqual(q3['tipo'], 'DIS')
+        self.assertEqual(len(q3['alternativas']), 0)
+        self.assertEqual(q3['criterios_correcao'], 'Critérios: grafo ponderado, fila de prioridade.')
+
+    def test_parse_excel_missing_enunciado_header_raises_error(self):
+        """Verifica se erro específico é levantado quando a coluna 'enunciado' não existe no Excel."""
+        raw_bytes = self._create_sample_workbook_bytes(
+            [
+                ['Origem', 'Questão', 'Opção A'],
+                ['ENADE', 1, 'Alt A'],
+            ]
+        )
+        with self.assertRaises(CSVParseError) as ctx:
+            ExcelQuestaoParser.parse(raw_bytes)
+
+        self.assertIn('Cabeçalho da planilha Excel incompleto', str(ctx.exception))
+
+    def test_file_questao_parser_dispatcher(self):
+        """Verifica se FileQuestaoParser despacha corretamente com base na extensão ou conteúdo."""
+        excel_bytes = self._create_sample_workbook_bytes(
+            [
+                ['origem', 'questao', 'enunciado', 'opcao_a', 'opcao_b', 'gabarito'],
+                ['ENADE', 1, 'Pergunta teste?', 'Sim', 'Não', 'A'],
+            ]
+        )
+        # Teste por bytes (magic bytes PK)
+        res_bytes = FileQuestaoParser.parse(excel_bytes)
+        self.assertEqual(len(res_bytes), 1)
+        self.assertEqual(res_bytes[0]['enunciado'], 'Pergunta teste?')
+
+        # Teste por filename CSV
+        csv_str = 'enunciado,opcao_a,opcao_b,gabarito\nPergunta CSV?,A,B,A\n'
+        res_csv = FileQuestaoParser.parse(csv_str, filename='questoes.csv')
+        self.assertEqual(len(res_csv), 1)
+        self.assertEqual(res_csv[0]['enunciado'], 'Pergunta CSV?')
+
 
 class CSVQuestaoValidatorTest(TestCase):
     """Testes unitários para as regras de validação linha a linha de CSV."""
@@ -113,12 +270,14 @@ class CSVQuestaoValidatorTest(TestCase):
         """Verifica validação de uma linha objetiva completa e válida."""
         row = {
             'linha': 2,
+            'origem': 'ENADE ADS 2021',
+            'numero_questao': '26',
             'enunciado': 'Qual é a fórmula da água?',
             'tipo': 'OBJ',
-            'disciplina': 'Química',
-            'topico': 'Inorgânica',
-            'dificuldade': 'F',
-            'tags': ['quimica', 'agua'],
+            'disciplina': '',
+            'topico': None,
+            'dificuldade': '',
+            'tags': [],
             'alternativas': [
                 {'letra': 'A', 'texto': 'H2O', 'correta': True},
                 {'letra': 'B', 'texto': 'CO2', 'correta': False},
@@ -130,52 +289,55 @@ class CSVQuestaoValidatorTest(TestCase):
         self.assertTrue(res.is_valid)
         self.assertEqual(len(res.errors), 0)
         self.assertEqual(res.cleaned_data['tipo'], Questao.Tipo.OBJETIVA)
-        self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.FACIL)
+        self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.MEDIO)  # Default
+        self.assertEqual(res.cleaned_data['disciplina'], 'Não Classificada')  # Default
+        self.assertEqual(res.cleaned_data['origem'], 'ENADE ADS 2021')
+        self.assertEqual(res.cleaned_data['numero_questao'], '26')
         self.assertEqual(len(res.cleaned_data['alternativas']), 2)
 
     def test_validate_valid_discursive_row(self):
-        """Verifica validação de uma linha discursiva completa e válida."""
+        """Verifica validação de uma linha discursiva sem comentários (agora opcional)."""
         row = {
             'linha': 3,
+            'origem': '',
+            'numero_questao': '',
             'enunciado': 'Explique o princípio da inércia de Newton.',
             'tipo': 'DIS',
-            'disciplina': 'Física',
-            'topico': 'Mecânica',
-            'dificuldade': 'M',
-            'tags': ['fisica', 'leis-de-newton'],
+            'disciplina': '',
+            'topico': None,
+            'dificuldade': '',
+            'tags': [],
             'alternativas': [],
             'correta': None,
-            'criterios_correcao': 'Mencionar a tendência de manter repouso ou MRU caso força resultante seja nula.',
+            'criterios_correcao': '',
         }
         res = CSVQuestaoValidator.validate_row(row)
         self.assertTrue(res.is_valid)
         self.assertEqual(res.cleaned_data['tipo'], Questao.Tipo.DISCURSIVA)
         self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.MEDIO)
-        self.assertTrue(bool(res.cleaned_data['criterios_correcao']))
 
-    def test_validate_missing_mandatory_fields(self):
-        """Verifica erro quando enunciado, tipo, disciplina e dificuldade faltam."""
+    def test_validate_missing_enunciado(self):
+        """Verifica erro quando enunciado está ausente (único campo realmente obrigatório)."""
         row = {
             'linha': 4,
             'enunciado': '',
-            'tipo': '',
-            'disciplina': '',
-            'dificuldade': '',
+            'tipo': 'OBJ',
+            'alternativas': [
+                {'letra': 'A', 'texto': 'A', 'correta': True},
+                {'letra': 'B', 'texto': 'B', 'correta': False},
+            ],
+            'correta': 'A',
         }
         res = CSVQuestaoValidator.validate_row(row)
         self.assertFalse(res.is_valid)
         self.assertTrue(any('enunciado' in err for err in res.errors))
-        self.assertTrue(any('disciplina' in err for err in res.errors))
-        self.assertTrue(any('tipo' in err for err in res.errors))
-        self.assertTrue(any('dificuldade' in err for err in res.errors))
 
     def test_validate_invalid_tipo_and_dificuldade(self):
-        """Verifica rejeição de tipos e dificuldades inválidos."""
+        """Verifica rejeição de tipos e dificuldades explicitamente inválidos."""
         row = {
             'linha': 5,
             'enunciado': 'Enunciado de teste',
             'tipo': 'INVALIDO',
-            'disciplina': 'Matemática',
             'dificuldade': 'X',
         }
         res = CSVQuestaoValidator.validate_row(row)
@@ -189,8 +351,6 @@ class CSVQuestaoValidatorTest(TestCase):
             'linha': 6,
             'enunciado': 'Questão com 1 alternativa',
             'tipo': 'OBJ',
-            'disciplina': 'História',
-            'dificuldade': 'F',
             'alternativas': [{'letra': 'A', 'texto': 'Única alternativa', 'correta': True}],
             'correta': 'A',
         }
@@ -204,55 +364,52 @@ class CSVQuestaoValidatorTest(TestCase):
             'linha': 7,
             'enunciado': 'Questão com gabarito inexistente',
             'tipo': 'OBJ',
-            'disciplina': 'História',
-            'dificuldade': 'F',
             'alternativas': [
                 {'letra': 'A', 'texto': 'Alt A', 'correta': False},
                 {'letra': 'B', 'texto': 'Alt B', 'correta': False},
             ],
-            'correta': 'E',  # E não está preenchida
+            'correta': 'E',
         }
         res = CSVQuestaoValidator.validate_row(row)
         self.assertFalse(res.is_valid)
         self.assertTrue(any('não corresponde a nenhuma alternativa preenchida' in err for err in res.errors))
 
-    def test_validate_discursive_missing_criterios(self):
-        """Verifica erro quando questão discursiva não tem critérios de correção."""
+    def test_validate_defaults_applied_when_fields_absent(self):
+        """Verifica que disciplina e dificuldade recebem valores-padrão quando ausentes."""
         row = {
             'linha': 8,
-            'enunciado': 'Discursiva sem critérios',
-            'tipo': 'DIS',
-            'disciplina': 'Filosofia',
-            'dificuldade': 'D',
-            'criterios_correcao': '   ',  # Vazio
+            'enunciado': 'Questão sem disciplina e dificuldade',
+            'tipo': 'OBJ',
+            'disciplina': '',
+            'dificuldade': '',
+            'alternativas': [
+                {'letra': 'A', 'texto': 'A', 'correta': True},
+                {'letra': 'B', 'texto': 'B', 'correta': False},
+            ],
+            'correta': 'A',
         }
         res = CSVQuestaoValidator.validate_row(row)
-        self.assertFalse(res.is_valid)
-        self.assertTrue(any('Critérios de correção são obrigatórios' in err for err in res.errors))
+        self.assertTrue(res.is_valid)
+        self.assertEqual(res.cleaned_data['disciplina'], 'Não Classificada')
+        self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.MEDIO)
 
     def test_validate_batch_rows_report(self):
         """Verifica a geração do relatório consolidado com validate_rows."""
         rows = [
-            # 1 Válida
             {
                 'linha': 2,
                 'enunciado': 'Questão Válida',
                 'tipo': 'OBJ',
-                'disciplina': 'Biologia',
-                'dificuldade': 'F',
                 'alternativas': [
                     {'letra': 'A', 'texto': 'A', 'correta': True},
                     {'letra': 'B', 'texto': 'B', 'correta': False},
                 ],
                 'correta': 'A',
             },
-            # 1 Inválida
             {
                 'linha': 3,
                 'enunciado': '',
                 'tipo': 'OBJ',
-                'disciplina': 'Biologia',
-                'dificuldade': 'F',
             },
         ]
         report = CSVQuestaoValidator.validate_rows(rows)
@@ -272,8 +429,6 @@ class CSVQuestaoValidatorTest(TestCase):
                 'linha': 2,
                 'enunciado': 'Qual é a velocidade da luz?',
                 'tipo': 'OBJ',
-                'disciplina': 'Física',
-                'dificuldade': 'M',
                 'alternativas': [
                     {'letra': 'A', 'texto': '300.000 km/s', 'correta': True},
                     {'letra': 'B', 'texto': '150.000 km/s', 'correta': False},
@@ -282,11 +437,8 @@ class CSVQuestaoValidatorTest(TestCase):
             },
             {
                 'linha': 3,
-                # Enunciado idêntico com espaços extras e maiúsculas variadas
                 'enunciado': '   QUAL É A   VELOCIDADE DA LUZ?   ',
                 'tipo': 'OBJ',
-                'disciplina': 'Física',
-                'dificuldade': 'M',
                 'alternativas': [
                     {'letra': 'A', 'texto': '300.000 km/s', 'correta': True},
                     {'letra': 'B', 'texto': '150.000 km/s', 'correta': False},
@@ -321,11 +473,8 @@ class CSVQuestaoValidatorTest(TestCase):
         rows = [
             {
                 'linha': 2,
-                # Enunciado idêntico ao já existente no banco (com espaços e case alterados)
                 'enunciado': '  qual é a constante gravitacional na terra?  ',
                 'tipo': 'OBJ',
-                'disciplina': 'Física Geral',
-                'dificuldade': 'M',
                 'alternativas': [
                     {'letra': 'A', 'texto': '9.8 m/s²', 'correta': True},
                     {'letra': 'B', 'texto': '10.5 m/s²', 'correta': False},
@@ -346,7 +495,7 @@ class CSVQuestaoValidatorTest(TestCase):
 
 
 class QuestaoImportViewTest(TestCase):
-    """Testes de integração da view de importação e relatório pós-upload."""
+    """Testes de integração da view de importação e relatório pós-upload (formato 10 colunas)."""
 
     def setUp(self):
         from django.contrib.auth.models import Permission, User
@@ -363,18 +512,19 @@ class QuestaoImportViewTest(TestCase):
         url = reverse('banco_questoes:questao_import')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Importação de Questões via CSV')
+        self.assertContains(response, 'Importação de Questões')
+        self.assertContains(response, 'Baixar Modelo Excel')
         self.assertContains(response, 'Baixar Modelo CSV')
 
     def test_import_csv_success_persists_and_renders_report(self):
-        """Verifica persistência de questões e exibição de relatório pós-upload."""
+        """Verifica persistência de questões no formato 10 colunas e exibição de relatório."""
         from django.core.files.uploadedfile import SimpleUploadedFile
         from django.urls import reverse
 
         csv_content = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Qual é a capital da França?,OBJ,Geografia,Europa,F,geografia;europa,Londres,Paris,Berlim,Madrid,,B,\n'
-            'Discorra sobre a Revolução Industrial.,DIS,História,Idade Contemporânea,M,historia;revolucao,,,,,,,Destacar a transição da manufatura para maquinofatura.\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE ADS 2021,26,Qual é a capital da França?,Londres,Paris,Berlim,Madrid,,B,Paris é a capital desde o século X.\n'
+            'POSCOMP 2025,15,Discorra sobre a Revolução Industrial.,,,,,,, Destacar a transição da manufatura para maquinofatura.\n'
         ).encode()
 
         uploaded_file = SimpleUploadedFile(
@@ -393,8 +543,89 @@ class QuestaoImportViewTest(TestCase):
         self.assertContains(response, 'Discorra sobre a Revolução Industrial.')
 
         # Confirma que foram salvas no banco
-        self.assertEqual(Questao.objects.filter(enunciado__icontains='França').count(), 1)
+        q_obj = Questao.objects.get(enunciado__icontains='França')
+        self.assertEqual(q_obj.origem, 'ENADE ADS 2021')
+        self.assertEqual(q_obj.numero_questao, '26')
         self.assertEqual(Questao.objects.filter(enunciado__icontains='Revolução Industrial').count(), 1)
+
+    def test_import_excel_success_persists_and_renders_report(self):
+        """Verifica persistência de questões via upload de planilha Excel (.xlsx) e relatório."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(
+            [
+                'Origem',
+                'Questão',
+                'Enunciado',
+                'Opção A',
+                'Opção B',
+                'Opção C',
+                'Opção D',
+                'Opção E',
+                'Gabarito',
+                'Comentários / Justificativa',
+            ]
+        )
+        ws.append(
+            [
+                'ENADE ADS 2021',
+                26,
+                'Qual é a capital da Itália?',
+                'Milão',
+                'Roma',
+                'Nápoles',
+                'Turim',
+                'Florença',
+                'B',
+                'Roma é a capital.',
+            ]
+        )
+        ws.append(
+            [
+                'POSCOMP 2025',
+                15,
+                'Explique o algoritmo Bubble Sort.',
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                'Explicar trocas adjacentes e complexidade O(n^2).',
+            ]
+        )
+        buf = io.BytesIO()
+        wb.save(buf)
+
+        uploaded_file = SimpleUploadedFile(
+            'questoes_novas.xlsx',
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+        url = reverse('banco_questoes:questao_import')
+        response = self.client.post(url, {'csv_file': uploaded_file})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Relatório Detalhado Linha a Linha')
+        self.assertContains(response, 'Importadas com Sucesso')
+        self.assertContains(response, 'Qual é a capital da Itália?')
+        self.assertContains(response, 'Explique o algoritmo Bubble Sort.')
+
+        # Confirma no banco de dados
+        q_obj = Questao.objects.get(enunciado__icontains='Itália')
+        self.assertEqual(q_obj.origem, 'ENADE ADS 2021')
+        self.assertEqual(q_obj.numero_questao, '26')
+        self.assertEqual(q_obj.tipo, 'OBJ')
+        self.assertEqual(q_obj.alternativas.count(), 5)
+        self.assertEqual(q_obj.alternativas.get(correta=True).letra, 'B')
+
+        q_dis = Questao.objects.get(enunciado__icontains='Bubble Sort')
+        self.assertEqual(q_dis.tipo, 'DIS')
+        self.assertEqual(q_dis.origem, 'POSCOMP 2025')
 
     def test_import_csv_with_inconsistencies_shows_rejection_reasons(self):
         """Verifica se linhas inválidas geram relatório com motivos claros de rejeição."""
@@ -402,9 +633,9 @@ class QuestaoImportViewTest(TestCase):
         from django.urls import reverse
 
         csv_content = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Questão Sem Disciplina,OBJ,,Geral,F,tag1,Alt A,Alt B,,,,A,\n'
-            'Questão Objetiva Sem Gabarito,OBJ,Matemática,Álgebra,F,tag2,Alt A,Alt B,,,,,\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE,1,,Alt A,Alt B,,,,A,\n'
+            'ENADE,2,Questão Objetiva Sem Gabarito,Alt A,Alt B,,,,, \n'
         ).encode()
 
         uploaded_file = SimpleUploadedFile(
@@ -418,21 +649,21 @@ class QuestaoImportViewTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Rejeitadas / Inconsistentes')
-        self.assertContains(response, 'O campo &quot;disciplina&quot; é obrigatório')
-        self.assertContains(response, 'O campo &quot;correta&quot; é obrigatório')
+        self.assertContains(response, 'O campo &quot;enunciado&quot; é obrigatório')
+        self.assertContains(response, 'O campo &quot;gabarito&quot; é obrigatório')
 
 
 class CSVImportServiceTest(TestCase):
-    """Testes unitários dedicados ao serviço CSVImportService."""
+    """Testes unitários dedicados ao serviço CSVImportService (formato 10 colunas)."""
 
-    def test_import_service_commits_valid_questions_with_relations(self):
-        """Verifica se CSVImportService comita disciplinas, tópicos, tags e alternativas."""
+    def test_import_service_commits_valid_questions_10col(self):
+        """Verifica se CSVImportService comita questões no formato de 10 colunas com campos novos."""
         from .importer import CSVImportService
 
         csv_text = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Qual a fórmula da fotossíntese?,DIS,Biologia,Fisiologia,M,"bio,celular",,,,,,,Explicar fase clara e escura.\n'
-            'O que é 5 x 5?,OBJ,Matemática,Aritmética,F,"matematica,tabuada",10,20,25,30,,C,\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'POSCOMP 2025,15,Qual a fórmula da fotossíntese?,,,,,,,Explicar fase clara e escura.\n'
+            'ENADE ADS 2021,26,O que é 5 x 5?,10,20,25,30,,C,Alternativa C é correta.\n'
         )
 
         res = CSVImportService.import_csv(csv_text)
@@ -442,23 +673,49 @@ class CSVImportServiceTest(TestCase):
         self.assertEqual(res.total_rejeitadas, 0)
         self.assertFalse(res.has_errors)
 
-        # Verifica criação no banco
+        # Verifica criação no banco com campos novos
         q_obj = Questao.objects.get(enunciado='O que é 5 x 5?')
-        self.assertEqual(q_obj.disciplina.nome, 'Matemática')
-        self.assertEqual(q_obj.topico.nome, 'Aritmética')
+        self.assertEqual(q_obj.origem, 'ENADE ADS 2021')
+        self.assertEqual(q_obj.numero_questao, '26')
+        self.assertEqual(q_obj.disciplina.nome, 'Não Classificada')  # Default
+        self.assertEqual(q_obj.dificuldade, 'M')  # Default
         self.assertEqual(q_obj.alternativas.count(), 4)
         self.assertEqual(q_obj.alternativas.get(correta=True).letra, 'C')
         self.assertEqual(q_obj.alternativas.get(correta=True).texto, '25')
-        self.assertEqual(set(q_obj.tags.names()), {'matematica', 'tabuada'})
+
+        # Verifica discursiva inferida
+        q_dis = Questao.objects.get(enunciado='Qual a fórmula da fotossíntese?')
+        self.assertEqual(q_dis.tipo, 'DIS')
+        self.assertEqual(q_dis.origem, 'POSCOMP 2025')
+
+    def test_import_service_commits_excel_file(self):
+        """Verifica se QuestaoImportService importa diretamente planilhas Excel binárias."""
+        from .importer import QuestaoImportService
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(['Origem', 'Questão', 'Enunciado', 'Opção A', 'Opção B', 'Gabarito', 'Comentários'])
+        ws.append(['ENADE', 1, 'Quanto é 10 + 20?', '30', '40', 'A', '10 + 20 = 30'])
+        buf = io.BytesIO()
+        wb.save(buf)
+
+        res = QuestaoImportService.import_excel(buf.getvalue())
+        self.assertEqual(res.total_processadas, 1)
+        self.assertEqual(res.total_sucesso, 1)
+        self.assertFalse(res.has_errors)
+
+        q = Questao.objects.get(enunciado='Quanto é 10 + 20?')
+        self.assertEqual(q.alternativas.count(), 2)
+        self.assertEqual(q.alternativas.get(correta=True).letra, 'A')
 
     def test_import_service_partial_commits_only_valid_rows(self):
         """Verifica que linhas com erro são rejeitadas sem bloquear as linhas válidas."""
         from .importer import CSVImportService
 
         csv_text = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Questão Sem Enunciado,,Matemática,,F,,,,,,,,,\n'  # Inválida
-            'Capital de SP?,OBJ,Geografia,Sudeste,F,sp,Santos,São Paulo,Campinas,,,B,\n'  # Válida
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE,1,,,,,,,,\n'
+            'ENADE,2,Capital de SP?,Santos,São Paulo,Campinas,,,B,\n'
         )
 
         res = CSVImportService.import_csv(csv_text)
@@ -476,15 +733,13 @@ class CSVImportServiceTest(TestCase):
         from .importer import CSVImportService
 
         csv_text = (
-            'enunciado,tipo,disciplina,topico,dificuldade,tags,alt_a,alt_b,alt_c,alt_d,alt_e,correta,criterios_correcao\n'
-            'Questão Unica 2026,OBJ,Sociologia,,F,socio,Opcao 1,Opcao 2,,,,A,\n'
+            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE 2026,1,Questão Unica 2026,Opcao 1,Opcao 2,,,,A,\n'
         )
 
-        # 1ª Importação: Sucesso
         res1 = CSVImportService.import_csv(csv_text)
         self.assertEqual(res1.total_sucesso, 1)
 
-        # 2ª Importação: Bloqueada por duplicidade contra o banco
         res2 = CSVImportService.import_csv(csv_text)
         self.assertEqual(res2.total_sucesso, 0)
         self.assertEqual(res2.total_rejeitadas, 1)
@@ -846,7 +1101,7 @@ class QuestaoCreateViewTest(TestCase):
 
 
 class CSVExportViewTest(TestCase):
-    """Testes de integração para o download e exportação de dados reais em CSV."""
+    """Testes de integração para o download e exportação no formato de 10 colunas."""
 
     def setUp(self):
         from django.contrib.auth import get_user_model
@@ -862,12 +1117,14 @@ class CSVExportViewTest(TestCase):
 
         self.topico_arv = Topico.objects.create(disciplina=self.disc_esd, nome='Árvores Binárias')
 
-        # Questão 1: Objetiva real
+        # Questão 1: Objetiva com origem
         self.q_obj = Questao.objects.create(
             disciplina=self.disc_esd,
             topico=self.topico_arv,
             tipo=Questao.Tipo.OBJETIVA,
             dificuldade=Questao.Dificuldade.MEDIO,
+            origem='ENADE ADS 2021',
+            numero_questao='26',
             enunciado='Qual a complexidade de inserção numa árvore AVL balanceada?',
             ativo=True,
             autor=self.user,
@@ -876,11 +1133,13 @@ class CSVExportViewTest(TestCase):
         Alternativa.objects.create(questao=self.q_obj, letra='A', texto='O(log n)', correta=True)
         Alternativa.objects.create(questao=self.q_obj, letra='B', texto='O(n)', correta=False)
 
-        # Questão 2: Discursiva real
+        # Questão 2: Discursiva com comentários
         self.q_dis = Questao.objects.create(
             disciplina=self.disc_caw,
             tipo=Questao.Tipo.DISCURSIVA,
             dificuldade=Questao.Dificuldade.FACIL,
+            origem='POSCOMP 2025',
+            numero_questao='15',
             enunciado='Explique o ciclo de vida de uma requisição HTTP.',
             criterios_correcao='DNS, handshake TCP, requisição HTTP, resposta do servidor.',
             ativo=True,
@@ -888,8 +1147,8 @@ class CSVExportViewTest(TestCase):
         )
         self.q_dis.tags.add('http', 'web')
 
-    def test_export_csv_contains_real_database_records(self):
-        """Verifica se o CSV exporta os registros reais cadastrados no banco de dados."""
+    def test_export_csv_10col_contains_real_database_records(self):
+        """Verifica se o CSV de 10 colunas exporta os registros reais incluindo origem e numero_questao."""
         from django.urls import reverse
 
         url = reverse('banco_questoes:download_modelo_csv')
@@ -900,24 +1159,29 @@ class CSVExportViewTest(TestCase):
         self.assertIn('attachment; filename="acervo_questoes_faeterj.csv"', response['Content-Disposition'])
 
         content = response.content.decode('utf-8')
-        # Verifica cabeçalho BOM UTF-8
         self.assertTrue(content.startswith('\ufeff'))
 
-        # Verifica presença das questões reais
+        # Verifica cabeçalho de 10 colunas
+        self.assertIn('origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios', content)
+
+        # Verifica dados reais
+        self.assertIn('ENADE ADS 2021', content)
+        self.assertIn('26', content)
         self.assertIn('Qual a complexidade de inserção numa árvore AVL balanceada?', content)
-        self.assertIn('Estrutura de Dados (ESD)', content)
-        self.assertIn('Árvores Binárias', content)
         self.assertIn('O(log n)', content)
+        self.assertIn('POSCOMP 2025', content)
         self.assertIn('Explique o ciclo de vida de uma requisição HTTP.', content)
-        self.assertIn('Construção de Aplicações WEB (CAW)', content)
         self.assertIn('DNS, handshake TCP, requisição HTTP, resposta do servidor.', content)
+
+        # Verifica que campos internos NÃO estão no CSV
+        self.assertNotIn('Estrutura de Dados (ESD)', content)
+        self.assertNotIn('Árvores Binárias', content)
 
     def test_export_csv_respects_active_filters(self):
         """Verifica se o CSV exporta apenas os registros que atendem aos filtros ativos da query string."""
         from django.urls import reverse
 
         url = reverse('banco_questoes:download_modelo_csv')
-        # Filtra apenas pela disciplina ESD
         response = self.client.get(url, {'disciplina': self.disc_esd.pk})
 
         self.assertEqual(response.status_code, 200)
@@ -925,6 +1189,153 @@ class CSVExportViewTest(TestCase):
 
         self.assertIn('Qual a complexidade de inserção numa árvore AVL balanceada?', content)
         self.assertNotIn('Explique o ciclo de vida de uma requisição HTTP.', content)
+
+
+class ExcelExportViewTest(TestCase):
+    """Testes de integração para a exportação de dados em planilhas Excel (.xlsx)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from .models import Alternativa, Disciplina, Topico
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_excel', password='secret_password')  # noqa: S106
+        self.client.login(username='docente_excel', password='secret_password')  # noqa: S106
+
+        self.disc_esd, _ = Disciplina.objects.get_or_create(nome='Estrutura de Dados (ESD)')
+        self.disc_caw, _ = Disciplina.objects.get_or_create(nome='Construção de Aplicações WEB (CAW)')
+
+        self.topico_arv = Topico.objects.create(disciplina=self.disc_esd, nome='Árvores Binárias')
+
+        # Questão 1: Objetiva com origem
+        self.q_obj = Questao.objects.create(
+            disciplina=self.disc_esd,
+            topico=self.topico_arv,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.MEDIO,
+            origem='ENADE ADS 2021',
+            numero_questao='26',
+            enunciado='Qual a complexidade de inserção numa árvore AVL balanceada?',
+            ativo=True,
+            autor=self.user,
+        )
+        self.q_obj.tags.add('avl', 'arvores')
+        Alternativa.objects.create(questao=self.q_obj, letra='A', texto='O(log n)', correta=True)
+        Alternativa.objects.create(questao=self.q_obj, letra='B', texto='O(n)', correta=False)
+
+        # Questão 2: Discursiva com comentários
+        self.q_dis = Questao.objects.create(
+            disciplina=self.disc_caw,
+            tipo=Questao.Tipo.DISCURSIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            origem='POSCOMP 2025',
+            numero_questao='15',
+            enunciado='Explique o ciclo de vida de uma requisição HTTP.',
+            criterios_correcao='DNS, handshake TCP, requisição HTTP, resposta do servidor.',
+            ativo=True,
+            autor=self.user,
+        )
+        self.q_dis.tags.add('http', 'web')
+
+    def test_export_excel_status_and_content_type(self):
+        """Verifica se o endpoint retorna status 200, Content-Type correto e nome do anexo .xlsx."""
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:download_modelo_xlsx')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertIn('attachment; filename="acervo_questoes_faeterj.xlsx"', response['Content-Disposition'])
+
+    def test_export_excel_contains_real_database_records(self):
+        """Verifica se o workbook .xlsx exportado contém as 10 colunas e dados reais do banco."""
+        import openpyxl
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:download_modelo_xlsx')
+        response = self.client.get(url)
+
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+        self.assertIn('Acervo de Questões', wb.sheetnames)
+        ws = wb['Acervo de Questões']
+
+        # Verifica cabeçalhos na linha 1
+        headers = [cell.value for cell in ws[1]]
+        expected_headers = [
+            'origem',
+            'questao',
+            'enunciado',
+            'opcao_a',
+            'opcao_b',
+            'opcao_c',
+            'opcao_d',
+            'opcao_e',
+            'gabarito',
+            'comentarios',
+        ]
+        self.assertEqual(headers, expected_headers)
+
+        # Deve conter 3 linhas: cabeçalho + 2 questões
+        self.assertEqual(ws.max_row, 3)
+
+        # Linha 2: Questão HTTP (mais recente por -criado_em)
+        row2 = [cell.value for cell in ws[2]]
+        self.assertEqual(row2[0], 'POSCOMP 2025')
+        self.assertEqual(row2[1], '15')
+        self.assertEqual(row2[2], 'Explique o ciclo de vida de uma requisição HTTP.')
+        self.assertEqual(row2[9], 'DNS, handshake TCP, requisição HTTP, resposta do servidor.')
+
+        # Linha 3: Questão AVL
+        row3 = [cell.value for cell in ws[3]]
+        self.assertEqual(row3[0], 'ENADE ADS 2021')
+        self.assertEqual(row3[1], '26')
+        self.assertEqual(row3[2], 'Qual a complexidade de inserção numa árvore AVL balanceada?')
+        self.assertEqual(row3[3], 'O(log n)')
+        self.assertEqual(row3[8], 'A')
+
+    def test_export_excel_respects_active_filters(self):
+        """Verifica se a exportação em Excel exporta apenas registros correspondentes ao filtro GET."""
+        import openpyxl
+        from django.urls import reverse
+
+        url = reverse('banco_questoes:download_modelo_xlsx')
+        response = self.client.get(url, {'disciplina': self.disc_esd.pk})
+
+        self.assertEqual(response.status_code, 200)
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+        ws = wb['Acervo de Questões']
+
+        # Deve conter apenas 2 linhas: cabeçalho + 1 questão filtrada
+        self.assertEqual(ws.max_row, 2)
+        row2 = [cell.value for cell in ws[2]]
+        self.assertEqual(row2[0], 'ENADE ADS 2021')
+        self.assertEqual(row2[2], 'Qual a complexidade de inserção numa árvore AVL balanceada?')
+
+    def test_export_excel_empty_database_generates_sample_records(self):
+        """Verifica se o acervo vazio gera planilha modelo com dados de exemplo ENADE/POSCOMP."""
+        import openpyxl
+        from django.urls import reverse
+
+        # Remove todas as questões
+        Questao.objects.all().delete()
+
+        url = reverse('banco_questoes:download_modelo_xlsx')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+        ws = wb['Acervo de Questões']
+
+        self.assertEqual(ws.max_row, 3)
+        row2 = [cell.value for cell in ws[2]]
+        self.assertEqual(row2[0], 'ENADE ADS 2021')
+        self.assertEqual(row2[1], '26')
+        self.assertIn('DNS', row2[2])
 
 
 class AuthenticationViewsTest(TestCase):
