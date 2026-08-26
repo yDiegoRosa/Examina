@@ -46,6 +46,11 @@ class CSVValidationReport:
         return self.total_invalidas == 0 and self.total_processadas > 0
 
 
+# Disciplina e dificuldade padrão para importação do formato de 10 colunas
+DISCIPLINA_PADRAO = 'Não Classificada'
+DIFICULDADE_PADRAO = Questao.Dificuldade.MEDIO
+
+
 class CSVQuestaoValidator:
     """Validador de regras de negócio, integridade e duplicidade para questões de CSV."""
 
@@ -73,13 +78,20 @@ class CSVQuestaoValidator:
         """
         Aplica todas as regras sintáticas e condicionais a uma linha estruturada pelo parser.
 
+        Suporta tanto o formato novo (10 colunas) quanto o legado (13 colunas).
+        Campos ausentes recebem valores-padrão.
+
         Retorna uma instância de RowValidationResult contendo erros e dados limpos.
         """
         linha_num = row.get('linha', 0)
         errors: list[str] = []
         cleaned: dict[str, Any] = {}
 
-        # 1. Validação de Enunciado
+        # 0. Campos do novo formato (origem e numero_questao)
+        cleaned['origem'] = (row.get('origem') or '').strip()
+        cleaned['numero_questao'] = (row.get('numero_questao') or '').strip()
+
+        # 1. Validação de Enunciado (sempre obrigatório)
         enunciado = (row.get('enunciado') or '').strip()
         if not enunciado:
             errors.append(f'Linha {linha_num}: O campo "enunciado" é obrigatório.')
@@ -87,37 +99,36 @@ class CSVQuestaoValidator:
             cleaned['enunciado'] = enunciado
             cleaned['enunciado_normalizado'] = normalize_enunciado(enunciado)
 
-        # 2. Validação de Disciplina
+        # 2. Disciplina — usa valor do CSV ou fallback para padrão
         disciplina = (row.get('disciplina') or '').strip()
-        if not disciplina:
-            errors.append(f'Linha {linha_num}: O campo "disciplina" é obrigatório.')
-        else:
-            cleaned['disciplina'] = disciplina
+        cleaned['disciplina'] = disciplina if disciplina else DISCIPLINA_PADRAO
 
-        # Tópico (opcional)
+        # 3. Tópico (opcional)
         topico = row.get('topico')
         cleaned['topico'] = topico.strip() if isinstance(topico, str) and topico.strip() else None
 
-        # Tags (lista)
+        # 4. Tags (lista, opcional)
         tags = row.get('tags', [])
         cleaned['tags'] = [t.strip() for t in tags if isinstance(t, str) and t.strip()]
 
-        # 3. Validação de Tipo
+        # 5. Tipo — aceita valor explícito ou usa o inferido pelo parser
         tipo_raw = (row.get('tipo') or '').strip().upper()
         if not tipo_raw:
-            errors.append(f'Linha {linha_num}: O campo "tipo" é obrigatório (OBJ ou DIS).')
-            tipo_normalizado = None
-        elif tipo_raw in cls.TIPOS_VALIDOS:
+            # Tipo já deve ter sido inferido pelo parser; fallback defensivo
+            alternativas = row.get('alternativas', [])
+            tipo_raw = 'OBJ' if alternativas else 'DIS'
+
+        if tipo_raw in cls.TIPOS_VALIDOS:
             tipo_normalizado = cls.TIPOS_VALIDOS[tipo_raw]
             cleaned['tipo'] = tipo_normalizado
         else:
             errors.append(f'Linha {linha_num}: Tipo de questão inválido ("{tipo_raw}"). Valores aceitos: OBJ ou DIS.')
             tipo_normalizado = None
 
-        # 4. Validação de Dificuldade
+        # 6. Dificuldade — aceita valor explícito ou usa padrão
         dif_raw = (row.get('dificuldade') or '').strip().upper()
         if not dif_raw:
-            errors.append(f'Linha {linha_num}: O campo "dificuldade" é obrigatório (F, M ou D).')
+            cleaned['dificuldade'] = DIFICULDADE_PADRAO
         elif dif_raw in cls.DIFICULDADES_VALIDAS:
             cleaned['dificuldade'] = cls.DIFICULDADES_VALIDAS[dif_raw]
         else:
@@ -125,7 +136,7 @@ class CSVQuestaoValidator:
                 f'Linha {linha_num}: Nível de dificuldade inválido ("{dif_raw}"). Valores aceitos: F, M ou D.'
             )
 
-        # 5. Regras Condicionais: Objetiva vs Discursiva
+        # 7. Regras Condicionais: Objetiva vs Discursiva
         if tipo_normalizado == Questao.Tipo.OBJETIVA:
             cls._validate_objetiva(row, linha_num, errors, cleaned)
         elif tipo_normalizado == Questao.Tipo.DISCURSIVA:
@@ -160,12 +171,14 @@ class CSVQuestaoValidator:
 
         # Deve indicar a correta
         if not correta:
-            errors.append(f'Linha {linha_num}: O campo "correta" é obrigatório para questões objetivas (ex.: A, B, C).')
+            errors.append(
+                f'Linha {linha_num}: O campo "gabarito" é obrigatório para questões objetivas (ex.: A, B, C).'
+            )
         else:
             letras_disponiveis = [a['letra'] for a in alternativas]
             if correta not in letras_disponiveis:
                 errors.append(
-                    f'Linha {linha_num}: A alternativa correta "{correta}" não corresponde a nenhuma alternativa preenchida ({", ".join(letras_disponiveis) or "nenhuma"}).'
+                    f'Linha {linha_num}: A alternativa do gabarito "{correta}" não corresponde a nenhuma alternativa preenchida ({", ".join(letras_disponiveis) or "nenhuma"}).'
                 )
 
         # Atualiza a flag correta nas alternativas estruturadas
@@ -180,7 +193,7 @@ class CSVQuestaoValidator:
 
         cleaned['alternativas'] = alts_com_flag
         cleaned['correta'] = correta
-        cleaned['criterios_correcao'] = ''
+        cleaned['criterios_correcao'] = (row.get('criterios_correcao') or '').strip()
 
     @classmethod
     def _validate_discursiva(
@@ -190,14 +203,12 @@ class CSVQuestaoValidator:
         errors: list[str],
         cleaned: dict[str, Any],
     ) -> None:
-        """Valida regras exclusivas de questões discursivas."""
+        """Valida regras exclusivas de questões discursivas.
+
+        No formato de 10 colunas, o campo 'comentários' é opcional para discursivas.
+        """
         criterios = (row.get('criterios_correcao') or '').strip()
-
-        if not criterios:
-            errors.append(f'Linha {linha_num}: Critérios de correção são obrigatórios para questões discursivas.')
-        else:
-            cleaned['criterios_correcao'] = criterios
-
+        cleaned['criterios_correcao'] = criterios
         cleaned['alternativas'] = []
         cleaned['correta'] = None
 

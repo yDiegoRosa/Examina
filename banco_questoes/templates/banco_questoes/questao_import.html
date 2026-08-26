@@ -13,15 +13,18 @@
           <i class="bi bi-file-earmark-arrow-up-fill"></i> Módulo 1 • Importação em Lote (RF02)
         </span>
       </div>
-      <h1 class="mb-1">Importação de Questões via CSV</h1>
+      <h1 class="mb-1">Importação de Questões (Excel & CSV)</h1>
       <p class="text-secondary" style="max-width: 620px;">
-        Envie um arquivo formatado com questões objetivas e discursivas para inserção rápida e automatizada no acervo.
+        Envie planilhas Excel (<code>.xlsx</code>) ou arquivos CSV formatados com questões para inserção e validação automatizada no acervo.
       </p>
     </div>
 
     <div class="flex flex-wrap gap-2">
+      <a href="{% url 'banco_questoes:download_modelo_xlsx' %}" class="btn btn-outline">
+        <i class="bi bi-file-earmark-excel-fill" style="color: #107C41;"></i> Baixar Modelo Excel
+      </a>
       <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline">
-        <i class="bi bi-download" style="color: var(--fae-blue-primary);"></i> Baixar Modelo CSV
+        <i class="bi bi-file-earmark-arrow-down-fill" style="color: var(--fae-blue-primary);"></i> Baixar Modelo CSV
       </a>
       <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">
         <i class="bi bi-arrow-left"></i> Voltar ao Acervo
@@ -35,24 +38,25 @@
     <div class="card-header header-primary">
       <div class="flex items-center gap-2">
         <i class="bi bi-cloud-arrow-up-fill text-primary" style="font-size: 1.2rem; color: var(--fae-blue-electric);"></i>
-        <span class="font-bold">Selecione o Arquivo CSV para Processamento</span>
+        <span class="font-bold">Selecione a Planilha Excel (.xlsx) ou Arquivo CSV</span>
       </div>
-      <span class="badge-pill badge-pill-medio font-bold">Padrão 13 Colunas</span>
+      <span class="badge-pill badge-pill-medio font-bold">Padrão 10 Colunas</span>
     </div>
     <div class="card-body">
       <form method="post" enctype="multipart/form-data" id="form-import-csv">
         {% csrf_token %}
 
         <div style="border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 2.5rem 1.5rem; text-align: center; background: #FAFBFD; transition: var(--transition);" id="drop-zone">
-          <div class="text-primary mb-3" style="font-size: 3rem; color: var(--fae-blue-electric); opacity: 0.85;">
-            <i class="bi bi-filetype-csv"></i>
+          <div class="flex justify-center items-center gap-3 mb-3 text-primary" style="font-size: 2.8rem; opacity: 0.9;">
+            <i class="bi bi-file-earmark-excel-fill" style="color: #107C41;"></i>
+            <i class="bi bi-filetype-csv" style="color: var(--fae-blue-electric);"></i>
           </div>
-          <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Arraste seu arquivo CSV ou clique para escolher</div>
-          <p class="text-muted small mb-4" style="max-width: 450px; margin-left: auto; margin-right: auto;">
-            Codificações suportadas: UTF-8 (com ou sem BOM) e Latin-1. Separadores aceitos: vírgula (<code>,</code>) ou ponto-e-vírgula (<code>;</code>).
+          <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Arraste sua planilha Excel (.xlsx) ou arquivo CSV</div>
+          <p class="text-muted small mb-4" style="max-width: 520px; margin-left: auto; margin-right: auto;">
+            Formatos aceitos: <strong>Microsoft Excel (.xlsx)</strong> e <strong>CSV</strong> (UTF-8 com/sem BOM, Latin-1, separadores <code>,</code> ou <code>;</code>).
           </p>
 
-          <input type="file" name="csv_file" id="id_csv_file" accept=".csv" class="form-input" style="max-width: 380px; margin: 0 auto; display: block;" required>
+          <input type="file" name="csv_file" id="id_csv_file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" class="form-input" style="max-width: 400px; margin: 0 auto; display: block;" required>
         </div>
 
         <div class="flex items-center justify-between mt-4">
@@ -68,22 +72,30 @@
     </div>
   </div>
 
-  <!-- Card com Diretrizes de Formatação do CSV -->
+  <!-- Card com Diretrizes de Formatação do Arquivo -->
   <div class="card-surface">
     <div class="card-header">
       <div class="flex items-center gap-2">
         <i class="bi bi-info-circle-fill" style="color: var(--fae-gold);"></i>
-        <span class="font-bold">Estrutura das 13 Colunas do CSV</span>
+        <span class="font-bold">Estrutura das 10 Colunas (Excel e CSV)</span>
       </div>
     </div>
     <div class="card-body">
+      <div style="background: #F8FAFC; padding: 1rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 1rem;">
+        <div class="font-bold text-main mb-2 flex items-center gap-2">
+          <i class="bi bi-table" style="color: var(--fae-blue-primary);"></i> Colunas do Formato Padrão
+        </div>
+        <p class="text-muted small mb-0">
+          <code>origem</code>, <code>questao</code>, <code>enunciado</code>, <code>opcao_a</code>, <code>opcao_b</code>, <code>opcao_c</code>, <code>opcao_d</code>, <code>opcao_e</code>, <code>gabarito</code>, <code>comentarios</code>
+        </p>
+      </div>
       <div class="grid grid-cols-2 gap-4">
         <div style="background: #F8FAFC; padding: 1rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
           <div class="font-bold text-main mb-1 flex items-center gap-2">
             <span class="badge-pill badge-pill-obj">Objetivas</span> Questões de Múltipla Escolha
           </div>
           <p class="text-muted small mb-0">
-            Preencha <code>enunciado</code>, <code>tipo=OBJ</code>, <code>disciplina</code>, <code>dificuldade</code>, alternativas em <code>alt_a</code> até <code>alt_e</code> (mínimo 2) e indique a letra do gabarito em <code>correta</code>.
+            Preencha <code>enunciado</code>, alternativas em <code>opcao_a</code> até <code>opcao_e</code> (mínimo 2) e indique a letra do gabarito. O tipo é inferido automaticamente. Campos <code>origem</code>, <code>questao</code> e <code>comentarios</code> são opcionais.
           </p>
         </div>
 
@@ -92,7 +104,7 @@
             <span class="badge-pill badge-pill-dis">Discursivas</span> Questões Abertas
           </div>
           <p class="text-muted small mb-0">
-            Preencha <code>enunciado</code>, <code>tipo=DIS</code>, <code>disciplina</code>, <code>dificuldade</code> e descreva os critérios pedagógicos de pontuação no campo <code>criterios_correcao</code>.
+            Preencha <code>enunciado</code> e deixe as alternativas em branco — o tipo discursivo é inferido automaticamente. <code>comentarios</code> é opcional.
           </p>
         </div>
       </div>
