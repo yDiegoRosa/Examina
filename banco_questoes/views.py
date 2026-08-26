@@ -4,7 +4,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .filters import QuestaoFilter
@@ -180,6 +180,34 @@ def questao_update(request, pk):
             'questao': questao,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Inativar / Reativar questão (soft delete — ativo=False)
+# ---------------------------------------------------------------------------
+@login_required
+@permission_required('banco_questoes.change_questao', raise_exception=True)
+def questao_toggle_ativo(request, pk):
+    """Inverte o flag `ativo` da questão (inativa ou reativa) sem excluí-la.
+
+    Aceita apenas POST para evitar ativações/inativações acidentais via GET.
+    A mudança é registrada no histórico do django-simple-history com o usuário
+    que executou a ação.
+    """
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    questao = get_object_or_404(Questao, pk=pk)
+    questao.ativo = not questao.ativo
+    questao._history_user = request.user
+    questao.save(update_fields=['ativo', 'atualizado_em'])
+
+    if questao.ativo:
+        messages.success(request, f'Questão Q{questao.pk} reativada com sucesso.')
+    else:
+        messages.success(request, f'Questão Q{questao.pk} inativada. O registro foi preservado no acervo.')
+
+    return redirect('banco_questoes:questao_list')
 
 
 # ---------------------------------------------------------------------------

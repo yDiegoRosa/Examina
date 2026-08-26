@@ -1134,3 +1134,96 @@ class QuestaoMediaSupportTest(TestCase):
         questao.refresh_from_db()
         self.assertEqual(questao.texto_auxiliar, 'Texto auxiliar revisado e enriquecido.')
         self.assertFalse(bool(questao.imagem))  # Imagem removida com sucesso
+
+
+class QuestaoToggleAtivoViewTests(TestCase):
+    """Testes de integração da view questao_toggle_ativo (soft delete)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Permission
+
+        from .models import Disciplina
+
+        user_model = get_user_model()
+
+        # Usuário com permissão de edição
+        self.editor = user_model.objects.create_user(username='editor_toggle', password='secret_password')  # noqa: S106
+        perm_change = Permission.objects.get(codename='change_questao')
+        self.editor.user_permissions.add(perm_change)
+
+        # Usuário sem permissão
+        self.sem_perm = user_model.objects.create_user(username='leitor_toggle', password='secret_password')  # noqa: S106
+
+        disc = Disciplina.objects.create(nome='Lógica de Programação')
+
+        self.questao_ativa = Questao.objects.create(
+            disciplina=disc,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão ativa para soft delete.',
+            ativo=True,
+            autor=self.editor,
+        )
+        self.questao_inativa = Questao.objects.create(
+            disciplina=disc,
+            tipo=Questao.Tipo.DISCURSIVA,
+            dificuldade=Questao.Dificuldade.MEDIO,
+            enunciado='Questão inativa para reativação.',
+            ativo=False,
+            autor=self.editor,
+        )
+
+    def _url(self, pk):
+        from django.urls import reverse
+
+        return reverse('banco_questoes:questao_toggle_ativo', kwargs={'pk': pk})
+
+    def test_sem_permissao_retorna_403(self):
+        """Usuário sem change_questao não pode inativar/reativar — deve receber 403."""
+        self.client.login(username='leitor_toggle', password='secret_password')  # noqa: S106
+        response = self.client.post(self._url(self.questao_ativa.pk))
+        self.assertEqual(response.status_code, 403)
+
+    def test_inativar_questao_ativa(self):
+        """POST em questão ativa inverte ativo para False e redireciona para a lista."""
+        from django.urls import reverse
+
+        self.client.login(username='editor_toggle', password='secret_password')  # noqa: S106
+        response = self.client.post(self._url(self.questao_ativa.pk))
+
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+        self.questao_ativa.refresh_from_db()
+        self.assertFalse(self.questao_ativa.ativo)
+
+    def test_reativar_questao_inativa(self):
+        """POST em questão inativa inverte ativo para True e redireciona para a lista."""
+        from django.urls import reverse
+
+        self.client.login(username='editor_toggle', password='secret_password')  # noqa: S106
+        response = self.client.post(self._url(self.questao_inativa.pk))
+
+        self.assertRedirects(response, reverse('banco_questoes:questao_list'))
+        self.questao_inativa.refresh_from_db()
+        self.assertTrue(self.questao_inativa.ativo)
+
+    def test_get_retorna_405(self):
+        """GET na URL de toggle deve retornar 405 Method Not Allowed."""
+        self.client.login(username='editor_toggle', password='secret_password')  # noqa: S106
+        response = self.client.get(self._url(self.questao_ativa.pk))
+        self.assertEqual(response.status_code, 405)
+
+    def test_historico_registra_mudanca_de_ativo(self):
+        """A mudança de ativo deve gerar um novo registro no histórico da questão."""
+        self.client.login(username='editor_toggle', password='secret_password')  # noqa: S106
+
+        historico_antes = self.questao_ativa.history.count()
+        self.client.post(self._url(self.questao_ativa.pk))
+
+        self.questao_ativa.refresh_from_db()
+        self.assertEqual(self.questao_ativa.history.count(), historico_antes + 1)
+
+        ultima_revisao = self.questao_ativa.history.first()
+        self.assertFalse(ultima_revisao.ativo)
+        self.assertEqual(ultima_revisao.history_user, self.editor)
+

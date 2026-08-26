@@ -9,3 +9,4 @@ sqlparse
 tzdata
 ruff>=0.5.0
 coverage>=7.0
+django-filter>=23.0
