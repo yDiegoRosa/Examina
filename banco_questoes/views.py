@@ -3,6 +3,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,18 +18,29 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Lista de questões (com django-filter)
+# Lista de questões (com django-filter e paginação)
 # ---------------------------------------------------------------------------
 @login_required
 def questao_list(request):
-    """Lista de questões com filtros avançados via django-filter e métricas."""
+    """Lista de questões com filtros avançados via django-filter, métricas e paginação."""
     base_qs = (
         Questao.objects.select_related('disciplina', 'topico', 'autor').prefetch_related('tags').order_by('-criado_em')
     )
 
     # Aplicação do FilterSet
     questao_filter = QuestaoFilter(request.GET, queryset=base_qs)
-    questoes = questao_filter.qs
+    questoes_qs = questao_filter.qs
+
+    # Paginação (15 itens por página)
+    paginator = Paginator(questoes_qs, 15)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    page_range = paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1)
+
+    # Query string preservando filtros para navegação entre páginas
+    get_params = request.GET.copy()
+    get_params.pop('page', None)
+    querystring = get_params.urlencode()
 
     # Métricas globais do acervo
     all_questoes = Questao.objects.all()
@@ -49,7 +61,10 @@ def questao_list(request):
         'banco_questoes/questao_list.html',
         {
             'filter': questao_filter,
-            'questoes': questoes,
+            'questoes': page_obj,
+            'page_obj': page_obj,
+            'page_range': page_range,
+            'querystring': querystring,
             'metricas': metricas,
             'has_active_filters': has_active_filters,
         },

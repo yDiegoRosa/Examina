@@ -1,0 +1,82 @@
+{# Componente Reutilizável de Paginação SaaS com Preservação de Query Parameters #}
+{% if page_obj.has_other_pages %}
+<div class="pagination-wrapper">
+  <div class="pagination-info">
+    Mostrando <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong> de <strong>{{ page_obj.paginator.count }}</strong> item(ns)
+    <span class="text-muted">• Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+  </div>
+
+  <nav class="pagination-nav" aria-label="Navegação de páginas">
+    <ul class="pagination-list">
+      {# Primeira Página #}
+      {% if page_obj.has_previous %}
+      <li>
+        <a href="?page=1{% if querystring %}&{{ querystring }}{% endif %}" class="pagination-btn" title="Primeira página" aria-label="Primeira página">
+          <i class="bi bi-chevron-double-left"></i>
+        </a>
+      </li>
+      <li>
+        <a href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}" class="pagination-btn" title="Página anterior" aria-label="Página anterior">
+          <i class="bi bi-chevron-left"></i>
+        </a>
+      </li>
+      {% else %}
+      <li>
+        <span class="pagination-btn disabled" aria-disabled="true" title="Primeira página">
+          <i class="bi bi-chevron-double-left"></i>
+        </span>
+      </li>
+      <li>
+        <span class="pagination-btn disabled" aria-disabled="true" title="Página anterior">
+          <i class="bi bi-chevron-left"></i>
+        </span>
+      </li>
+      {% endif %}
+
+      {# Números das Páginas (Elided Page Range) #}
+      {% for num in page_range %}
+        {% if num == page_obj.paginator.ELLIPSIS %}
+        <li>
+          <span class="pagination-ellipsis">&hellip;</span>
+        </li>
+        {% elif num == page_obj.number %}
+        <li>
+          <span class="pagination-btn active" aria-current="page">{{ num }}</span>
+        </li>
+        {% else %}
+        <li>
+          <a href="?page={{ num }}{% if querystring %}&{{ querystring }}{% endif %}" class="pagination-btn">
+            {{ num }}
+          </a>
+        </li>
+        {% endif %}
+      {% endfor %}
+
+      {# Próxima Página e Última Página #}
+      {% if page_obj.has_next %}
+      <li>
+        <a href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}" class="pagination-btn" title="Próxima página" aria-label="Próxima página">
+          <i class="bi bi-chevron-right"></i>
+        </a>
+      </li>
+      <li>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if querystring %}&{{ querystring }}{% endif %}" class="pagination-btn" title="Última página" aria-label="Última página">
+          <i class="bi bi-chevron-double-right"></i>
+        </a>
+      </li>
+      {% else %}
+      <li>
+        <span class="pagination-btn disabled" aria-disabled="true" title="Próxima página">
+          <i class="bi bi-chevron-right"></i>
+        </span>
+      </li>
+      <li>
+        <span class="pagination-btn disabled" aria-disabled="true" title="Última página">
+          <i class="bi bi-chevron-double-right"></i>
+        </span>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endif %}

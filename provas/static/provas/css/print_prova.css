@@ -1,0 +1,282 @@
+/* ==========================================================================
+   Examina — Folha de Estilos para Impressão e Geração de PDF (WeasyPrint)
+   Identidade Visual e Padrão Acadêmico FAETERJ-Rio
+   ========================================================================== */
+
+@page {
+  size: A4 portrait;
+  margin: 18mm 14mm 20mm 14mm;
+
+  @top-left {
+    content: "FAETERJ-Rio • Faculdade de Educação Tecnológica do Estado do RJ";
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 7.5pt;
+    color: #64748B;
+    border-bottom: 0.5pt solid #CBD5E1;
+    padding-bottom: 3mm;
+  }
+
+  @top-right {
+    content: "Sistema Examina";
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 7.5pt;
+    font-weight: bold;
+    color: #002B49;
+    border-bottom: 0.5pt solid #CBD5E1;
+    padding-bottom: 3mm;
+  }
+
+  @bottom-left {
+    content: "Documento gerado automaticamente pelo Sistema Examina";
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 7pt;
+    color: #94A3B8;
+  }
+
+  @bottom-right {
+    content: "Página " counter(page) " de " counter(pages);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8pt;
+    font-weight: bold;
+    color: #334155;
+  }
+}
+
+@page :first {
+  @top-left {
+    content: none;
+  }
+  @top-right {
+    content: none;
+  }
+}
+
+/* --- Configurações Globais do Documento --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10pt;
+  line-height: 1.45;
+  color: #1E293B;
+  background-color: #FFFFFF;
+}
+
+/* --- Cabeçalho Institucional de Avaliação --- */
+.header-prova {
+  border: 1.5pt solid #002B49;
+  border-radius: 4pt;
+  padding: 10pt 12pt;
+  margin-bottom: 14pt;
+  background-color: #F8FAFC;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1pt solid #CBD5E1;
+  padding-bottom: 6pt;
+  margin-bottom: 8pt;
+}
+
+.header-instituicao {
+  font-size: 11pt;
+  font-weight: bold;
+  color: #002B49;
+  text-transform: uppercase;
+  letter-spacing: 0.3pt;
+}
+
+.header-sub {
+  font-size: 8pt;
+  color: #475569;
+}
+
+.header-grid {
+  display: table;
+  width: 100%;
+  font-size: 9pt;
+}
+
+.header-row {
+  display: table-row;
+}
+
+.header-cell {
+  display: table-cell;
+  padding: 2.5pt 4pt;
+  vertical-align: middle;
+}
+
+.header-cell-label {
+  font-weight: bold;
+  color: #002B49;
+}
+
+.header-field-line {
+  border-bottom: 0.75pt dotted #64748B;
+  display: inline-block;
+  min-width: 100pt;
+}
+
+/* --- Bloco de Instruções --- */
+.instrucoes-box {
+  border-left: 3pt solid #D97706;
+  background-color: #FFFBEB;
+  padding: 6pt 10pt;
+  margin-bottom: 14pt;
+  font-size: 8.5pt;
+  color: #92400E;
+}
+
+.instrucoes-title {
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-bottom: 2pt;
+}
+
+/* --- Questões da Prova --- */
+.questao-bloco {
+  page-break-inside: avoid;
+  margin-bottom: 16pt;
+  padding-bottom: 8pt;
+  border-bottom: 0.5pt dashed #E2E8F0;
+}
+
+.questao-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4pt;
+}
+
+.questao-numero {
+  font-size: 10.5pt;
+  font-weight: bold;
+  color: #002B49;
+}
+
+.questao-meta {
+  font-size: 8pt;
+  color: #64748B;
+}
+
+.questao-texto-auxiliar {
+  font-size: 9pt;
+  font-style: italic;
+  color: #334155;
+  background-color: #F1F5F9;
+  padding: 6pt 8pt;
+  border-left: 2pt solid #0284C7;
+  border-radius: 2pt;
+  margin-bottom: 6pt;
+}
+
+.questao-imagem {
+  text-align: center;
+  margin: 8pt 0;
+}
+
+.questao-imagem img {
+  max-width: 85%;
+  max-height: 180pt;
+  border: 0.5pt solid #CBD5E1;
+  border-radius: 2pt;
+}
+
+.questao-enunciado {
+  font-size: 10pt;
+  color: #0F172A;
+  margin-bottom: 8pt;
+  text-align: justify;
+}
+
+/* --- Alternativas --- */
+.alternativas-lista {
+  margin-left: 4pt;
+}
+
+.alternativa-item {
+  display: table;
+  width: 100%;
+  margin-bottom: 4.5pt;
+  page-break-inside: avoid;
+}
+
+.alt-letra {
+  display: table-cell;
+  width: 22pt;
+  font-weight: bold;
+  color: #002B49;
+  vertical-align: top;
+}
+
+.alt-texto {
+  display: table-cell;
+  font-size: 9.5pt;
+  color: #1E293B;
+  vertical-align: top;
+}
+
+/* --- Linhas de Resposta Discursiva --- */
+.linhas-resposta {
+  margin-top: 8pt;
+}
+
+.linha-pautada {
+  border-bottom: 0.75pt solid #CBD5E1;
+  height: 18pt;
+  width: 100%;
+}
+
+/* --- Gabarito / Espelho de Correção (Página Separada) --- */
+.pagina-gabarito {
+  page-break-before: always;
+}
+
+.gabarito-title {
+  font-size: 14pt;
+  font-weight: bold;
+  color: #002B49;
+  border-bottom: 2pt solid #002B49;
+  padding-bottom: 4pt;
+  margin-bottom: 12pt;
+  text-transform: uppercase;
+}
+
+.gabarito-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14pt;
+  font-size: 9pt;
+}
+
+.gabarito-tabela th {
+  background-color: #002B49;
+  color: #FFFFFF;
+  font-weight: bold;
+  padding: 5pt 6pt;
+  text-align: left;
+  border: 0.5pt solid #002B49;
+}
+
+.gabarito-tabela td {
+  padding: 5pt 6pt;
+  border: 0.5pt solid #CBD5E1;
+  vertical-align: top;
+}
+
+.gabarito-tabela tr:nth-child(even) {
+  background-color: #F8FAFC;
+}
+
+.gabarito-letra-correta {
+  font-weight: bold;
+  color: #059669;
+  font-size: 10.5pt;
+}

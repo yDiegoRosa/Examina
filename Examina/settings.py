@@ -10,9 +10,25 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import contextlib
+import os
+import sys
 from pathlib import Path
 
 import environ
+
+# Configure Windows DLL search path for WeasyPrint (GTK3 / Pango / Cairo)
+if sys.platform == 'win32':
+    for _gtk_path in [
+        r'C:\msys64\mingw64\bin',
+        r'C:\msys64\ucrt64\bin',
+        r'C:\Program Files\GTK3-Runtime-Win64\bin',
+    ]:
+        if os.path.isdir(_gtk_path):
+            with contextlib.suppress(AttributeError, OSError):
+                os.add_dll_directory(_gtk_path)
+            if _gtk_path not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = f'{_gtk_path};{os.environ.get("PATH", "")}'
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -47,6 +63,7 @@ INSTALLED_APPS = [
     'django_filters',
     # Local apps
     'banco_questoes',
+    'provas.apps.ProvasConfig',
 ]
 
 # django-taggit

@@ -292,13 +292,14 @@
       </tbody>
     </table>
   </div>
-  {% if questoes %}
+  {% if page_obj %}
   <div class="card-header" style="background: #F8FAFC; font-size: 0.825rem; color: var(--text-muted);">
     <div class="flex items-center gap-2">
       <i class="bi bi-info-circle" style="color: var(--fae-blue-electric);"></i>
-      <span>Total de <strong>{{ questoes|length }}</strong> questão(ões) encontrada(s) com os critérios atuais.</span>
+      <span>Total de <strong>{{ page_obj.paginator.count }}</strong> questão(ões) encontrada(s) com os critérios atuais.</span>
     </div>
   </div>
+  {% include "banco_questoes/includes/pagination.html" %}
   {% endif %}
 </div>
 {% endblock %}

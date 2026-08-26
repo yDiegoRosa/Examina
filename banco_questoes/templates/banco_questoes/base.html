@@ -40,6 +40,11 @@
               <i class="bi bi-grid-fill"></i> Acervo de Questões
             </a>
           </li>
+          <li>
+            <a class="nav-item-link" href="{% url 'provas:index' %}">
+              <i class="bi bi-file-earmark-ruled-fill"></i> Provas
+            </a>
+          </li>
           {% if perms.banco_questoes.add_questao %}
           <li>
             <a class="nav-item-link" href="{% url 'banco_questoes:questao_create' %}">
@@ -48,7 +53,7 @@
           </li>
           <li>
             <a class="nav-item-link" href="{% url 'banco_questoes:questao_import' %}">
-              <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar CSV
+              <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar (Excel/CSV)
             </a>
           </li>
           {% endif %}
