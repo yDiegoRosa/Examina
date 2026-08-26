@@ -59,6 +59,8 @@ class QuestaoForm(forms.ModelForm):
     class Meta:
         model = Questao
         fields = [
+            'origem',
+            'numero_questao',
             'tipo',
             'dificuldade',
             'disciplina',
@@ -71,6 +73,8 @@ class QuestaoForm(forms.ModelForm):
             'ativo',
         ]
         labels = {
+            'origem': 'Origem / Exame (Opcional)',
+            'numero_questao': 'Nº da Questão no Exame (Opcional)',
             'tipo': 'Tipo de questão',
             'dificuldade': 'Nível de dificuldade',
             'disciplina': 'Disciplina',
@@ -78,11 +82,23 @@ class QuestaoForm(forms.ModelForm):
             'texto_auxiliar': 'Texto auxiliar / Contextualização (Opcional)',
             'imagem': 'Imagem / Diagrama de apoio (Opcional)',
             'enunciado': 'Enunciado da questão',
-            'criterios_correcao': 'Critérios de correção / Gabarito',
+            'criterios_correcao': 'Comentários / Justificativa do Gabarito',
             'tags': 'Tags e palavras-chave',
             'ativo': 'Questão ativa no acervo',
         }
         widgets = {
+            'origem': forms.TextInput(
+                attrs={
+                    'class': 'form-input',
+                    'placeholder': 'Ex.: ENADE ADS 2021, POSCOMP 2025',
+                },
+            ),
+            'numero_questao': forms.TextInput(
+                attrs={
+                    'class': 'form-input',
+                    'placeholder': 'Ex.: 26, 15',
+                },
+            ),
             'tipo': forms.Select(attrs={'class': 'form-select'}),
             'dificuldade': forms.Select(attrs={'class': 'form-select'}),
             'disciplina': forms.Select(attrs={'class': 'form-select'}),
@@ -111,7 +127,7 @@ class QuestaoForm(forms.ModelForm):
                 attrs={
                     'class': 'form-textarea',
                     'rows': 3,
-                    'placeholder': 'Descreva detalhadamente os critérios de avaliação e pontuação…',
+                    'placeholder': 'Justificativa analítica fundamentando o gabarito e detalhando eventuais erros nas demais alternativas…',
                 },
             ),
             'ativo': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),

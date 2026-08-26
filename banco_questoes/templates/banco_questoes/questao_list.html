@@ -21,6 +21,9 @@
     <a href="{% url 'banco_questoes:download_modelo_csv' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-outline" title="Exportar questões do acervo no formato CSV">
       <i class="bi bi-file-earmark-arrow-down-fill" style="color: var(--fae-blue-primary);"></i> Exportar CSV
     </a>
+    <a href="{% url 'banco_questoes:download_modelo_xlsx' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-outline" title="Exportar questões do acervo no formato Excel (.xlsx)">
+      <i class="bi bi-file-earmark-excel-fill" style="color: #107C41;"></i> Exportar Excel
+    </a>
     {% if perms.banco_questoes.add_questao %}
     <a href="{% url 'banco_questoes:questao_import' %}" class="btn btn-outline" title="Importar questões em lote a partir de arquivo CSV">
       <i class="bi bi-file-earmark-arrow-up-fill" style="color: var(--fae-blue-primary);"></i> Importar CSV
@@ -208,13 +211,18 @@
             <div class="font-bold text-main mb-1" style="max-width: 480px;">
               {{ q.enunciado|truncatewords:22 }}
             </div>
-            {% if q.tags.all %}
-            <div class="flex flex-wrap gap-1 mt-1">
-              {% for tag in q.tags.all %}
-              <span class="badge-pill badge-pill-inactive small font-mono">#{{ tag.name }}</span>
-              {% endfor %}
+            <div class="flex flex-wrap gap-1 mt-1 items-center">
+              {% if q.origem %}
+              <span class="badge-pill badge-pill-inactive small" title="Origem do exame">
+                <i class="bi bi-journal-bookmark-fill" style="color: var(--fae-blue-primary);"></i> {{ q.origem }}{% if q.numero_questao %} • Q{{ q.numero_questao }}{% endif %}
+              </span>
+              {% endif %}
+              {% if q.tags.all %}
+                {% for tag in q.tags.all %}
+                <span class="badge-pill badge-pill-inactive small font-mono">#{{ tag.name }}</span>
+                {% endfor %}
+              {% endif %}
             </div>
-            {% endif %}
           </td>
           <td>
             {% if q.autor %}

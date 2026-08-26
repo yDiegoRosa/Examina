@@ -85,6 +85,18 @@ class Questao(models.Model):
         null=True,
         blank=True,
     )
+    origem = models.CharField(
+        'origem / exame',
+        max_length=150,
+        blank=True,
+        help_text='Exame, ano e curso de origem (ex.: ENADE ADS 14, POSCOMP 2025).',
+    )
+    numero_questao = models.CharField(
+        'nº da questão',
+        max_length=20,
+        blank=True,
+        help_text='Número identificador original da questão na avaliação de origem.',
+    )
     texto_auxiliar = models.TextField(
         'texto auxiliar / contextualização',
         blank=True,

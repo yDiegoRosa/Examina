@@ -5,7 +5,7 @@ from typing import Any
 from django.db import transaction
 
 from .models import Alternativa, Disciplina, Questao, Topico
-from .parser import CSVQuestaoParser
+from .parser import FileQuestaoParser
 from .validator import CSVQuestaoValidator
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ImportLineResult:
-    """Resultado individual de processamento de uma linha do arquivo CSV."""
+    """Resultado individual de processamento de uma linha do arquivo CSV ou Excel."""
 
     linha: int
     status: str  # 'SUCESSO' ou 'REJEITADA'
@@ -39,25 +39,31 @@ class ImportExecutionResult:
         return self.total_rejeitadas > 0
 
 
-class CSVImportService:
+class QuestaoImportService:
     """
     Serviço orquestrador do pipeline de importação em lote de questões (RF02).
+    Suporta arquivos Microsoft Excel (.xlsx) e arquivos CSV.
 
     Etapas do Pipeline:
-    1. Parser: Leitura nativa e extração de colunas linha a linha.
+    1. Parser: Leitura nativa e extração de colunas linha a linha (Excel ou CSV).
     2. Validação & Deduplicação: Verificação de consistência e unicidade.
     3. Commit Transacional: Persistência no banco apenas das linhas válidas.
     """
 
     @classmethod
-    def import_csv(cls, file_or_content: Any, autor: Any = None) -> ImportExecutionResult:
+    def import_file(
+        cls,
+        file_or_content: Any,
+        filename: str = '',
+        autor: Any = None,
+    ) -> ImportExecutionResult:
         """
-        Executa o pipeline completo de importação a partir de um arquivo ou conteúdo CSV.
+        Executa o pipeline completo de importação a partir de um arquivo Excel (.xlsx) ou CSV.
 
         Retorna uma instância de ImportExecutionResult com o resumo e detalhamento.
         """
-        # 1. Leitura e extração estruturada
-        parsed_rows = CSVQuestaoParser.parse(file_or_content)
+        # 1. Leitura e extração estruturada (Excel ou CSV)
+        parsed_rows = FileQuestaoParser.parse(file_or_content, filename=filename)
 
         if not parsed_rows:
             return ImportExecutionResult()
@@ -87,12 +93,14 @@ class CSVImportService:
                                 nome=data['topico'],
                             )
 
-                        # Cria a questão
+                        # Cria a questão com os novos campos
                         questao = Questao.objects.create(
                             disciplina=disc,
                             topico=topico_obj,
                             tipo=data['tipo'],
                             dificuldade=data['dificuldade'],
+                            origem=data.get('origem', ''),
+                            numero_questao=data.get('numero_questao', ''),
                             enunciado=data['enunciado'],
                             criterios_correcao=data.get('criterios_correcao', ''),
                             ativo=True,
@@ -158,3 +166,17 @@ class CSVImportService:
                 )
 
         return exec_result
+
+    @classmethod
+    def import_csv(cls, file_or_content: Any, autor: Any = None) -> ImportExecutionResult:
+        """Atalho para importação de CSV (mantém retrocompatibilidade total)."""
+        return cls.import_file(file_or_content, filename='.csv', autor=autor)
+
+    @classmethod
+    def import_excel(cls, file_or_content: Any, autor: Any = None) -> ImportExecutionResult:
+        """Atalho para importação de Excel (.xlsx)."""
+        return cls.import_file(file_or_content, filename='.xlsx', autor=autor)
+
+
+# Alias para retrocompatibilidade
+CSVImportService = QuestaoImportService

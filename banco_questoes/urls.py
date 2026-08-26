@@ -12,4 +12,5 @@ urlpatterns = [
     path('questoes/<int:pk>/toggle-ativo/', views.questao_toggle_ativo, name='questao_toggle_ativo'),
     path('questoes/importar/', views.questao_import, name='questao_import'),
     path('questoes/modelo-csv/', views.download_modelo_csv, name='download_modelo_csv'),
+    path('questoes/modelo-excel/', views.download_modelo_xlsx, name='download_modelo_xlsx'),
 ]

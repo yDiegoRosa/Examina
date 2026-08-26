@@ -211,16 +211,16 @@ def questao_toggle_ativo(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# Download / Exportação do Acervo em CSV
+# Download / Exportação do Acervo em CSV (Formato 10 Colunas — Padrão Cliente)
 # ---------------------------------------------------------------------------
 @login_required
 def download_modelo_csv(request):
     """
-    Exporta o acervo de questões no formato CSV padrão com 13 colunas.
+    Exporta o acervo de questões no formato CSV padrão com 10 colunas:
+    origem, questao, enunciado, opcao_a, opcao_b, opcao_c, opcao_d, opcao_e, gabarito, comentarios.
 
     Caso existam filtros na requisição GET, exporta o conjunto filtrado.
-    Se não houver questões cadastradas, gera registros modelo baseados nas
-    disciplinas reais da FAETERJ-Rio.
+    Se não houver questões cadastradas, gera registros modelo estilo ENADE/POSCOMP.
     """
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="acervo_questoes_faeterj.csv"'
@@ -231,19 +231,16 @@ def download_modelo_csv(request):
     writer = csv.writer(response)
     writer.writerow(
         [
+            'origem',
+            'questao',
             'enunciado',
-            'tipo',
-            'disciplina',
-            'topico',
-            'dificuldade',
-            'tags',
-            'alt_a',
-            'alt_b',
-            'alt_c',
-            'alt_d',
-            'alt_e',
-            'correta',
-            'criterios_correcao',
+            'opcao_a',
+            'opcao_b',
+            'opcao_c',
+            'opcao_d',
+            'opcao_e',
+            'gabarito',
+            'comentarios',
         ]
     )
 
@@ -264,16 +261,12 @@ def download_modelo_csv(request):
         for q in questoes:
             alt_map = {alt.letra: alt.texto for alt in q.alternativas.all()}
             correta_letra = next((alt.letra for alt in q.alternativas.all() if alt.correta), '')
-            tags_str = ';'.join(tag.name for tag in q.tags.all())
 
             writer.writerow(
                 [
+                    q.origem or '',
+                    q.numero_questao or '',
                     q.enunciado,
-                    q.tipo,
-                    q.disciplina.nome,
-                    q.topico.nome if q.topico else '',
-                    q.dificuldade,
-                    tags_str,
                     alt_map.get('A', ''),
                     alt_map.get('B', ''),
                     alt_map.get('C', ''),
@@ -284,39 +277,33 @@ def download_modelo_csv(request):
                 ]
             )
     else:
-        # Exemplo modelo baseado na grade da FAETERJ
+        # Exemplos modelo no estilo ENADE / POSCOMP
         writer.writerow(
             [
-                'Em uma árvore binária de busca (BST), qual é a complexidade temporal média para busca?',
-                'OBJ',
-                'Estrutura de Dados (ESD)',
-                'Árvores Binárias',
-                'M',
-                'arvores;bst;complexidade',
-                'O(1)',
-                'O(log n)',
-                'O(n)',
-                'O(n log n)',
-                'O(n^2)',
-                'B',
-                '',
+                'ENADE ADS 2021',
+                '26',
+                'Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.',
+                'O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.',
+                'O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.',
+                'O processo de resolução de nomes pode envolver consultas recursivas e iterativas.',
+                'O DNS não suporta balanceamento de carga entre servidores.',
+                'Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.',
+                'C',
+                'A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).',
             ]
         )
         writer.writerow(
             [
-                'Explique o funcionamento do protocolo HTTP e diferencie os métodos GET e POST.',
-                'DIS',
-                'Construção de Aplicações WEB (CAW)',
-                'Protocolo HTTP',
-                'F',
-                'web;http;get;post',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                'O aluno deve conceituar requisição/resposta stateless, indicar que GET trafega dados na URL/idempotente e POST no corpo da requisição/criação de recursos.',
+                'POSCOMP 2025',
+                '15',
+                'Considere o seguinte trecho de código em C:\n\nint x = 5;\nint y = ++x + x++;\nprintf("%d %d", x, y);\n\nQual será a saída do programa?',
+                '7 12',
+                '7 13',
+                '6 12',
+                '7 11',
+                '6 11',
+                'A',
+                'O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.',
             ]
         )
 
@@ -324,37 +311,203 @@ def download_modelo_csv(request):
 
 
 # ---------------------------------------------------------------------------
-# Importação em Lote via CSV & Commit (RF02)
+# Download / Exportação do Acervo em Excel (.xlsx — Formato 10 Colunas)
+# ---------------------------------------------------------------------------
+@login_required
+def download_modelo_xlsx(request):
+    """
+    Exporta o acervo de questões no formato Microsoft Excel (.xlsx) com 10 colunas:
+    origem, questao, enunciado, opcao_a, opcao_b, opcao_c, opcao_d, opcao_e, gabarito, comentarios.
+
+    Inclui estilização institucional (cabeçalho azul marinho, larguras automáticas,
+    alinhamentos e quebra de texto) e respeita os filtros ativos da requisição GET.
+    """
+    import io
+
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Acervo de Questões'
+
+    headers = [
+        'origem',
+        'questao',
+        'enunciado',
+        'opcao_a',
+        'opcao_b',
+        'opcao_c',
+        'opcao_d',
+        'opcao_e',
+        'gabarito',
+        'comentarios',
+    ]
+    ws.append(headers)
+
+    # Estilos para cabeçalho
+    header_font = Font(name='Segoe UI', size=11, bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='002B49', end_color='002B49', fill_type='solid')
+    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    thin_border = Border(
+        left=Side(style='thin', color='D0D5DD'),
+        right=Side(style='thin', color='D0D5DD'),
+        top=Side(style='thin', color='D0D5DD'),
+        bottom=Side(style='thin', color='D0D5DD'),
+    )
+
+    ws.row_dimensions[1].height = 26
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    base_qs = (
+        Questao.objects.select_related('disciplina', 'topico')
+        .prefetch_related('tags', 'alternativas')
+        .order_by('-criado_em')
+    )
+
+    # Aplica filtros se houver parâmetros GET
+    if request.GET:
+        questao_filter = QuestaoFilter(request.GET, queryset=base_qs)
+        questoes = questao_filter.qs
+    else:
+        questoes = base_qs
+
+    data_font = Font(name='Segoe UI', size=10)
+    data_align_left = Alignment(horizontal='left', vertical='top', wrap_text=True)
+    data_align_center = Alignment(horizontal='center', vertical='top', wrap_text=True)
+
+    if questoes.exists():
+        for q in questoes:
+            alt_map = {alt.letra: alt.texto for alt in q.alternativas.all()}
+            correta_letra = next((alt.letra for alt in q.alternativas.all() if alt.correta), '')
+
+            row_data = [
+                q.origem or '',
+                q.numero_questao or '',
+                q.enunciado,
+                alt_map.get('A', ''),
+                alt_map.get('B', ''),
+                alt_map.get('C', ''),
+                alt_map.get('D', ''),
+                alt_map.get('E', ''),
+                correta_letra,
+                q.criterios_correcao or '',
+            ]
+            ws.append(row_data)
+    else:
+        # Exemplos modelo no estilo ENADE / POSCOMP
+        ws.append(
+            [
+                'ENADE ADS 2021',
+                '26',
+                'Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.',
+                'O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.',
+                'O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.',
+                'O processo de resolução de nomes pode envolver consultas recursivas e iterativas.',
+                'O DNS não suporta balanceamento de carga entre servidores.',
+                'Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.',
+                'C',
+                'A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).',
+            ]
+        )
+        ws.append(
+            [
+                'POSCOMP 2025',
+                '15',
+                'Considere o seguinte trecho de código em C:\n\nint x = 5;\nint y = ++x + x++;\nprintf("%d %d", x, y);\n\nQual será a saída do programa?',
+                '7 12',
+                '7 13',
+                '6 12',
+                '7 11',
+                '6 11',
+                'A',
+                'O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.',
+            ]
+        )
+
+    # Aplica estilos e bordas nas linhas de dados
+    for row_idx in range(2, ws.max_row + 1):
+        ws.row_dimensions[row_idx].height = 36
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.font = data_font
+            cell.border = thin_border
+            # Alinha centralizado colunas de código/gabarito e à esquerda as de texto
+            if col_idx in (1, 2, 9):
+                cell.alignment = data_align_center
+            else:
+                cell.alignment = data_align_left
+
+    # Configuração de larguras de colunas personalizadas para excelente legibilidade
+    col_widths = {
+        'A': 18,  # origem
+        'B': 12,  # questao
+        'C': 50,  # enunciado
+        'D': 35,  # opcao_a
+        'E': 35,  # opcao_b
+        'F': 35,  # opcao_c
+        'G': 35,  # opcao_d
+        'H': 35,  # opcao_e
+        'I': 12,  # gabarito
+        'J': 45,  # comentarios
+    }
+    for col_letter, width in col_widths.items():
+        ws.column_dimensions[col_letter].width = width
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="acervo_questoes_faeterj.xlsx"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Importação em Lote via Excel (.xlsx) e CSV & Commit (RF02)
 # ---------------------------------------------------------------------------
 @login_required
 @permission_required('banco_questoes.add_questao', raise_exception=True)
 def questao_import(request):
-    """View para upload, commit e relatório de inconsistências linha a linha."""
+    """View para upload de planilhas Excel (.xlsx) ou arquivos CSV, commit e relatório de inconsistências."""
     relatorio = None
 
     if request.method == 'POST':
-        csv_file = request.FILES.get('csv_file')
-        if not csv_file:
-            messages.error(request, 'Selecione um arquivo CSV para realizar a importação.')
+        arquivo = request.FILES.get('csv_file') or request.FILES.get('arquivo')
+        if not arquivo:
+            messages.error(request, 'Selecione um arquivo Excel (.xlsx) ou CSV para realizar a importação.')
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
-        if not csv_file.name.lower().endswith('.csv'):
-            messages.error(request, 'Formato inválido. O arquivo deve possuir a extensão .csv.')
+        nome_arquivo = arquivo.name.lower()
+        if not nome_arquivo.endswith(('.csv', '.xlsx', '.xls')):
+            messages.error(
+                request,
+                'Formato inválido. O arquivo deve possuir a extensão .xlsx ou .csv.',
+            )
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
         try:
-            relatorio = CSVImportService.import_csv(csv_file, autor=request.user)
+            relatorio = CSVImportService.import_file(arquivo, filename=arquivo.name, autor=request.user)
         except CSVParseError as err:
-            logger.warning('Erro de formato CSV durante importação: %s', err)
-            messages.error(request, f'Erro ao ler o arquivo CSV: {err}')
+            logger.warning('Erro de formato durante importação: %s', err)
+            messages.error(request, f'Erro ao ler o arquivo: {err}')
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
         except Exception as exc:
-            logger.exception('Erro inesperado durante importação de CSV: %s', exc)
+            logger.exception('Erro inesperado durante importação: %s', exc)
             messages.error(request, f'Ocorreu um erro interno durante o processamento: {exc}')
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
         if relatorio.total_processadas == 0:
-            messages.warning(request, 'O arquivo CSV enviado não contém linhas de dados para importação.')
+            messages.warning(request, 'O arquivo enviado não contém linhas de dados para importação.')
             return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
 
         if relatorio.total_sucesso > 0:

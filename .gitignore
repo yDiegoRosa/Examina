@@ -10,9 +10,8 @@ logs/
 # C extensions
 *.so
 
-#Test
-media/csv_test/*
-.pre-commit-config.yaml
+# Media uploads
+media/
 
 # Distribution / packaging
 .Python
