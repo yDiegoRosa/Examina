@@ -529,3 +529,121 @@ def questao_import(request):
             'titulo': 'Importação em Lote de Questões',
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Histórico de Alterações de uma Questão (simple_history diff view)
+# ---------------------------------------------------------------------------
+
+# Campos internos do simple_history que não devem aparecer no diff
+_HISTORY_META_FIELDS = frozenset(
+    [
+        'history_date',
+        'history_change_reason',
+        'history_user',
+        'history_user_id',
+        'history_type',
+        'history_id',
+        'atualizado_em',
+    ]
+)
+
+# Mapeamento de nomes de campo técnicos → rótulos legíveis em português
+_FIELD_LABELS = {
+    'tipo': 'Tipo',
+    'dificuldade': 'Dificuldade',
+    'disciplina_id': 'Disciplina',
+    'topico_id': 'Tópico',
+    'origem': 'Origem / Exame',
+    'numero_questao': 'Nº da Questão',
+    'texto_auxiliar': 'Texto Auxiliar',
+    'imagem': 'Imagem de Apoio',
+    'enunciado': 'Enunciado',
+    'criterios_correcao': 'Critérios de Correção',
+    'ativo': 'Status (Ativo)',
+    'autor_id': 'Autor',
+}
+
+# Rótulos legíveis para o tipo de ação do simple_history
+_ACTION_LABELS = {
+    '+': ('Criação', 'history-action-create'),
+    '~': ('Edição', 'history-action-edit'),
+    '-': ('Exclusão', 'history-action-delete'),
+}
+
+
+@login_required
+def questao_history(request, pk):
+    """Exibe o histórico de alterações de uma questão com diffs campo a campo.
+
+    Para cada versão registrada pelo simple_history, compara com a versão
+    imediatamente anterior e exibe quais campos mudaram (valor antigo → novo),
+    quem realizou a alteração e quando.
+    """
+    questao = get_object_or_404(Questao, pk=pk)
+    registros = questao.history.all().order_by('-history_date')
+
+    versoes = []
+    registros_list = list(registros)
+
+    for idx, record in enumerate(registros_list):
+        autor = record.history_user
+        action_label, action_css = _ACTION_LABELS.get(record.history_type, ('Alteração', 'history-action-edit'))
+
+        diffs = []
+
+        # Versão anterior existe → calcula diff
+        if idx < len(registros_list) - 1:
+            previous = registros_list[idx + 1]
+            delta = record.diff_against(previous)
+            for change in delta.changes:
+                if change.field in _HISTORY_META_FIELDS:
+                    continue
+                diffs.append(
+                    {
+                        'campo': _FIELD_LABELS.get(change.field, change.field),
+                        'campo_raw': change.field,
+                        'old': change.old,
+                        'new': change.new,
+                    }
+                )
+        else:
+            # Primeira versão (criação): mostra todos os campos preenchidos
+            for field_name, label in _FIELD_LABELS.items():
+                try:
+                    value = getattr(record, field_name, None)
+                except Exception:
+                    value = None
+                if value not in (None, '', False):
+                    diffs.append(
+                        {
+                            'campo': label,
+                            'campo_raw': field_name,
+                            'old': None,
+                            'new': value,
+                        }
+                    )
+
+        versoes.append(
+            {
+                'record': record,
+                'diffs': diffs,
+                'autor': autor,
+                'data': record.history_date,
+                'action_label': action_label,
+                'action_css': action_css,
+                'is_creation': idx == len(registros_list) - 1,
+            }
+        )
+
+    logger.debug('Histórico da questão Q%s: %d versão(ões) carregada(s).', pk, len(versoes))
+
+    return render(
+        request,
+        'banco_questoes/questao_history.html',
+        {
+            'questao': questao,
+            'versoes': versoes,
+            'titulo': f'Histórico — Q{questao.pk}',
+        },
+    )

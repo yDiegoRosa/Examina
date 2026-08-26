@@ -1,0 +1,360 @@
+﻿{% extends "banco_questoes/base.html" %}
+
+{% block title %}Histórico — Q{{ questao.pk }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Timeline Layout ─────────────────────────────────────── */
+  .history-timeline {
+    position: relative;
+    padding-left: 2.5rem;
+  }
+  .history-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.95rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--fae-blue-primary), transparent);
+    border-radius: 2px;
+  }
+
+  /* ── Versão Card ──────────────────────────────────────────── */
+  .history-card {
+    position: relative;
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .history-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  /* ── Marcador na linha do tempo ───────────────────────────── */
+  .history-dot {
+    position: absolute;
+    left: -2.05rem;
+    top: 1.25rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    border: 3px solid var(--surface-card);
+    box-shadow: 0 0 0 2px var(--fae-blue-primary);
+    background: var(--fae-blue-primary);
+    z-index: 1;
+  }
+  .history-dot.dot-create { background: var(--color-success); box-shadow: 0 0 0 2px var(--color-success); }
+  .history-dot.dot-edit   { background: var(--fae-blue-electric); box-shadow: 0 0 0 2px var(--fae-blue-electric); }
+  .history-dot.dot-delete { background: var(--color-danger); box-shadow: 0 0 0 2px var(--color-danger); }
+
+  /* ── Badge de ação ────────────────────────────────────────── */
+  .history-action-create { background: rgba(34,197,94,.12); color: #16a34a; border: 1px solid rgba(34,197,94,.3); }
+  .history-action-edit   { background: rgba(59,130,246,.1); color: var(--fae-blue-electric); border: 1px solid rgba(59,130,246,.25); }
+  .history-action-delete { background: rgba(239,68,68,.1); color: var(--color-danger); border: 1px solid rgba(239,68,68,.25); }
+
+  .history-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  /* ── Autor Avatar ─────────────────────────────────────────── */
+  .history-avatar {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--fae-blue-primary), var(--fae-blue-electric));
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ── Tabela de Diff ───────────────────────────────────────── */
+  .diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.825rem;
+    margin-top: 1rem;
+  }
+  .diff-table thead tr {
+    background: var(--surface-hover);
+  }
+  .diff-table th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .diff-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+    line-height: 1.55;
+  }
+  .diff-table tr:last-child td { border-bottom: none; }
+  .diff-table tr:hover td { background: var(--surface-hover); }
+
+  .diff-field-name {
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    width: 160px;
+  }
+  .diff-old {
+    color: #b91c1c;
+    background: rgba(239,68,68,.07);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    word-break: break-all;
+    max-width: 300px;
+    display: inline-block;
+  }
+  .diff-new {
+    color: #15803d;
+    background: rgba(34,197,94,.08);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    word-break: break-all;
+    max-width: 300px;
+    display: inline-block;
+  }
+  .diff-arrow {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+    width: 2rem;
+  }
+  .diff-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.8rem;
+  }
+
+  /* ── No-diff state ────────────────────────────────────────── */
+  .diff-no-changes {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 0.75rem 0 0;
+  }
+
+  /* ── Collapsible diff ─────────────────────────────────────── */
+  .diff-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--fae-blue-electric);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.75rem;
+    transition: opacity 0.15s;
+  }
+  .diff-toggle-btn:hover { opacity: 0.75; }
+  .diff-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .diff-body.collapsed { max-height: 0; }
+  .diff-body.expanded  { max-height: 2000px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Cabeçalho da Página -->
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-clock-history"></i> Histórico de Versões
+      </span>
+    </div>
+    <h1 class="mb-1">
+      Histórico &mdash; <span class="font-mono" style="color: var(--fae-blue-electric);">Q{{ questao.pk }}</span>
+    </h1>
+    <p class="text-secondary" style="max-width: 580px;">
+      {{ questao.enunciado|truncatewords:20 }}
+    </p>
+  </div>
+  <div class="flex gap-2 flex-wrap">
+    {% if perms.banco_questoes.change_questao %}
+    <a href="{% url 'banco_questoes:questao_update' pk=questao.pk %}" class="btn btn-outline">
+      <i class="bi bi-pencil-square"></i> Editar Questão
+    </a>
+    {% endif %}
+    <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">
+      <i class="bi bi-arrow-left"></i> Voltar ao Acervo
+    </a>
+  </div>
+</div>
+
+<!-- Resumo rápido -->
+<div class="flex items-center gap-3 mb-4" style="font-size:0.875rem; color:var(--text-muted);">
+  <i class="bi bi-layers-fill" style="color:var(--fae-blue-electric);"></i>
+  <span>
+    <strong style="color:var(--text-main);">{{ versoes|length }}</strong>
+    vers{% if versoes|length == 1 %}ão registrada{% else %}ões registradas{% endif %} no histórico
+  </span>
+  <span>&bull;</span>
+  <span><strong style="color:var(--text-main);">{{ questao.disciplina.nome }}</strong></span>
+  <span>&bull;</span>
+  <span>{{ questao.get_tipo_display }}</span>
+</div>
+
+<!-- Timeline -->
+{% if versoes %}
+<div class="history-timeline">
+  {% for v in versoes %}
+  <div class="history-card">
+    <!-- Marcador na linha -->
+    <span class="history-dot
+      {% if v.action_css == 'history-action-create' %}dot-create
+      {% elif v.action_css == 'history-action-delete' %}dot-delete
+      {% else %}dot-edit{% endif %}">
+    </span>
+
+    <!-- Cabeçalho do card -->
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <!-- Badge de ação -->
+        <span class="history-badge {{ v.action_css }}">
+          {% if v.action_css == 'history-action-create' %}
+          <i class="bi bi-plus-circle-fill"></i>
+          {% elif v.action_css == 'history-action-delete' %}
+          <i class="bi bi-trash3-fill"></i>
+          {% else %}
+          <i class="bi bi-pencil-fill"></i>
+          {% endif %}
+          {{ v.action_label }}
+        </span>
+
+        <!-- Avatar + Autor -->
+        <div class="flex items-center gap-2">
+          <div class="history-avatar">
+            {% if v.autor %}{{ v.autor.username|first|upper }}{% else %}?{% endif %}
+          </div>
+          <div>
+            <div class="font-bold" style="font-size:0.875rem; color:var(--text-main); line-height:1.2;">
+              {% if v.autor %}{{ v.autor.get_full_name|default:v.autor.username }}{% else %}<em class="text-muted">Usuário desconhecido</em>{% endif %}
+            </div>
+            {% if v.autor and v.autor.get_full_name %}
+            <div class="small text-muted" style="line-height:1.2;">@{{ v.autor.username }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Data e hora -->
+      <div class="flex items-center gap-2 text-muted small">
+        <i class="bi bi-calendar3"></i>
+        <time datetime="{{ v.data|date:'c' }}" title="{{ v.data|date:'d/m/Y H:i:s' }}">
+          {{ v.data|date:"d/m/Y" }} &agrave;s {{ v.data|date:"H:i" }}
+        </time>
+      </div>
+    </div>
+
+    <!-- Diff dos campos -->
+    {% if v.diffs %}
+    <button class="diff-toggle-btn" onclick="toggleDiff(this)" aria-expanded="true">
+      <i class="bi bi-chevron-up"></i>
+      <span>{{ v.diffs|length }} campo{% if v.diffs|length != 1 %}s{% endif %} alterado{% if v.diffs|length != 1 %}s{% endif %}</span>
+    </button>
+    <div class="diff-body expanded">
+      <table class="diff-table">
+        <thead>
+          <tr>
+            <th style="width:160px;">Campo</th>
+            <th>Valor Anterior</th>
+            <th class="diff-arrow" style="width:2.5rem;"></th>
+            <th>Valor Novo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for diff in v.diffs %}
+          <tr>
+            <td class="diff-field-name">{{ diff.campo }}</td>
+            <td>
+              {% if diff.old is not None and diff.old != '' %}
+              <span class="diff-old">{{ diff.old }}</span>
+              {% else %}
+              <span class="diff-empty">&mdash;</span>
+              {% endif %}
+            </td>
+            <td class="diff-arrow">&rarr;</td>
+            <td>
+              {% if diff.new is not None and diff.new != '' %}
+              <span class="diff-new">{{ diff.new }}</span>
+              {% else %}
+              <span class="diff-empty">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="diff-no-changes">
+      <i class="bi bi-info-circle"></i>
+      <span>Nenhuma alteração detectada nos campos rastreados.</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<!-- Estado vazio -->
+<div class="card-surface" style="padding: 4rem 2rem; text-align: center;">
+  <div style="font-size: 3rem; opacity: 0.3; margin-bottom: 1rem;">
+    <i class="bi bi-clock-history"></i>
+  </div>
+  <div class="font-extrabold mb-2" style="font-size: 1.2rem;">Nenhum histórico registrado</div>
+  <p class="text-muted">Esta questão ainda não possui versões anteriores registradas pelo sistema.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function toggleDiff(btn) {
+    var body = btn.nextElementSibling;
+    var icon = btn.querySelector('i');
+    var expanded = body.classList.contains('expanded');
+
+    if (expanded) {
+      body.classList.replace('expanded', 'collapsed');
+      icon.classList.replace('bi-chevron-up', 'bi-chevron-down');
+      btn.setAttribute('aria-expanded', 'false');
+    } else {
+      body.classList.replace('collapsed', 'expanded');
+      icon.classList.replace('bi-chevron-down', 'bi-chevron-up');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  }
+</script>
+{% endblock %}

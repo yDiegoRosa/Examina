@@ -247,6 +247,10 @@
           <td class="text-right">
             <div class="flex gap-2 justify-end">
               {% if perms.banco_questoes.change_questao %}
+              <a href="{% url 'banco_questoes:questao_history' pk=q.pk %}"
+                 class="btn-icon-circle" title="Ver Histórico de Alterações">
+                <i class="bi bi-clock-history"></i>
+              </a>
               <a href="{% url 'banco_questoes:questao_update' pk=q.pk %}"
                  class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;" title="Editar Questão">
                 <i class="bi bi-pencil-square"></i> Editar
