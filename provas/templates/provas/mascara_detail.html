@@ -1,0 +1,146 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}{{ mascara.titulo }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-card-checklist"></i> Matriz de Critérios da Máscara #{{ mascara.pk }}
+      </span>
+      {% if mascara.ativo %}
+      <span class="badge-pill badge-pill-active small">Ativa</span>
+      {% else %}
+      <span class="badge-pill badge-pill-inactive small">Inativa</span>
+      {% endif %}
+    </div>
+    <h1 class="mb-1">{{ mascara.titulo }}</h1>
+    <p class="text-secondary" style="max-width: 650px;">
+      {{ mascara.disciplina.nome }} • {{ mascara.quantidade_questoes }} questões ({{ mascara.valor_total }} pts) • {{ mascara.get_modalidade_display }}
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'provas:mascara_update' pk=mascara.pk %}" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-pencil-square"></i> Editar Máscara
+    </a>
+    <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline flex items-center gap-2">
+      <i class="bi bi-arrow-left"></i> Voltar à Lista
+    </a>
+  </div>
+</div>
+
+<div class="grid grid-cols-12 gap-4 mb-4">
+
+  <!-- Matriz de Dificuldade -->
+  <div class="col-span-6 card-surface p-4">
+    <h3 class="font-bold text-main mb-3 flex items-center gap-2">
+      <i class="bi bi-speedometer2 text-primary" style="color: var(--fae-gold);"></i> Matriz de Dificuldade
+    </h3>
+
+    <div class="mb-3">
+      <div style="display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #E2E8F0; width: 100%;">
+        <div style="width: {{ mascara.percentual_facil }}%; background: var(--color-success);"></div>
+        <div style="width: {{ mascara.percentual_medio }}%; background: var(--fae-blue-primary);"></div>
+        <div style="width: {{ mascara.percentual_dificil }}%; background: var(--color-danger);"></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-2 text-center">
+      <div class="col-span-4 p-3" style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">
+        <div class="small font-bold" style="color: var(--color-success);">FÁCIL</div>
+        <div class="font-bold font-mono" style="font-size: 1.25rem; color: var(--color-success);">{{ mascara.percentual_facil }}%</div>
+        <div class="small text-muted">{{ distribuicao_dif.F }} questão(ões)</div>
+      </div>
+      <div class="col-span-4 p-3" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px;">
+        <div class="small font-bold" style="color: var(--fae-blue-primary);">MÉDIO</div>
+        <div class="font-bold font-mono" style="font-size: 1.25rem; color: var(--fae-blue-primary);">{{ mascara.percentual_medio }}%</div>
+        <div class="small text-muted">{{ distribuicao_dif.M }} questão(ões)</div>
+      </div>
+      <div class="col-span-4 p-3" style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px;">
+        <div class="small font-bold" style="color: var(--color-danger);">DIFÍCIL</div>
+        <div class="font-bold font-mono" style="font-size: 1.25rem; color: var(--color-danger);">{{ mascara.percentual_dificil }}%</div>
+        <div class="small text-muted">{{ distribuicao_dif.D }} questão(ões)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tópicos Curriculares -->
+  <div class="col-span-6 card-surface p-4">
+    <h3 class="font-bold text-main mb-3 flex items-center gap-2">
+      <i class="bi bi-diagram-3-fill text-success" style="color: var(--color-success);"></i> Conteúdo Curricular
+    </h3>
+
+    {% if mascara.topicos_distribuicao.all %}
+    <div class="table-responsive">
+      <table class="saas-table">
+        <thead>
+          <tr>
+            <th>Tópico</th>
+            <th style="width: 80px;">%</th>
+            <th style="width: 100px;">Qtd. Estimada</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in mascara.topicos_distribuicao.all %}
+          <tr>
+            <td class="font-bold">{{ t.topico.nome }}</td>
+            <td class="font-mono font-bold">{{ t.percentual }}%</td>
+            <td class="text-muted">{{ t.quantidade_questoes }} itens</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-3 text-muted text-center" style="background: #F8FAFC; border-radius: 6px;">
+      Nenhum tópico específico selecionado (sorteio livre em todos os tópicos ativos da disciplina).
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Diagnóstico de Estoque no Acervo -->
+<div class="card-surface p-4 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="font-bold text-main flex items-center gap-2 mb-0">
+      <i class="bi bi-box-seam-fill text-primary" style="color: var(--fae-blue-primary);"></i> Diagnóstico de Estoque no Banco de Questões
+    </h3>
+    {% if diagnostico.suficiente %}
+    <span class="badge-pill badge-pill-active">Estoque Pronto para Sorteio ✅</span>
+    {% else %}
+    <span class="badge-pill badge-pill-inactive">Estoque Parcial</span>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-12 gap-3">
+    <div class="col-span-3 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
+      <div class="small text-muted font-bold">Total Necessário</div>
+      <div class="font-bold font-mono" style="font-size: 1.35rem;">{{ diagnostico.total_necessario }}</div>
+    </div>
+    <div class="col-span-3 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
+      <div class="small text-muted font-bold">Total Disponível</div>
+      <div class="font-bold font-mono" style="font-size: 1.35rem; color: var(--fae-blue-primary);">{{ diagnostico.total_disponivel }}</div>
+    </div>
+    <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
+      <div class="small text-muted font-bold">Saldo Fácil</div>
+      <div class="font-bold font-mono" style="font-size: 1.15rem; color: {% if diagnostico.facil.ok %}var(--color-success){% else %}var(--color-danger){% endif %};">
+        {{ diagnostico.facil.estoque }}/{{ diagnostico.facil.demanda }}
+      </div>
+    </div>
+    <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
+      <div class="small text-muted font-bold">Saldo Médio</div>
+      <div class="font-bold font-mono" style="font-size: 1.15rem; color: {% if diagnostico.medio.ok %}var(--color-success){% else %}var(--color-danger){% endif %};">
+        {{ diagnostico.medio.estoque }}/{{ diagnostico.medio.demanda }}
+      </div>
+    </div>
+    <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
+      <div class="small text-muted font-bold">Saldo Difícil</div>
+      <div class="font-bold font-mono" style="font-size: 1.15rem; color: {% if diagnostico.dificil.ok %}var(--color-success){% else %}var(--color-danger){% endif %};">
+        {{ diagnostico.dificil.estoque }}/{{ diagnostico.dificil.demanda }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 """Serviço de geração de documentos PDF para o Módulo de Provas via WeasyPrint."""
 
-from io import BytesIO
 import logging
+from io import BytesIO
 from typing import Any
 
 from django.conf import settings

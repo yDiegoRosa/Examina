@@ -1,0 +1,180 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Máscaras de Avaliação — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-file-earmark-ruled-fill"></i> Módulo 2 • Provas & Avaliações
+      </span>
+    </div>
+    <h1 class="mb-1">Máscaras de Avaliação (Blueprints)</h1>
+    <p class="text-secondary" style="max-width: 620px;">
+      Gerencie matrizes de critérios pedagógicos para geração automatizada e balanceada de provas acadêmicas na FAETERJ-Rio.
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'provas:mascara_create' %}" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-plus-circle-fill"></i> Nova Máscara
+    </a>
+    <a href="{% url 'provas:pdf_teste' %}" target="_blank" class="btn btn-outline flex items-center gap-2" style="background: rgba(255,255,255,0.7);">
+      <i class="bi bi-file-pdf"></i> Modelo PDF
+    </a>
+  </div>
+</div>
+
+<!-- Métricas Rápidas -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 card-surface p-3 flex items-center gap-3">
+    <div class="stat-icon-box" style="background: rgba(0, 43, 73, 0.08); color: var(--fae-blue-primary); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+      <i class="bi bi-grid-3x3-gap-fill"></i>
+    </div>
+    <div>
+      <div class="small text-muted font-bold">Total de Máscaras</div>
+      <div class="font-bold text-main" style="font-size: 1.35rem;">{{ metricas.total }}</div>
+    </div>
+  </div>
+
+  <div class="col-span-4 card-surface p-3 flex items-center gap-3">
+    <div class="stat-icon-box" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+      <i class="bi bi-check-circle-fill"></i>
+    </div>
+    <div>
+      <div class="small text-muted font-bold">Máscaras Ativas</div>
+      <div class="font-bold text-main" style="font-size: 1.35rem; color: var(--color-success);">{{ metricas.ativas }}</div>
+    </div>
+  </div>
+
+  <div class="col-span-4 card-surface p-3 flex items-center gap-3">
+    <div class="stat-icon-box" style="background: rgba(245, 158, 11, 0.1); color: var(--color-warning); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+      <i class="bi bi-pause-circle-fill"></i>
+    </div>
+    <div>
+      <div class="small text-muted font-bold">Inativas</div>
+      <div class="font-bold text-main" style="font-size: 1.35rem;">{{ metricas.inativas }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtro por Disciplina -->
+<div class="card-surface p-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-3">
+    <label class="form-label mb-0 font-bold" style="min-width: 140px;">Filtrar por Disciplina:</label>
+    <select name="disciplina" class="form-select flex-1" onchange="this.form.submit()">
+      <option value="">Todas as disciplinas</option>
+      {% for d in disciplinas %}
+      <option value="{{ d.pk }}" {% if disciplina_selecionada == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.nome }}</option>
+      {% endfor %}
+    </select>
+    {% if disciplina_selecionada %}
+    <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.825rem;">
+      <i class="bi bi-x-lg"></i> Limpar
+    </a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Tabela de Máscaras -->
+<div class="card-surface">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 70px;">ID</th>
+          <th>Título & Observações</th>
+          <th style="width: 180px;">Disciplina</th>
+          <th style="width: 110px;">Questões</th>
+          <th style="width: 170px;">Distribuição (% F/M/D)</th>
+          <th style="width: 100px;">Status</th>
+          <th style="width: 130px;" class="text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in mascaras %}
+        <tr>
+          <td><span class="font-bold text-muted font-mono">#{{ m.pk }}</span></td>
+          <td>
+            <a href="{% url 'provas:mascara_detail' pk=m.pk %}" class="font-bold text-main" style="text-decoration: none;">
+              {{ m.titulo }}
+            </a>
+            {% if m.descricao %}
+            <div class="small text-muted mt-1">{{ m.descricao|truncatewords:10 }}</div>
+            {% endif %}
+            <div class="flex gap-1 mt-1">
+              <span class="badge-pill badge-pill-inactive small">
+                <i class="bi bi-layers-fill"></i> {{ m.get_modalidade_display }}
+              </span>
+              {% if m.priorizar_enade %}
+              <span class="badge-pill badge-pill-inactive small" title="Prioriza questões do ENADE">
+                <i class="bi bi-star-fill text-warning"></i> ENADE
+              </span>
+              {% endif %}
+            </div>
+          </td>
+          <td>
+            <span class="font-bold" style="color: var(--fae-blue-primary);">{{ m.disciplina.nome }}</span>
+          </td>
+          <td>
+            <div class="font-bold text-main">{{ m.quantidade_questoes }} itens</div>
+            <div class="small text-muted">{{ m.valor_total }} pts</div>
+          </td>
+          <td>
+            <div class="flex items-center gap-1 mb-1 font-mono small font-bold">
+              <span style="color: var(--color-success);">{{ m.percentual_facil }}%</span> /
+              <span style="color: var(--fae-blue-primary);">{{ m.percentual_medio }}%</span> /
+              <span style="color: var(--color-danger);">{{ m.percentual_dificil }}%</span>
+            </div>
+            <!-- Barra de Dificuldade -->
+            <div style="display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #E2E8F0; width: 100%;">
+              <div style="width: {{ m.percentual_facil }}%; background: var(--color-success);"></div>
+              <div style="width: {{ m.percentual_medio }}%; background: var(--fae-blue-primary);"></div>
+              <div style="width: {{ m.percentual_dificil }}%; background: var(--color-danger);"></div>
+            </div>
+          </td>
+          <td>
+            {% if m.ativo %}
+            <span class="badge-pill badge-pill-active">
+              <i class="bi bi-check-circle-fill"></i> Ativa
+            </span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive">
+              <i class="bi bi-slash-circle"></i> Inativa
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-1">
+              <a href="{% url 'provas:mascara_detail' pk=m.pk %}" class="btn-table-action" title="Visualizar Critérios e Diagnóstico">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{% url 'provas:mascara_update' pk=m.pk %}" class="btn-table-action" title="Editar Máscara">
+                <i class="bi bi-pencil-square"></i>
+              </a>
+              <form method="post" action="{% url 'provas:mascara_toggle_ativo' pk=m.pk %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-table-action" title="{% if m.ativo %}Desativar{% else %}Ativar{% endif %}">
+                  <i class="bi {% if m.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-journal-x"></i></div>
+            <h4 class="font-bold text-main">Nenhuma máscara cadastrada</h4>
+            <p class="text-muted mb-3">Crie seu primeiro blueprint de critérios para geração automatizada de provas.</p>
+            <a href="{% url 'provas:mascara_create' %}" class="btn btn-gold">
+              <i class="bi bi-plus-circle-fill"></i> Criar Nova Máscara
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

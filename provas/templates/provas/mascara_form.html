@@ -1,0 +1,569 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}{{ titulo_pagina|default:"Máscara de Avaliação" }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-sliders"></i> Módulo 2 • Blueprint de Avaliação
+      </span>
+    </div>
+    <h1 class="mb-1">{{ titulo_pagina }}</h1>
+    <p class="text-secondary" style="max-width: 600px;">
+      Configure os pesos pedagógicos, matriz de dificuldade e distribuição curricular por tópicos para montagem e sorteio de provas.
+    </p>
+  </div>
+</div>
+
+<form method="post" id="mascara-form" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+  <div class="alert-toast alert-toast-danger mb-4">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-exclamation-octagon-fill"></i>
+      <div>
+        {% for error in form.non_field_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 1. DADOS GERAIS DA MÁSCARA -->
+  <div class="card-surface mb-4">
+    <div class="card-header header-primary">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-info-circle-fill text-primary" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
+        <span class="font-bold">1. Parâmetros Gerais da Avaliação</span>
+      </div>
+      <span class="badge-pill badge-pill-inactive small">Configuração Base</span>
+    </div>
+    <div class="card-body">
+      <div class="grid grid-cols-12 gap-3">
+
+        <div class="col-span-8">
+          <label for="{{ form.titulo.id_for_label }}" class="form-label font-bold">
+            {{ form.titulo.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.titulo }}
+          {% if form.titulo.errors %}
+          <div class="invalid-feedback">{{ form.titulo.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-4">
+          <label for="{{ form.disciplina.id_for_label }}" class="form-label font-bold">
+            {{ form.disciplina.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.disciplina }}
+          {% if form.disciplina.errors %}
+          <div class="invalid-feedback">{{ form.disciplina.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-12">
+          <label for="{{ form.descricao.id_for_label }}" class="form-label">
+            {{ form.descricao.label }}
+          </label>
+          {{ form.descricao }}
+          {% if form.descricao.errors %}
+          <div class="invalid-feedback">{{ form.descricao.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-3">
+          <label for="{{ form.quantidade_questoes.id_for_label }}" class="form-label font-bold">
+            {{ form.quantidade_questoes.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.quantidade_questoes }}
+          <div class="form-help">Total de itens da prova (1 a 50).</div>
+          {% if form.quantidade_questoes.errors %}
+          <div class="invalid-feedback">{{ form.quantidade_questoes.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-3">
+          <label for="{{ form.modalidade.id_for_label }}" class="form-label font-bold">
+            {{ form.modalidade.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.modalidade }}
+          {% if form.modalidade.errors %}
+          <div class="invalid-feedback">{{ form.modalidade.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-3">
+          <label for="{{ form.valor_total.id_for_label }}" class="form-label font-bold">
+            {{ form.valor_total.label }}
+          </label>
+          {{ form.valor_total }}
+          {% if form.valor_total.errors %}
+          <div class="invalid-feedback">{{ form.valor_total.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-3">
+          <label for="{{ form.tempo_estimado_minutos.id_for_label }}" class="form-label font-bold">
+            {{ form.tempo_estimado_minutos.label }}
+          </label>
+          {{ form.tempo_estimado_minutos }}
+          {% if form.tempo_estimado_minutos.errors %}
+          <div class="invalid-feedback">{{ form.tempo_estimado_minutos.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Campos de Modalidade Mista -->
+        <div class="col-span-6 d-none" id="box-qtd-objetivas">
+          <label for="{{ form.quantidade_objetivas.id_for_label }}" class="form-label font-bold">
+            {{ form.quantidade_objetivas.label }}
+          </label>
+          {{ form.quantidade_objetivas }}
+        </div>
+
+        <div class="col-span-6 d-none" id="box-qtd-discursivas">
+          <label for="{{ form.quantidade_discursivas.id_for_label }}" class="form-label font-bold">
+            {{ form.quantidade_discursivas.label }}
+          </label>
+          {{ form.quantidade_discursivas }}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-4 mb-4">
+
+    <!-- 2. MATRIZ DE DIFICULDADE -->
+    <div class="col-span-6 card-surface">
+      <div class="card-header header-primary">
+        <div class="flex items-center gap-2">
+          <i class="bi bi-speedometer2 text-primary" style="font-size: 1.15rem; color: var(--fae-gold);"></i>
+          <span class="font-bold">2. Matriz de Dificuldade (%)</span>
+        </div>
+        <span id="badge-status-dif" class="badge-pill badge-pill-active">Soma: 100% ✅</span>
+      </div>
+      <div class="card-body">
+
+        <!-- Barra Multi-Segmentada de Dificuldade -->
+        <div class="mb-4">
+          <div class="flex justify-between text-muted small mb-1">
+            <span>Composição Visual:</span>
+            <span id="resumo-qtd-dif" class="font-bold text-main font-mono">4 Fáceis | 4 Médias | 2 Difíceis</span>
+          </div>
+          <div style="display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #E2E8F0; width: 100%;">
+            <div id="bar-facil" style="width: 40%; background: var(--color-success); transition: width 0.2s ease;"></div>
+            <div id="bar-medio" style="width: 40%; background: var(--fae-blue-primary); transition: width 0.2s ease;"></div>
+            <div id="bar-dificil" style="width: 20%; background: var(--color-danger); transition: width 0.2s ease;"></div>
+          </div>
+        </div>
+
+        <!-- Presets Rápidos -->
+        <div class="flex gap-1 mb-4 flex-wrap">
+          <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="40" data-medio="40" data-dificil="20" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+            Equilibrada (40/40/20)
+          </button>
+          <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="50" data-medio="30" data-dificil="20" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+            Formativa (50/30/20)
+          </button>
+          <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="20" data-medio="50" data-dificil="30" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+            Aprofundada (20/50/30)
+          </button>
+        </div>
+
+        <!-- Fácil -->
+        <div class="mb-3 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold" style="color: var(--color-success);">
+              <i class="bi bi-circle-fill" style="font-size: 0.65rem;"></i> Nível Fácil
+            </span>
+            <span id="label-qtd-facil" class="badge-pill badge-pill-facil">4 questões</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0" max="100" step="5" class="flex-1 slider-dificuldade" id="slider_facil" value="{{ form.percentual_facil.value|default:40 }}">
+            <div style="width: 80px;">{{ form.percentual_facil }}</div>
+          </div>
+        </div>
+
+        <!-- Médio -->
+        <div class="mb-3 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold" style="color: var(--fae-blue-primary);">
+              <i class="bi bi-circle-fill" style="font-size: 0.65rem;"></i> Nível Médio
+            </span>
+            <span id="label-qtd-medio" class="badge-pill badge-pill-medio">4 questões</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0" max="100" step="5" class="flex-1 slider-dificuldade" id="slider_medio" value="{{ form.percentual_medio.value|default:40 }}">
+            <div style="width: 80px;">{{ form.percentual_medio }}</div>
+          </div>
+        </div>
+
+        <!-- Difícil -->
+        <div class="mb-2 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold" style="color: var(--color-danger);">
+              <i class="bi bi-circle-fill" style="font-size: 0.65rem;"></i> Nível Difícil
+            </span>
+            <span id="label-qtd-dificil" class="badge-pill badge-pill-dificil">2 questões</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0" max="100" step="5" class="flex-1 slider-dificuldade" id="slider_dificil" value="{{ form.percentual_dificil.value|default:20 }}">
+            <div style="width: 80px;">{{ form.percentual_dificil }}</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 3. DISTRIBUIÇÃO POR TÓPICOS CURRICULARES -->
+    <div class="col-span-6 card-surface">
+      <div class="card-header header-success">
+        <div class="flex items-center gap-2">
+          <i class="bi bi-diagram-3-fill text-success" style="font-size: 1.15rem; color: var(--color-success);"></i>
+          <span class="font-bold">3. Distribuição por Tópicos (%)</span>
+        </div>
+        <span id="badge-status-topicos" class="badge-pill badge-pill-inactive">Soma: 0%</span>
+      </div>
+      <div class="card-body">
+
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+        <div class="alert-toast alert-toast-danger mb-3">
+          {% for error in formset.non_form_errors %}
+          <div class="font-bold">{{ error }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="flex justify-between items-center mb-3">
+          <span class="small text-muted">Defina a proporção dos conteúdos:</span>
+          <button type="button" class="btn btn-outline small" id="btn-balancear-topicos" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+            <i class="bi bi-distribute-horizontal"></i> Balancear Igualmente
+          </button>
+        </div>
+
+        <div id="topicos-container">
+          {% for top_form in formset %}
+          <div class="topico-form-row mb-2 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
+            {{ top_form.id }}
+            <div class="grid grid-cols-12 gap-2 items-center">
+              <div class="col-span-6">
+                <label class="small text-muted font-bold mb-0">Tópico:</label>
+                {{ top_form.topico }}
+              </div>
+              <div class="col-span-3">
+                <label class="small text-muted font-bold mb-0">% Prova:</label>
+                {{ top_form.percentual }}
+              </div>
+              <div class="col-span-2">
+                <label class="small text-muted font-bold mb-0">Qtd:</label>
+                {{ top_form.quantidade_questoes }}
+              </div>
+              <div class="col-span-1 text-center pt-3">
+                {% if top_form.DELETE %}
+                <span title="Excluir">{{ top_form.DELETE }}</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if top_form.errors %}
+            <div class="text-danger small mt-1">{{ top_form.errors }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 4. DIAGNÓSTICO DO ACERVO & PARÂMETROS DE SORTEIO -->
+  <div class="card-surface mb-4">
+    <div class="card-header header-primary">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-shield-check text-primary" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
+        <span class="font-bold">4. Diagnóstico do Acervo & Parâmetros de Sorteio</span>
+      </div>
+      <span id="badge-diagnostico-estoque" class="badge-pill badge-pill-active">Estoque Pronto</span>
+    </div>
+    <div class="card-body">
+
+      <div class="grid grid-cols-12 gap-3 mb-3">
+        <div class="col-span-12 p-3" style="background: #F8FAFC; border-left: 3px solid var(--fae-blue-primary); border-radius: 4px;">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-bold text-main" id="diag-titulo">Banco de Questões da FAETERJ-Rio</div>
+              <div class="small text-muted mt-1" id="diag-info">
+                Selecione uma disciplina para checar o saldo de questões disponíveis no acervo em tempo real.
+              </div>
+            </div>
+            <div class="text-right">
+              <span id="diag-saldo-total" class="font-bold font-mono" style="font-size: 1.25rem; color: var(--fae-blue-primary);">—</span>
+              <div class="small text-muted">questões no acervo</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-3 pt-2">
+        <div class="col-span-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            {{ form.embaralhar_questoes }}
+            <span class="font-bold text-main">{{ form.embaralhar_questoes.label }}</span>
+          </label>
+          <div class="form-help ps-4">Gera cadernos com sequências distintas de questões.</div>
+        </div>
+
+        <div class="col-span-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            {{ form.embaralhar_alternativas }}
+            <span class="font-bold text-main">{{ form.embaralhar_alternativas.label }}</span>
+          </label>
+          <div class="form-help ps-4">Embaralha opções (A-E) preservando o gabarito.</div>
+        </div>
+
+        <div class="col-span-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            {{ form.priorizar_enade }}
+            <span class="font-bold text-main">{{ form.priorizar_enade.label }}</span>
+          </label>
+          <div class="form-help ps-4">Prioriza questões oficiais de exames acadêmicos.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Barra de Ações -->
+  <div class="flex gap-3 mb-6">
+    <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
+      <i class="bi bi-floppy2-fill"></i> Salvar Máscara de Avaliação
+    </button>
+    <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline" style="padding: 0.75rem 1.75rem;">
+      Cancelar
+    </a>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+
+  const totalInput = document.getElementById('id_total_questoes');
+  const modalidadeSelect = document.getElementById('id_modalidade_select');
+  const disciplinaSelect = document.getElementById('id_disciplina_select');
+
+  const inputFacil = document.getElementById('id_input_facil');
+  const inputMedio = document.getElementById('id_input_medio');
+  const inputDificil = document.getElementById('id_input_dificil');
+
+  const sliderFacil = document.getElementById('slider_facil');
+  const sliderMedio = document.getElementById('slider_medio');
+  const sliderDificil = document.getElementById('slider_dificil');
+
+  const barFacil = document.getElementById('bar-facil');
+  const barMedio = document.getElementById('bar-medio');
+  const barDificil = document.getElementById('bar-dificil');
+
+  const labelQtdFacil = document.getElementById('label-qtd-facil');
+  const labelQtdMedio = document.getElementById('label-qtd-medio');
+  const labelQtdDificil = document.getElementById('label-qtd-dificil');
+  const resumoQtdDif = document.getElementById('resumo-qtd-dif');
+  const badgeStatusDif = document.getElementById('badge-status-dif');
+
+  // Sincronização Sliders e Inputs de Dificuldade
+  function syncDificuldade(source) {
+    if (source === 'slider') {
+      inputFacil.value = sliderFacil.value;
+      inputMedio.value = sliderMedio.value;
+      inputDificil.value = sliderDificil.value;
+    } else {
+      sliderFacil.value = inputFacil.value;
+      sliderMedio.value = inputMedio.value;
+      sliderDificil.value = inputDificil.value;
+    }
+
+    const f = parseInt(inputFacil.value, 10) || 0;
+    const m = parseInt(inputMedio.value, 10) || 0;
+    const d = parseInt(inputDificil.value, 10) || 0;
+    const total = parseInt(totalInput.value, 10) || 10;
+    const soma = f + m + d;
+
+    // Atualiza barras
+    barFacil.style.width = `${f}%`;
+    barMedio.style.width = `${m}%`;
+    barDificil.style.width = `${d}%`;
+
+    // Atualiza quantidades
+    const qF = Math.round((total * f) / 100);
+    const qM = Math.round((total * m) / 100);
+    const qD = Math.round((total * d) / 100);
+
+    labelQtdFacil.textContent = `${qF} questões`;
+    labelQtdMedio.textContent = `${qM} questões`;
+    labelQtdDificil.textContent = `${qD} questões`;
+    resumoQtdDif.textContent = `${qF} Fáceis | ${qM} Médias | ${qD} Difíceis`;
+
+    if (soma === 100) {
+      badgeStatusDif.className = 'badge-pill badge-pill-active';
+      badgeStatusDif.textContent = 'Soma: 100% ✅';
+    } else {
+      badgeStatusDif.className = 'badge-pill badge-pill-inactive';
+      badgeStatusDif.textContent = `Soma: ${soma}% (${soma < 100 ? 'Faltam ' + (100 - soma) + '%' : 'Excede em ' + (soma - 100) + '%'})`;
+    }
+  }
+
+  [sliderFacil, sliderMedio, sliderDificil].forEach(function(slider) {
+    if (slider) slider.addEventListener('input', () => syncDificuldade('slider'));
+  });
+
+  [inputFacil, inputMedio, inputDificil].forEach(function(input) {
+    if (input) input.addEventListener('input', () => syncDificuldade('input'));
+  });
+
+  if (totalInput) {
+    totalInput.addEventListener('input', () => {
+      syncDificuldade('input');
+      recalcularQtdTopicos();
+    });
+  }
+
+  // Presets de Dificuldade
+  document.querySelectorAll('.btn-preset-dif').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      inputFacil.value = btn.dataset.facil;
+      inputMedio.value = btn.dataset.medio;
+      inputDificil.value = btn.dataset.dificil;
+      syncDificuldade('input');
+    });
+  });
+
+  // Modalidade Mista Toggle
+  function toggleModalidade() {
+    const mod = modalidadeSelect ? modalidadeSelect.value : '';
+    const boxObj = document.getElementById('box-qtd-objetivas');
+    const boxDis = document.getElementById('box-qtd-discursivas');
+    if (mod === 'MISTA') {
+      boxObj.classList.remove('d-none');
+      boxDis.classList.remove('d-none');
+    } else {
+      boxObj.classList.add('d-none');
+      boxDis.classList.add('d-none');
+    }
+  }
+
+  if (modalidadeSelect) {
+    modalidadeSelect.addEventListener('change', toggleModalidade);
+    toggleModalidade();
+  }
+
+  // Tópicos e Balanceamento
+  function recalcularQtdTopicos() {
+    const total = parseInt(totalInput.value, 10) || 10;
+    let soma = 0;
+    document.querySelectorAll('.topico-form-row').forEach(function(row) {
+      const percInput = row.querySelector('.topico-percentual-input');
+      const qtdInput = row.querySelector('.topico-qtd-input');
+      if (percInput && qtdInput) {
+        const p = parseInt(percInput.value, 10) || 0;
+        soma += p;
+        qtdInput.value = Math.round((total * p) / 100);
+      }
+    });
+
+    const badgeTopicos = document.getElementById('badge-status-topicos');
+    if (badgeTopicos) {
+      if (soma === 100) {
+        badgeTopicos.className = 'badge-pill badge-pill-active';
+        badgeTopicos.textContent = 'Soma: 100% ✅';
+      } else {
+        badgeTopicos.className = 'badge-pill badge-pill-inactive';
+        badgeTopicos.textContent = `Soma: ${soma}%`;
+      }
+    }
+  }
+
+  document.querySelectorAll('.topico-percentual-input').forEach(function(el) {
+    el.addEventListener('input', recalcularQtdTopicos);
+  });
+
+  const btnBalancear = document.getElementById('btn-balancear-topicos');
+  if (btnBalancear) {
+    btnBalancear.addEventListener('click', function() {
+      const activeRows = Array.from(document.querySelectorAll('.topico-form-row')).filter(function(row) {
+        const select = row.querySelector('.topico-select');
+        return select && select.value;
+      });
+
+      if (activeRows.length === 0) return;
+
+      const equalShare = Math.floor(100 / activeRows.length);
+      let remainder = 100 - (equalShare * activeRows.length);
+
+      activeRows.forEach(function(row, idx) {
+        const percInput = row.querySelector('.topico-percentual-input');
+        if (percInput) {
+          percInput.value = equalShare + (idx === 0 ? remainder : 0);
+        }
+      });
+
+      recalcularQtdTopicos();
+    });
+  }
+
+  // Diagnóstico de Estoque via API AJAX
+  function atualizarEstoqueDisciplina() {
+    const discId = disciplinaSelect ? disciplinaSelect.value : '';
+    if (!discId) return;
+
+    fetch(`{% url 'provas:api_topicos_estoque' %}?disciplina_id=${discId}`)
+      .then(res => res.json())
+      .then(data => {
+        const diagSaldo = document.getElementById('diag-saldo-total');
+        const diagInfo = document.getElementById('diag-info');
+        const badgeEstoque = document.getElementById('badge-diagnostico-estoque');
+
+        if (data.estoque) {
+          const totalAcervo = data.estoque.total || 0;
+          const totalNec = parseInt(totalInput.value, 10) || 10;
+
+          if (diagSaldo) diagSaldo.textContent = totalAcervo;
+          if (diagInfo) {
+            diagInfo.innerHTML = `Acervo disponível em <strong>${data.disciplina_nome}</strong>: ${data.estoque.facil} Fáceis, ${data.estoque.medio} Médias, ${data.estoque.dificil} Difíceis (${data.estoque.objetivas} OBJ / ${data.estoque.discursivas} DIS).`;
+          }
+
+          if (badgeEstoque) {
+            if (totalAcervo >= totalNec * 2) {
+              badgeEstoque.className = 'badge-pill badge-pill-active';
+              badgeEstoque.textContent = 'Estoque Abundante (Múltiplos Cadernos) ✅';
+            } else if (totalAcervo >= totalNec) {
+              badgeEstoque.className = 'badge-pill badge-pill-active';
+              badgeEstoque.textContent = 'Estoque Suficiente ✅';
+            } else {
+              badgeEstoque.className = 'badge-pill badge-pill-inactive';
+              badgeEstoque.textContent = `Estoque Baixo (${totalAcervo}/${totalNec} itens)`;
+            }
+          }
+        }
+      })
+      .catch(err => console.error('Erro ao buscar estoque:', err));
+  }
+
+  if (disciplinaSelect) {
+    disciplinaSelect.addEventListener('change', atualizarEstoqueDisciplina);
+    atualizarEstoqueDisciplina();
+  }
+
+  syncDificuldade('input');
+  recalcularQtdTopicos();
+})();
+</script>
+{% endblock %}
