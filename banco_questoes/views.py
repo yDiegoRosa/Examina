@@ -4,7 +4,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseNotAllowed
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .filters import QuestaoFilter

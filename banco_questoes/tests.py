@@ -1637,4 +1637,3 @@ class QuestaoToggleAtivoViewTests(TestCase):
         ultima_revisao = self.questao_ativa.history.first()
         self.assertFalse(ultima_revisao.ativo)
         self.assertEqual(ultima_revisao.history_user, self.editor)
-
