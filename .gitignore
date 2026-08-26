@@ -12,6 +12,7 @@ logs/
 
 #Test
 media/csv_test/*
+.pre-commit-config.yaml
 
 # Distribution / packaging
 .Python
