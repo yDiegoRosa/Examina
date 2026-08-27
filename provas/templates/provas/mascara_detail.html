@@ -46,21 +46,21 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-12 gap-2 text-center">
-      <div class="col-span-4 p-3" style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">
-        <div class="small font-bold" style="color: var(--color-success);">FÁCIL</div>
-        <div class="font-bold font-mono" style="font-size: 1.25rem; color: var(--color-success);">{{ mascara.percentual_facil }}%</div>
-        <div class="small text-muted">{{ distribuicao_dif.F }} questão(ões)</div>
+    <div class="grid grid-cols-12 gap-3 text-center">
+      <div class="col-span-4 diff-stat-card diff-stat-facil">
+        <div class="diff-stat-title text-success">FÁCIL</div>
+        <div class="diff-stat-pct text-success">{{ mascara.percentual_facil }}%</div>
+        <div class="diff-stat-subtitle">{{ distribuicao_dif.F }} questão(ões)</div>
       </div>
-      <div class="col-span-4 p-3" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px;">
-        <div class="small font-bold" style="color: var(--fae-blue-primary);">MÉDIO</div>
-        <div class="font-bold font-mono" style="font-size: 1.25rem; color: var(--fae-blue-primary);">{{ mascara.percentual_medio }}%</div>
-        <div class="small text-muted">{{ distribuicao_dif.M }} questão(ões)</div>
+      <div class="col-span-4 diff-stat-card diff-stat-medio">
+        <div class="diff-stat-title" style="color: var(--fae-blue-primary);">MÉDIO</div>
+        <div class="diff-stat-pct" style="color: var(--fae-blue-primary);">{{ mascara.percentual_medio }}%</div>
+        <div class="diff-stat-subtitle">{{ distribuicao_dif.M }} questão(ões)</div>
       </div>
-      <div class="col-span-4 p-3" style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px;">
-        <div class="small font-bold" style="color: var(--color-danger);">DIFÍCIL</div>
-        <div class="font-bold font-mono" style="font-size: 1.25rem; color: var(--color-danger);">{{ mascara.percentual_dificil }}%</div>
-        <div class="small text-muted">{{ distribuicao_dif.D }} questão(ões)</div>
+      <div class="col-span-4 diff-stat-card diff-stat-dificil">
+        <div class="diff-stat-title text-danger">DIFÍCIL</div>
+        <div class="diff-stat-pct text-danger">{{ mascara.percentual_dificil }}%</div>
+        <div class="diff-stat-subtitle">{{ distribuicao_dif.D }} questão(ões)</div>
       </div>
     </div>
   </div>
@@ -78,13 +78,13 @@
           <tr>
             <th>Tópico</th>
             <th style="width: 80px;">%</th>
-            <th style="width: 100px;">Qtd. Estimada</th>
+            <th style="width: 110px;">Qtd. Estimada</th>
           </tr>
         </thead>
         <tbody>
           {% for t in mascara.topicos_distribuicao.all %}
           <tr>
-            <td class="font-bold">{{ t.topico.nome }}</td>
+            <td class="font-bold text-main">{{ t.topico.nome }}</td>
             <td class="font-mono font-bold">{{ t.percentual }}%</td>
             <td class="text-muted">{{ t.quantidade_questoes }} itens</td>
           </tr>
@@ -93,12 +93,118 @@
       </table>
     </div>
     {% else %}
-    <div class="p-3 text-muted text-center" style="background: #F8FAFC; border-radius: 6px;">
+    <div class="p-4 text-muted text-center" style="background: #F8FAFC; border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+      <i class="bi bi-shuffle mb-1" style="font-size: 1.5rem; display: block; opacity: 0.5;"></i>
       Nenhum tópico específico selecionado (sorteio livre em todos os tópicos ativos da disciplina).
     </div>
     {% endif %}
   </div>
 
+</div>
+
+<!-- Matriz de Metas por Célula (Tópico × Dificuldade) • Método do Maior Resto -->
+<div class="card-surface p-4 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
+        <i class="bi bi-grid-3x3-gap-fill" style="color: var(--fae-blue-electric);"></i> Matriz de Metas por Célula (Tópico × Dificuldade)
+      </h3>
+      <p class="text-muted small mb-0">
+        Quantidades exatas calculadas pelo <strong>Método do Maior Resto (Hamilton-Hare)</strong>, garantindo soma exata de {{ mascara.quantidade_questoes }} questões.
+      </p>
+    </div>
+    <span class="badge-pill badge-pill-medio font-bold">
+      <i class="bi bi-calculator"></i> Soma: {{ matriz_metas.total_questoes }} itens
+    </span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th>Tópico Curricular</th>
+          <th style="width: 100px;" class="text-center">% Tópico</th>
+          <th style="width: 170px;" class="text-center">
+            <span class="badge-pill badge-pill-facil small">Fácil ({{ mascara.percentual_facil }}%)</span>
+          </th>
+          <th style="width: 170px;" class="text-center">
+            <span class="badge-pill badge-pill-medio small">Médio ({{ mascara.percentual_medio }}%)</span>
+          </th>
+          <th style="width: 170px;" class="text-center">
+            <span class="badge-pill badge-pill-dificil small">Difícil ({{ mascara.percentual_dificil }}%)</span>
+          </th>
+          <th style="width: 140px;" class="text-right">Total por Tópico</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in matriz_metas.linhas %}
+        <tr>
+          <td class="font-bold text-main">
+            {{ linha.topico_nome }}
+          </td>
+          <td class="text-center font-mono font-bold text-muted">
+            {{ linha.percentual_topico }}%
+          </td>
+          <!-- Célula Fácil -->
+          <td class="text-center">
+            {% with cel=linha.celulas.F %}
+            <div class="font-mono font-bold text-success" style="font-size: 1.1rem;">
+              {{ cel.quantidade }} <span class="small text-muted font-normal">({{ cel.cota_exata|floatformat:2 }})</span>
+            </div>
+            <div class="small text-muted font-mono" style="font-size: 0.725rem;">
+              {{ cel.percentual_composto|floatformat:1 }}%
+            </div>
+            {% endwith %}
+          </td>
+          <!-- Célula Médio -->
+          <td class="text-center">
+            {% with cel=linha.celulas.M %}
+            <div class="font-mono font-bold" style="font-size: 1.1rem; color: var(--fae-blue-primary);">
+              {{ cel.quantidade }} <span class="small text-muted font-normal">({{ cel.cota_exata|floatformat:2 }})</span>
+            </div>
+            <div class="small text-muted font-mono" style="font-size: 0.725rem;">
+              {{ cel.percentual_composto|floatformat:1 }}%
+            </div>
+            {% endwith %}
+          </td>
+          <!-- Célula Difícil -->
+          <td class="text-center">
+            {% with cel=linha.celulas.D %}
+            <div class="font-mono font-bold text-danger" style="font-size: 1.1rem;">
+              {{ cel.quantidade }} <span class="small text-muted font-normal">({{ cel.cota_exata|floatformat:2 }})</span>
+            </div>
+            <div class="small text-muted font-mono" style="font-size: 0.725rem;">
+              {{ cel.percentual_composto|floatformat:1 }}%
+            </div>
+            {% endwith %}
+          </td>
+          <!-- Total da Linha -->
+          <td class="text-right font-mono font-bold text-main" style="font-size: 1.05rem;">
+            {{ linha.total_questoes }} itens
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background: #F8FAFC; border-top: 2px solid var(--border-color); font-weight: 800;">
+          <td>Total por Nível</td>
+          <td class="text-center font-mono">100%</td>
+          <td class="text-center font-mono text-success" style="font-size: 1.15rem;">
+            {{ matriz_metas.totais_por_dificuldade.F }} Fáceis
+          </td>
+          <td class="text-center font-mono" style="font-size: 1.15rem; color: var(--fae-blue-primary);">
+            {{ matriz_metas.totais_por_dificuldade.M }} Médias
+          </td>
+          <td class="text-center font-mono text-danger" style="font-size: 1.15rem;">
+            {{ matriz_metas.totais_por_dificuldade.D }} Difíceis
+          </td>
+          <td class="text-right font-mono text-main" style="font-size: 1.25rem;">
+            {{ matriz_metas.total_questoes }} itens
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
 </div>
 
 <!-- Diagnóstico de Estoque no Acervo -->
@@ -115,29 +221,29 @@
   </div>
 
   <div class="grid grid-cols-12 gap-3">
-    <div class="col-span-3 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
-      <div class="small text-muted font-bold">Total Necessário</div>
-      <div class="font-bold font-mono" style="font-size: 1.35rem;">{{ diagnostico.total_necessario }}</div>
+    <div class="col-span-3 stat-card-unified p-3 text-center flex-col justify-center">
+      <div class="stat-label-unified">Total Necessário</div>
+      <div class="stat-num-unified font-mono">{{ diagnostico.total_necessario }}</div>
     </div>
-    <div class="col-span-3 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
-      <div class="small text-muted font-bold">Total Disponível</div>
-      <div class="font-bold font-mono" style="font-size: 1.35rem; color: var(--fae-blue-primary);">{{ diagnostico.total_disponivel }}</div>
+    <div class="col-span-3 stat-card-unified p-3 text-center flex-col justify-center">
+      <div class="stat-label-unified">Total Disponível</div>
+      <div class="stat-num-unified font-mono" style="color: var(--fae-blue-primary);">{{ diagnostico.total_disponivel }}</div>
     </div>
-    <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
-      <div class="small text-muted font-bold">Saldo Fácil</div>
-      <div class="font-bold font-mono {% if diagnostico.facil.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.15rem;">
+    <div class="col-span-2 stat-card-unified p-3 text-center flex-col justify-center">
+      <div class="stat-label-unified">Saldo Fácil</div>
+      <div class="stat-num-unified font-mono {% if diagnostico.facil.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.25rem;">
         {{ diagnostico.facil.estoque }}/{{ diagnostico.facil.demanda }}
       </div>
     </div>
-    <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
-      <div class="small text-muted font-bold">Saldo Médio</div>
-      <div class="font-bold font-mono {% if diagnostico.medio.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.15rem;">
+    <div class="col-span-2 stat-card-unified p-3 text-center flex-col justify-center">
+      <div class="stat-label-unified">Saldo Médio</div>
+      <div class="stat-num-unified font-mono {% if diagnostico.medio.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.25rem;">
         {{ diagnostico.medio.estoque }}/{{ diagnostico.medio.demanda }}
       </div>
     </div>
-    <div class="col-span-2 p-3 text-center" style="background: #F8FAFC; border-radius: 6px; border: 1px solid #E2E8F0;">
-      <div class="small text-muted font-bold">Saldo Difícil</div>
-      <div class="font-bold font-mono {% if diagnostico.dificil.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.15rem;">
+    <div class="col-span-2 stat-card-unified p-3 text-center flex-col justify-center">
+      <div class="stat-label-unified">Saldo Difícil</div>
+      <div class="stat-num-unified font-mono {% if diagnostico.dificil.ok %}text-success{% else %}text-danger{% endif %}" style="font-size: 1.25rem;">
         {{ diagnostico.dificil.estoque }}/{{ diagnostico.dificil.demanda }}
       </div>
     </div>

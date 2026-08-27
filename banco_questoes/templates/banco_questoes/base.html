@@ -36,23 +36,23 @@
 
         <ul class="nav-links">
           <li>
-            <a class="nav-item-link" href="{% url 'banco_questoes:questao_list' %}">
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'banco_questoes' and request.resolver_match.url_name == 'questao_list' or request.resolver_match.url_name == 'index' %}active{% endif %}" href="{% url 'banco_questoes:questao_list' %}">
               <i class="bi bi-grid-fill"></i> Acervo de Questões
             </a>
           </li>
           <li>
-            <a class="nav-item-link" href="{% url 'provas:index' %}">
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'provas' %}active{% endif %}" href="{% url 'provas:index' %}">
               <i class="bi bi-file-earmark-ruled-fill"></i> Provas
             </a>
           </li>
           {% if perms.banco_questoes.add_questao %}
           <li>
-            <a class="nav-item-link" href="{% url 'banco_questoes:questao_create' %}">
+            <a class="nav-item-link {% if request.resolver_match.url_name == 'questao_create' %}active{% endif %}" href="{% url 'banco_questoes:questao_create' %}">
               <i class="bi bi-plus-circle-fill"></i> Nova Questão
             </a>
           </li>
           <li>
-            <a class="nav-item-link" href="{% url 'banco_questoes:questao_import' %}">
+            <a class="nav-item-link {% if request.resolver_match.url_name == 'questao_import' %}active{% endif %}" href="{% url 'banco_questoes:questao_import' %}">
               <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar (Excel/CSV)
             </a>
           </li>

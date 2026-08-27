@@ -15,7 +15,10 @@
       Composição, formatação e geração automatizada de avaliações acadêmicas e gabaritos para a FAETERJ-Rio.
     </p>
   </div>
-  <div class="flex gap-2 mt-3">
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'provas:mascara_list' %}" class="btn btn-primary flex items-center gap-2">
+      <i class="bi bi-card-checklist"></i> Máscaras de Avaliação
+    </a>
     <a href="{% url 'provas:pdf_teste' %}" target="_blank" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-file-earmark-pdf-fill"></i> Testar Geração de PDF (WeasyPrint)
     </a>

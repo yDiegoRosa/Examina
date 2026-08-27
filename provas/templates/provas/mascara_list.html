@@ -27,33 +27,33 @@
 
 <!-- Métricas Rápidas -->
 <div class="grid grid-cols-12 gap-3 mb-4">
-  <div class="col-span-4 card-surface p-3 flex items-center gap-3">
-    <div class="stat-icon-box" style="background: rgba(0, 43, 73, 0.08); color: var(--fae-blue-primary); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy">
       <i class="bi bi-grid-3x3-gap-fill"></i>
     </div>
     <div>
-      <div class="small text-muted font-bold">Total de Máscaras</div>
-      <div class="font-bold text-main" style="font-size: 1.35rem;">{{ metricas.total }}</div>
+      <div class="stat-label-unified">Total de Máscaras</div>
+      <div class="stat-num-unified">{{ metricas.total }}</div>
     </div>
   </div>
 
-  <div class="col-span-4 card-surface p-3 flex items-center gap-3">
-    <div class="stat-icon-box" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-success">
       <i class="bi bi-check-circle-fill"></i>
     </div>
     <div>
-      <div class="small text-muted font-bold">Máscaras Ativas</div>
-      <div class="font-bold text-main" style="font-size: 1.35rem; color: var(--color-success);">{{ metricas.ativas }}</div>
+      <div class="stat-label-unified">Máscaras Ativas</div>
+      <div class="stat-num-unified text-success">{{ metricas.ativas }}</div>
     </div>
   </div>
 
-  <div class="col-span-4 card-surface p-3 flex items-center gap-3">
-    <div class="stat-icon-box" style="background: rgba(245, 158, 11, 0.1); color: var(--color-warning); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-warning">
       <i class="bi bi-pause-circle-fill"></i>
     </div>
     <div>
-      <div class="small text-muted font-bold">Inativas</div>
-      <div class="font-bold text-main" style="font-size: 1.35rem;">{{ metricas.inativas }}</div>
+      <div class="stat-label-unified">Inativas</div>
+      <div class="stat-num-unified">{{ metricas.inativas }}</div>
     </div>
   </div>
 </div>

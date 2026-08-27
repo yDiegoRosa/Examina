@@ -238,26 +238,24 @@
             <div class="flex gap-2 justify-end">
               {% if perms.banco_questoes.change_questao %}
               <a href="{% url 'banco_questoes:questao_history' pk=q.pk %}"
-                 class="btn-icon-circle" title="Ver Histórico de Alterações">
+                 class="btn-table-action" title="Ver Histórico de Alterações">
                 <i class="bi bi-clock-history"></i>
               </a>
               <a href="{% url 'banco_questoes:questao_update' pk=q.pk %}"
-                 class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;" title="Editar Questão">
+                 class="btn btn-outline btn-sm" title="Editar Questão">
                 <i class="bi bi-pencil-square"></i> Editar
               </a>
               <form method="post" action="{% url 'banco_questoes:questao_toggle_ativo' pk=q.pk %}" style="display:inline;">
                 {% csrf_token %}
                 {% if q.ativo %}
                 <button type="submit"
-                        class="btn btn-outline"
-                        style="padding: 0.4rem 0.9rem; font-size: 0.8rem; color: var(--color-danger); border-color: var(--color-danger);"
+                        class="btn btn-sm btn-sm-danger"
                         title="Inativar questão (preserva o histórico)">
                   <i class="bi bi-slash-circle"></i> Inativar
                 </button>
                 {% else %}
                 <button type="submit"
-                        class="btn btn-outline"
-                        style="padding: 0.4rem 0.9rem; font-size: 0.8rem; color: var(--color-success); border-color: var(--color-success);"
+                        class="btn btn-sm btn-sm-success"
                         title="Reativar questão">
                   <i class="bi bi-check-circle"></i> Reativar
                 </button>
