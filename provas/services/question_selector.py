@@ -1,0 +1,143 @@
+import random
+
+from django.db.models import Case, Count, IntegerField, Q, QuerySet, Value, When
+
+from banco_questoes.models import Questao
+
+
+def consultar_questoes_candidatas_priorizadas(
+    mascara,
+    topico_id: int | None = None,
+    dificuldade: str | None = None,
+    tipo: str | None = None,
+    limite_provas_recentes: int = 5,
+    excluir_ids: set[int] | list[int] | None = None,
+) -> QuerySet[Questao]:
+    """
+    Retorna QuerySet de questões ativas anotadas e ordenadas pela restrição do RF07:
+    priorizando questões NÃO usadas (ou MENOS usadas) nas últimas 5 gerações desta máscara.
+
+    Estratégia de Priorização:
+    1. Preferência a exames oficiais (ENADE / POSCOMP) quando `mascara.priorizar_enade=True`.
+    2. Menor frequência de uso recente (`vezes_usada_recentemente ASC`: 0 usos > 1 uso > 2 usos).
+    3. Aleatorização controlada (`?`) para desempate entre questões com mesmo histórico de uso.
+
+    Args:
+        mascara: Instância de Mascara de Avaliação.
+        topico_id: ID do tópico curricular (opcional).
+        dificuldade: Nível de dificuldade ('F', 'M', 'D', opcional).
+        tipo: Tipo de questão ('OBJ', 'DIS', opcional).
+        limite_provas_recentes: Quantidade de avaliações anteriores a considerar (padrão: 5).
+        excluir_ids: Lista/set de IDs de questões a excluir (ex.: já selecionadas no mesmo exame).
+
+    Returns:
+        QuerySet[Questao] anotado com `vezes_usada_recentemente` e ordenado por prioridade.
+    """
+    from provas.models import Prova
+
+    # 1. Identifica os IDs das últimas N provas geradas desta mesma máscara
+    ultimas_provas_ids = list(
+        Prova.objects.filter(mascara=mascara)
+        .order_by('-criado_em')
+        .values_list('id', flat=True)[:limite_provas_recentes]
+    )
+
+    # 2. Base de questões ativas da disciplina da máscara
+    qs = Questao.objects.filter(
+        disciplina=mascara.disciplina,
+        ativo=True,
+    )
+
+    # 3. Filtros estruturais e pedagógicos
+    if topico_id is not None:
+        qs = qs.filter(topico_id=topico_id)
+
+    if dificuldade:
+        qs = qs.filter(dificuldade=dificuldade)
+
+    if tipo:
+        qs = qs.filter(tipo=tipo)
+    elif mascara.modalidade == mascara.Modalidade.OBJETIVA:
+        qs = qs.filter(tipo=Questao.Tipo.OBJETIVA)
+    elif mascara.modalidade == mascara.Modalidade.DISCURSIVA:
+        qs = qs.filter(tipo=Questao.Tipo.DISCURSIVA)
+
+    if excluir_ids:
+        qs = qs.exclude(id__in=excluir_ids)
+
+    # 4. Anotação de utilizações nas últimas 5 provas e pontuação ENADE
+    if ultimas_provas_ids:
+        filtro_provas_recentes = Q(utilizacoes_provas__prova_id__in=ultimas_provas_ids)
+    else:
+        # Se não há provas anteriores, a contagem é 0 para todas as questões
+        filtro_provas_recentes = Q(pk__in=[])
+
+    if mascara.priorizar_enade:
+        enade_expr = Case(
+            When(origem__icontains='enade', then=Value(1)),
+            When(origem__icontains='poscomp', then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+    else:
+        enade_expr = Value(0, output_field=IntegerField())
+
+    qs = qs.annotate(
+        vezes_usada_recentemente=Count(
+            'utilizacoes_provas',
+            filter=filtro_provas_recentes,
+        ),
+        is_enade=enade_expr,
+    )
+
+    # 5. Ordenação priorizada
+    if mascara.priorizar_enade:
+        return qs.order_by('-is_enade', 'vezes_usada_recentemente', '?')
+
+    return qs.order_by('vezes_usada_recentemente', '?')
+
+
+def selecionar_questoes_por_matriz(
+    mascara,
+    limite_provas_recentes: int = 5,
+) -> list[Questao]:
+    """
+    Executa a seleção automatizada de questões para compor uma avaliação conforme o RF07,
+    respeitando as quantidades inteiras calculadas na Matriz de Metas (Tópico × Dificuldade)
+    e priorizando itens com menor uso nas últimas 5 gerações.
+
+    Args:
+        mascara: Instância de Mascara de Avaliação.
+        limite_provas_recentes: Quantidade de gerações anteriores para controle de repetição.
+
+    Returns:
+        Lista de instâncias de Questao selecionadas sem duplicatas.
+    """
+    matriz = mascara.calcular_matriz_metas()
+    questoes_selecionadas: list[Questao] = []
+    ids_selecionados: set[int] = set()
+
+    for celula in matriz.celulas:
+        qtd_necessaria = celula.quantidade
+        if qtd_necessaria <= 0:
+            continue
+
+        candidatas = list(
+            consultar_questoes_candidatas_priorizadas(
+                mascara=mascara,
+                topico_id=celula.topico_id,
+                dificuldade=celula.dificuldade,
+                limite_provas_recentes=limite_provas_recentes,
+                excluir_ids=ids_selecionados,
+            )[:qtd_necessaria]
+        )
+
+        for q in candidatas:
+            questoes_selecionadas.append(q)
+            ids_selecionados.add(q.id)
+
+    # Se a máscara solicitar embaralhamento geral das questões
+    if mascara.embaralhar_questoes:
+        random.shuffle(questoes_selecionadas)
+
+    return questoes_selecionadas

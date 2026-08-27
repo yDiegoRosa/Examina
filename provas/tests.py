@@ -921,4 +921,146 @@ class MatrizMetasCalculoTest(TestCase):
         self.assertContains(response, 'Matriz de Metas por Célula (Tópico × Dificuldade)')
 
 
+class SelecaoQuestoesMenosUsadasTest(TestCase):
+    """Testes unitários e de integração para a consulta priorizando questões menos usadas (RF07)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_rf07', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Algoritmos e Estrutura de Dados')
+        self.topico = Topico.objects.create(disciplina=self.disc, nome='Árvores Binárias')
+
+        # Criar 6 questões no banco para o mesmo tópico e dificuldade
+        self.questoes = [
+            Questao.objects.create(
+                disciplina=self.disc,
+                topico=self.topico,
+                tipo=Questao.Tipo.OBJETIVA,
+                dificuldade=Questao.Dificuldade.FACIL,
+                enunciado=f'Questão de teste {i}',
+                autor=self.user,
+                ativo=True,
+            )
+            for i in range(1, 7)
+        ]
+
+        self.mascara = Mascara.objects.create(
+            titulo='AV1 Algoritmos',
+            disciplina=self.disc,
+            quantidade_questoes=2,
+            percentual_facil=100,
+            percentual_medio=0,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+    def test_questoes_nunca_usadas_tem_prioridade_maxima(self):
+        """Verifica que questões não usadas nas últimas gerações têm prioridade máxima sobre as usadas."""
+        from provas.models import Prova, ProvaQuestao
+
+        # Gera Prova 1 usando Q1 e Q2
+        p1 = Prova.objects.create(mascara=self.mascara, titulo='Caderno 1', autor=self.user)
+        ProvaQuestao.objects.create(prova=p1, questao=self.questoes[0], ordem=1, numero=1)
+        ProvaQuestao.objects.create(prova=p1, questao=self.questoes[1], ordem=2, numero=2)
+
+        # Consulta candidatas priorizadas
+        candidatas = list(self.mascara.consultar_questoes_priorizadas())
+
+        # Q3..Q6 devem ter 0 usos e vir antes de Q1 e Q2 (que têm 1 uso)
+        nao_usadas = [q for q in candidatas if q.vezes_usada_recentemente == 0]
+        usadas = [q for q in candidatas if q.vezes_usada_recentemente == 1]
+
+        self.assertEqual(len(nao_usadas), 4)
+        self.assertEqual(len(usadas), 2)
+        self.assertEqual({q.id for q in usadas}, {self.questoes[0].id, self.questoes[1].id})
+
+        # Os 4 primeiros itens do queryset devem ser as não usadas
+        primeiras_4_ids = {q.id for q in candidatas[:4]}
+        self.assertEqual(primeiras_4_ids, {self.questoes[2].id, self.questoes[3].id, self.questoes[4].id, self.questoes[5].id})
+
+    def test_janela_deslizante_ultimas_5_geracoes(self):
+        """Verifica que apenas as 5 provas mais recentes da máscara são consideradas na contagem."""
+        import datetime
+
+        from django.utils import timezone
+
+        from provas.models import Prova, ProvaQuestao
+
+        agora = timezone.now()
+
+        # Cria 6 provas com timestamps progressivos
+        # Prova 1 (mais antiga, fora da janela de 5): usa Q1
+        p1 = Prova.objects.create(mascara=self.mascara, titulo='Prova 1', autor=self.user)
+        Prova.objects.filter(pk=p1.pk).update(criado_em=agora - datetime.timedelta(days=10))
+        ProvaQuestao.objects.create(prova=p1, questao=self.questoes[0], ordem=1, numero=1)
+
+        # Provas 2..6 (as 5 mais recentes): usam Q2 e Q3
+        for i in range(2, 7):
+            p = Prova.objects.create(mascara=self.mascara, titulo=f'Prova {i}', autor=self.user)
+            Prova.objects.filter(pk=p.pk).update(criado_em=agora - datetime.timedelta(days=7 - i))
+            ProvaQuestao.objects.create(prova=p, questao=self.questoes[1], ordem=1, numero=1)
+            ProvaQuestao.objects.create(prova=p, questao=self.questoes[2], ordem=2, numero=2)
+
+        candidatas = list(self.mascara.consultar_questoes_priorizadas())
+        q1 = next(q for q in candidatas if q.id == self.questoes[0].id)
+        q2 = next(q for q in candidatas if q.id == self.questoes[1].id)
+
+        # Q1 foi usada apenas na Prova 1 (6ª mais recente, fora da janela de 5), então vezes_usada_recentemente == 0
+        self.assertEqual(q1.vezes_usada_recentemente, 0)
+        # Q2 foi usada em todas as 5 provas mais recentes, então vezes_usada_recentemente == 5
+        self.assertEqual(q2.vezes_usada_recentemente, 5)
+
+    def test_isolamento_historico_por_mascara(self):
+        """Verifica que o histórico de uso não vaza entre máscaras diferentes."""
+        from provas.models import Prova, ProvaQuestao
+
+        outra_mascara = Mascara.objects.create(
+            titulo='Outra Turma de Algoritmos',
+            disciplina=self.disc,
+            quantidade_questoes=2,
+            percentual_facil=100,
+            percentual_medio=0,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        # Gera prova na outra_mascara usando Q1
+        p_outra = Prova.objects.create(mascara=outra_mascara, titulo='Caderno Outra', autor=self.user)
+        ProvaQuestao.objects.create(prova=p_outra, questao=self.questoes[0], ordem=1, numero=1)
+
+        # Na máscara original, Q1 deve continuar com 0 utilizações
+        candidatas_orig = list(self.mascara.consultar_questoes_priorizadas())
+        q1_orig = next(q for q in candidatas_orig if q.id == self.questoes[0].id)
+        self.assertEqual(q1_orig.vezes_usada_recentemente, 0)
+
+        # Na outra máscara, Q1 tem 1 utilização
+        candidatas_outra = list(outra_mascara.consultar_questoes_priorizadas())
+        q1_outra = next(q for q in candidatas_outra if q.id == self.questoes[0].id)
+        self.assertEqual(q1_outra.vezes_usada_recentemente, 1)
+
+    def test_priorizacao_enade_com_menos_usadas(self):
+        """Verifica que priorizar_enade=True pontua questões ENADE mantendo desempate por menor uso."""
+        self.mascara.priorizar_enade = True
+        self.mascara.save()
+
+        # Marca Q4 como ENADE
+        self.questoes[3].origem = 'ENADE ADS 2021'
+        self.questoes[3].save()
+
+        candidatas = list(self.mascara.consultar_questoes_priorizadas())
+        # Q4 deve ser a primeira questão devido a priorizar_enade
+        self.assertEqual(candidatas[0].id, self.questoes[3].id)
+
+    def test_selecionar_questoes_por_matriz_fluxo_completo(self):
+        """Verifica a seleção automatizada completa por matriz de metas sem duplicações."""
+        selecionadas = self.mascara.selecionar_questoes_automatizada()
+        self.assertEqual(len(selecionadas), 2)
+        # IDs devem ser únicos
+        ids = [q.id for q in selecionadas]
+        self.assertEqual(len(ids), len(set(ids)))
+
+
+
 

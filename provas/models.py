@@ -235,6 +235,41 @@ class Mascara(models.Model):
                 defaults={'percentual': perc, 'quantidade_questoes': qtd},
             )
 
+    def consultar_questoes_priorizadas(
+        self,
+        topico_id=None,
+        dificuldade=None,
+        tipo=None,
+        limite_provas_recentes=5,
+        excluir_ids=None,
+    ):
+        """
+        Retorna QuerySet de questões ativas anotadas e ordenadas pela restrição do RF07:
+        priorizando questões NÃO usadas (ou MENOS usadas) nas últimas 5 gerações desta máscara.
+        """
+        from .services.question_selector import consultar_questoes_candidatas_priorizadas
+
+        return consultar_questoes_candidatas_priorizadas(
+            mascara=self,
+            topico_id=topico_id,
+            dificuldade=dificuldade,
+            tipo=tipo,
+            limite_provas_recentes=limite_provas_recentes,
+            excluir_ids=excluir_ids,
+        )
+
+    def selecionar_questoes_automatizada(self, limite_provas_recentes=5):
+        """
+        Executa a seleção automatizada de questões (RF07) para compor a prova,
+        respeitando a matriz de metas por célula (tópico x dificuldade) e o histórico de uso.
+        """
+        from .services.question_selector import selecionar_questoes_por_matriz
+
+        return selecionar_questoes_por_matriz(
+            mascara=self,
+            limite_provas_recentes=limite_provas_recentes,
+        )
+
     @property
     def criterios_topico(self):
         """Propriedade de conveniência para a convenção de critérios de tópicos."""
@@ -336,6 +371,86 @@ class MascaraCriterioTopico(models.Model):
             raise ValidationError({'percentual': 'O percentual do tópico não pode exceder 100%.'})
 
 
+class Prova(models.Model):
+    """
+    Avaliação acadêmica gerada a partir de uma Máscara de Prova.
+    Rastreia cadernos de prova, data de aplicação e histórico de utilização de questões (RF07).
+    """
+
+    mascara = models.ForeignKey(
+        Mascara,
+        on_delete=models.CASCADE,
+        related_name='provas_geradas',
+        verbose_name='máscara de prova',
+    )
+    titulo = models.CharField('título da prova', max_length=250)
+    numero_caderno = models.PositiveIntegerField('número do caderno', default=1)
+    questoes = models.ManyToManyField(
+        Questao,
+        through='ProvaQuestao',
+        related_name='provas',
+        verbose_name='questões da prova',
+    )
+    autor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='provas_geradas',
+        verbose_name='docente responsável',
+    )
+    criado_em = models.DateTimeField('data de geração', auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['-criado_em', 'numero_caderno']
+        verbose_name = 'prova gerada'
+        verbose_name_plural = 'provas geradas'
+
+    def __str__(self):
+        return f'{self.titulo} (Caderno {self.numero_caderno})'
+
+
+class ProvaQuestao(models.Model):
+    """
+    Item/associação de uma questão a uma prova gerada específica.
+    """
+
+    prova = models.ForeignKey(
+        Prova,
+        on_delete=models.CASCADE,
+        related_name='itens',
+        verbose_name='prova',
+    )
+    questao = models.ForeignKey(
+        Questao,
+        on_delete=models.PROTECT,
+        related_name='utilizacoes_provas',
+        verbose_name='questão',
+    )
+    numero = models.PositiveIntegerField('número da questão no exame', default=1)
+    ordem = models.PositiveIntegerField('ordem de exibição', default=1)
+    pontuacao = models.DecimalField(
+        'pontuação da questão',
+        max_digits=5,
+        decimal_places=2,
+        default=1.00,
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('prova', 'questao'), ('prova', 'ordem')]
+        ordering = ['ordem']
+        verbose_name = 'questão da prova'
+        verbose_name_plural = 'questões da prova'
+
+    def __str__(self):
+        return f'{self.prova} • Questão {self.numero} (Q{self.questao_id})'
+
+
 # Aliases para retrocompatibilidade contínua
 MascaraProva = Mascara
 MascaraTopico = MascaraCriterioTopico
+

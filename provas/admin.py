@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico
+from .models import (
+    Mascara,
+    MascaraCriterioDificuldade,
+    MascaraCriterioTopico,
+    Prova,
+    ProvaQuestao,
+)
 
 
 class MascaraCriterioDificuldadeInline(admin.TabularInline):
@@ -44,3 +50,18 @@ class MascaraCriterioTopicoAdmin(admin.ModelAdmin):
     list_display = ['mascara', 'topico', 'percentual', 'quantidade_questoes']
     list_filter = ['mascara__disciplina']
     search_fields = ['mascara__titulo', 'topico__nome']
+
+
+class ProvaQuestaoInline(admin.TabularInline):
+    model = ProvaQuestao
+    extra = 0
+    readonly_fields = ['numero', 'ordem', 'questao', 'pontuacao', 'criado_em']
+
+
+@admin.register(Prova)
+class ProvaAdmin(admin.ModelAdmin):
+    list_display = ['titulo', 'mascara', 'numero_caderno', 'autor', 'criado_em']
+    list_filter = ['mascara__disciplina', 'criado_em']
+    search_fields = ['titulo', 'mascara__titulo']
+    inlines = [ProvaQuestaoInline]
+
