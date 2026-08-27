@@ -71,7 +71,7 @@ class CSVQuestaoParserTest(TestCase):
             '\ufeff'
             'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
             'ENADE 2023,5,Questão com BOM,Alt A,Alt B,,,,A,\n'
-        ).encode('utf-8')
+        ).encode()
 
         result = CSVQuestaoParser.parse(csv_bytes)
         self.assertEqual(len(result), 1)
@@ -1747,3 +1747,135 @@ class QuestaoListPaginationTest(TestCase):
         response_overflow = self.client.get(f'{self.url}?page=999')
         self.assertEqual(response_overflow.status_code, 200)
         self.assertEqual(response_overflow.context['page_obj'].number, 2)
+
+
+# ---------------------------------------------------------------------------
+# Testes de segurança — CSVUploadForm (extensão, tamanho, magic bytes)
+# ---------------------------------------------------------------------------
+class CSVUploadFormTest(TestCase):
+    """
+    Testes unitários para CSVUploadForm.
+
+    Cobre validação de extensão, tamanho máximo e assinatura binária (magic
+    bytes) para arquivos CSV e XLSX enviados no upload de importação em lote.
+    """
+
+    def _make_form(self, filename, content, content_type='text/csv'):
+        """Atalho: cria um CSVUploadForm com um arquivo em memória."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from .forms import CSVUploadForm
+
+        file_obj = SimpleUploadedFile(filename, content, content_type=content_type)
+        return CSVUploadForm(data={}, files={'arquivo': file_obj})
+
+    # -- Casos válidos -------------------------------------------------------
+
+    def test_valid_csv_file(self):
+        """Arquivo CSV bem formado deve passar na validação."""
+        csv_bytes = b'origem,questao,enunciado\nEXAMPLE,1,Enunciado de teste\n'
+        form = self._make_form('questoes.csv', csv_bytes)
+        self.assertTrue(form.is_valid(), msg=form.errors)
+
+    def test_valid_xlsx_file(self):
+        """Arquivo XLSX real (com magic bytes PK\\x03\\x04) deve passar na validação."""
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        buf = io.BytesIO()
+        wb.save(buf)
+        xlsx_bytes = buf.getvalue()
+
+        form = self._make_form(
+            'questoes.xlsx',
+            xlsx_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertTrue(form.is_valid(), msg=form.errors)
+
+    # -- Extensão inválida ---------------------------------------------------
+
+    def test_invalid_extension_pdf(self):
+        """Arquivo com extensão .pdf deve ser rejeitado."""
+        form = self._make_form('relatorio.pdf', b'%PDF-1.4 content here', content_type='application/pdf')
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+        self.assertIn('Formato inválido', form.errors['arquivo'][0])
+
+    def test_invalid_extension_exe(self):
+        """Arquivo com extensão .exe deve ser rejeitado."""
+        form = self._make_form('malware.exe', b'MZ\x90\x00', content_type='application/octet-stream')
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+
+    def test_invalid_extension_txt(self):
+        """Arquivo com extensão .txt deve ser rejeitado (mesmo que conteúdo seja CSV)."""
+        csv_bytes = b'origem,questao,enunciado\nEXAMPLE,1,Enunciado\n'
+        form = self._make_form('questoes.txt', csv_bytes, content_type='text/plain')
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+
+    # -- Tamanho máximo ------------------------------------------------------
+
+    def test_file_too_large(self):
+        """Arquivo maior que CSV_UPLOAD_MAX_SIZE_MB deve ser rejeitado."""
+        from django.test import override_settings
+
+        # Cria conteúdo de 6 MB (acima do padrão de 5 MB)
+        large_content = b'A' * (6 * 1024 * 1024)
+        with override_settings(CSV_UPLOAD_MAX_SIZE_MB=5):
+            form = self._make_form('grande.csv', large_content)
+            self.assertFalse(form.is_valid())
+            self.assertIn('arquivo', form.errors)
+            self.assertIn('muito grande', form.errors['arquivo'][0])
+
+    def test_file_at_exact_limit_is_accepted(self):
+        """Arquivo exatamente no limite de tamanho deve ser aceito."""
+        from django.test import override_settings
+
+        # 5 MB exatos — usa conteúdo CSV válido (sem bytes nulos)
+        limit_bytes = 5 * 1024 * 1024
+        # Cabeçalho CSV preenchido até o limite
+        header = b'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+        padding = b'x' * (limit_bytes - len(header))
+        content = header + padding
+
+        with override_settings(CSV_UPLOAD_MAX_SIZE_MB=5):
+            form = self._make_form('limite.csv', content)
+            self.assertTrue(form.is_valid(), msg=form.errors)
+
+    # -- Magic bytes ---------------------------------------------------------
+
+    def test_binary_file_renamed_to_csv(self):
+        """Arquivo binário (com bytes nulos) renomeado para .csv deve ser rejeitado."""
+        # Simula um arquivo binário com bytes nulos
+        binary_content = b'MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff'
+        form = self._make_form('malware.csv', binary_content)
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+        self.assertIn('binário', form.errors['arquivo'][0])
+
+    def test_xlsx_with_wrong_magic_bytes(self):
+        """Arquivo com extensão .xlsx mas magic bytes incorretos deve ser rejeitado."""
+        # Conteúdo de texto puro — não tem a assinatura ZIP (PK\x03\x04)
+        fake_xlsx = b'Este nao e um arquivo xlsx real'
+        form = self._make_form('fake.xlsx', fake_xlsx, content_type='application/octet-stream')
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+        self.assertIn('não corresponde', form.errors['arquivo'][0])
+
+    def test_xls_with_wrong_magic_bytes(self):
+        """Arquivo com extensão .xls mas magic bytes incorretos deve ser rejeitado."""
+        fake_xls = b'Este nao e um arquivo xls real'
+        form = self._make_form('fake.xls', fake_xls, content_type='application/octet-stream')
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+        self.assertIn('não corresponde', form.errors['arquivo'][0])
+
+    def test_csv_utf8_bom_is_valid(self):
+        """CSV com BOM UTF-8 (\\xef\\xbb\\xbf) deve ser aceito normalmente."""
+        bom_csv = b'\xef\xbb\xbforigem,questao,enunciado\nEXAMPLE,1,Enunciado BOM\n'
+        form = self._make_form('bom.csv', bom_csv)
+        self.assertTrue(form.is_valid(), msg=form.errors)
