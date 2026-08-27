@@ -141,3 +141,83 @@ def selecionar_questoes_por_matriz(
         random.shuffle(questoes_selecionadas)
 
     return questoes_selecionadas
+
+
+def gerar_prova_automatizada(
+    mascara,
+    autor=None,
+    titulo: str | None = None,
+    numero_caderno: int = 1,
+    limite_provas_recentes: int = 5,
+):
+    """
+    Gera uma avaliação acadêmica persistida (Prova e ProvaQuestao) a partir de uma Máscara.
+
+    Regra de Integridade e Bloqueio:
+    - Valida o estoque por célula antes de qualquer comit no banco de dados.
+    - Lança `EstoqueInsuficienteError` se faltar qualquer questão, impedindo provas incompletas.
+    - Executa a persistência dentro de uma transação atômica (`transaction.atomic`).
+
+    Args:
+        mascara: Instância de Mascara.
+        autor: Usuário docente solicitante.
+        titulo: Título customizado da avaliação (opcional).
+        numero_caderno: Número do caderno de prova (padrão: 1).
+        limite_provas_recentes: Janela deslizante de histórico de repetições (padrão: 5).
+
+    Returns:
+        Instância de Prova persistida com todas as suas questões vinculadas.
+
+    Raises:
+        EstoqueInsuficienteError: Caso o acervo não possua questões suficientes para todas as células.
+    """
+    from django.db import transaction
+
+    from provas.models import Prova, ProvaQuestao
+    from provas.services.stock_validator import (
+        EstoqueInsuficienteError,
+        validar_disponibilidade_estoque,
+    )
+
+    # 1. Validação prévia de disponibilidade por célula
+    relatorio = validar_disponibilidade_estoque(mascara)
+    if not relatorio.esta_valido:
+        raise EstoqueInsuficienteError(relatorio)
+
+    # 2. Seleção e persistência atômica
+    with transaction.atomic():
+        questoes = selecionar_questoes_por_matriz(
+            mascara=mascara,
+            limite_provas_recentes=limite_provas_recentes,
+        )
+
+        if len(questoes) < mascara.quantidade_questoes:
+            # Revalidação de segurança caso tenha ocorrido concorrência
+            raise EstoqueInsuficienteError(relatorio)
+
+        titulo_prova = titulo or f'{mascara.titulo} (Caderno {numero_caderno})'
+
+        prova = Prova.objects.create(
+            mascara=mascara,
+            titulo=titulo_prova,
+            numero_caderno=numero_caderno,
+            autor=autor or mascara.autor,
+        )
+
+        # Cálculo da pontuação proporcional por item
+        pontuacao_item = round(mascara.valor_total / mascara.quantidade_questoes, 2)
+
+        itens_prova = [
+            ProvaQuestao(
+                prova=prova,
+                questao=q,
+                numero=idx + 1,
+                ordem=idx + 1,
+                pontuacao=pontuacao_item,
+            )
+            for idx, q in enumerate(questoes)
+        ]
+        ProvaQuestao.objects.bulk_create(itens_prova)
+
+    return prova
+

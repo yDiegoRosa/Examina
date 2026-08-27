@@ -258,6 +258,28 @@ class Mascara(models.Model):
             excluir_ids=excluir_ids,
         )
 
+    def validar_estoque(self):
+        """
+        Audita o banco de questões e valida a disponibilidade real para cada célula (Tópico × Dificuldade).
+        """
+        from .services.stock_validator import validar_disponibilidade_estoque
+
+        return validar_disponibilidade_estoque(self)
+
+    def gerar_prova(self, autor=None, titulo=None, numero_caderno=1, limite_provas_recentes=5):
+        """
+        Gera uma Prova persistida e vinculada a esta Máscara após validação rigorosa de estoque.
+        """
+        from .services.question_selector import gerar_prova_automatizada
+
+        return gerar_prova_automatizada(
+            mascara=self,
+            autor=autor,
+            titulo=titulo,
+            numero_caderno=numero_caderno,
+            limite_provas_recentes=limite_provas_recentes,
+        )
+
     def selecionar_questoes_automatizada(self, limite_provas_recentes=5):
         """
         Executa a seleção automatizada de questões (RF07) para compor a prova,

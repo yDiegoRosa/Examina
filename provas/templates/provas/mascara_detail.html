@@ -24,6 +24,18 @@
     <a href="{% url 'provas:mascara_update' pk=mascara.pk %}" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-pencil-square"></i> Editar Máscara
     </a>
+    {% if relatorio_estoque.esta_valido %}
+    <form action="{% url 'provas:mascara_gerar_prova' pk=mascara.pk %}" method="post" style="display: inline-block;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary flex items-center gap-2" style="background: var(--fae-blue-electric); box-shadow: 0 4px 14px rgba(0, 128, 255, 0.35);">
+        <i class="bi bi-magic"></i> Gerar Avaliação (Sorteio RF07)
+      </button>
+    </form>
+    {% else %}
+    <button type="button" class="btn flex items-center gap-2" style="background: #E2E8F0; color: #64748B; cursor: not-allowed; opacity: 0.8;" title="Geração bloqueada: Estoque de questões insuficiente" disabled>
+      <i class="bi bi-slash-circle"></i> Geração Bloqueada (Faltam {{ relatorio_estoque.total_faltante }})
+    </button>
+    {% endif %}
     <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline flex items-center gap-2">
       <i class="bi bi-arrow-left"></i> Voltar à Lista
     </a>
@@ -210,24 +222,51 @@
 <!-- Diagnóstico de Estoque no Acervo -->
 <div class="card-surface p-4 mb-4">
   <div class="flex items-center justify-between mb-3">
-    <h3 class="font-bold text-main flex items-center gap-2 mb-0">
-      <i class="bi bi-box-seam-fill text-primary" style="color: var(--fae-blue-primary);"></i> Diagnóstico de Estoque no Banco de Questões
-    </h3>
-    {% if diagnostico.suficiente %}
-    <span class="badge-pill badge-pill-active">Estoque Pronto para Sorteio ✅</span>
+    <div>
+      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
+        <i class="bi bi-box-seam-fill text-primary" style="color: var(--fae-blue-primary);"></i> Diagnóstico de Estoque no Banco de Questões
+      </h3>
+      <p class="text-muted small mb-0">
+        Auditoria em tempo real de disponibilidade de itens para cada combinação pedagógica da avaliação.
+      </p>
+    </div>
+    {% if relatorio_estoque.esta_valido %}
+    <span class="badge-pill badge-pill-active font-bold">Estoque Pronto para Geração ✅</span>
     {% else %}
-    <span class="badge-pill badge-pill-inactive">Estoque Parcial</span>
+    <span class="badge-pill badge-pill-inactive font-bold" style="background: rgba(239, 68, 68, 0.15); color: var(--color-danger); border: 1px solid var(--color-danger);">
+      ⚠️ Bloqueado: Faltam {{ relatorio_estoque.total_faltante }} questões
+    </span>
     {% endif %}
   </div>
+
+  {% if not relatorio_estoque.esta_valido %}
+  <!-- Alerta Detalhado de Bloqueio por Insuficiência -->
+  <div class="p-3 mb-3" style="background: rgba(239, 68, 68, 0.08); border-left: 4px solid var(--color-danger); border-radius: var(--radius-sm);">
+    <div class="flex items-center gap-2 mb-2 font-bold text-danger">
+      <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.15rem;"></i>
+      Atenção: A geração desta prova está bloqueada preventivamente até que os seguintes déficits sejam supridos no acervo:
+    </div>
+    <ul class="mb-0 text-secondary small" style="padding-left: 1.5rem; line-height: 1.6;">
+      {% for def in relatorio_estoque.deficits %}
+      <li>
+        <strong>{{ def.topico_nome }}</strong> — Dificuldade <strong>{{ def.dificuldade_display }}</strong>:
+        Necessário: <span class="font-mono font-bold">{{ def.quantidade_necessaria }}</span> |
+        Disponível: <span class="font-mono">{{ def.quantidade_disponivel }}</span> |
+        <span class="font-bold text-danger">Faltam {{ def.quantidade_faltante }} questão(ões)</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 
   <div class="grid grid-cols-12 gap-3">
     <div class="col-span-3 stat-card-unified p-3 text-center flex-col justify-center">
       <div class="stat-label-unified">Total Necessário</div>
-      <div class="stat-num-unified font-mono">{{ diagnostico.total_necessario }}</div>
+      <div class="stat-num-unified font-mono">{{ relatorio_estoque.total_necessario }}</div>
     </div>
     <div class="col-span-3 stat-card-unified p-3 text-center flex-col justify-center">
-      <div class="stat-label-unified">Total Disponível</div>
-      <div class="stat-num-unified font-mono" style="color: var(--fae-blue-primary);">{{ diagnostico.total_disponivel }}</div>
+      <div class="stat-label-unified">Total no Acervo</div>
+      <div class="stat-num-unified font-mono" style="color: var(--fae-blue-primary);">{{ relatorio_estoque.total_disponivel }}</div>
     </div>
     <div class="col-span-2 stat-card-unified p-3 text-center flex-col justify-center">
       <div class="stat-label-unified">Saldo Fácil</div>

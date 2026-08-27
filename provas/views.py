@@ -14,6 +14,7 @@ from banco_questoes.models import Disciplina, Questao, Topico
 from .forms import MascaraProvaForm, MascaraTopicoFormSet
 from .models import MascaraProva
 from .services.pdf_generator import PDFGeneratorService
+from .services.stock_validator import EstoqueInsuficienteError
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,7 @@ def mascara_detail(request, pk):
     }
 
     matriz_metas = mascara.calcular_matriz_metas()
+    relatorio_estoque = mascara.validar_estoque()
 
     return render(
         request,
@@ -225,8 +227,36 @@ def mascara_detail(request, pk):
             'distribuicao_dif': distribuicao_dif,
             'matriz_metas': matriz_metas,
             'diagnostico': diagnostico,
+            'relatorio_estoque': relatorio_estoque,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Geração Automatizada de Prova (com Bloqueio por Insuficiência)
+# ---------------------------------------------------------------------------
+@require_POST
+@login_required
+def mascara_gerar_prova(request, pk):
+    """
+    Executa a geração e persistência de uma avaliação a partir da máscara.
+    Bloqueia a operação e notifica detalhadamente caso haja déficit de estoque no banco.
+    """
+    mascara = get_object_or_404(MascaraProva, pk=pk)
+
+    try:
+        prova = mascara.gerar_prova(autor=request.user)
+        messages.success(
+            request,
+            f'Avaliação "{prova.titulo}" gerada com sucesso contendo {prova.itens.count()} questões selecionadas!',
+        )
+        return redirect('provas:mascara_detail', pk=mascara.pk)
+    except EstoqueInsuficienteError as err:
+        messages.error(
+            request,
+            f'⚠️ Geração bloqueada: {err.mensagem}',
+        )
+        return redirect('provas:mascara_detail', pk=mascara.pk)
 
 
 # ---------------------------------------------------------------------------

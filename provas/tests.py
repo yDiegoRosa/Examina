@@ -1062,5 +1062,163 @@ class SelecaoQuestoesMenosUsadasTest(TestCase):
         self.assertEqual(len(ids), len(set(ids)))
 
 
+class BloqueioEstoqueInsuficienteTest(TestCase):
+    """Testes para validação de disponibilidade e bloqueio de geração por insuficiência de estoque."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_bloqueio', password='secret_password')  # noqa: S106
+        self.client.login(username='docente_bloqueio', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Banco de Dados II')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Indexação e Árvores B+')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Processamento de Consultas')
+
+        # Máscara que exige 4 questões:
+        # T1 (50% = 2 questões): 1 Fácil (50%), 1 Difícil (50%)
+        # T2 (50% = 2 questões): 1 Fácil (50%), 1 Difícil (50%)
+        self.mascara = Mascara.objects.create(
+            titulo='AV2 Banco de Dados',
+            disciplina=self.disc,
+            quantidade_questoes=4,
+            percentual_facil=50,
+            percentual_medio=0,
+            percentual_dificil=50,
+            autor=self.user,
+        )
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top1, percentual=50)
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top2, percentual=50)
+
+    def test_diagnostico_identifica_deficits_exatos_por_celula(self):
+        """Verifica que o relatório identifica com precisão as células com déficit e calcula itens faltantes."""
+        # Criamos apenas 1 questão Fácil no T1 (demanda é 1 Fácil e 1 Difícil para T1 e para T2)
+        Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão T1 Fácil',
+            autor=self.user,
+            ativo=True,
+        )
+
+        relatorio = self.mascara.validar_estoque()
+        self.assertFalse(relatorio.esta_valido)
+        # Faltam: T1 Difícil (1), T2 Fácil (1), T2 Difícil (1) -> 3 déficits
+        self.assertEqual(len(relatorio.deficits), 3)
+        self.assertEqual(relatorio.total_faltante, 3)
+
+        # Verifica dados de um déficit específico
+        deficit_t1_d = next(d for d in relatorio.deficits if d.topico_id == self.top1.id and d.dificuldade == 'D')
+        self.assertEqual(deficit_t1_d.quantidade_necessaria, 1)
+        self.assertEqual(deficit_t1_d.quantidade_disponivel, 0)
+        self.assertEqual(deficit_t1_d.quantidade_faltante, 1)
+
+    def test_bloqueio_gerar_prova_lanca_excecao_e_nao_comita(self):
+        """Garante que a tentativa de gerar prova com estoque insuficiente é abortada sem salvar nada."""
+        from provas.models import Prova, ProvaQuestao
+        from provas.services.stock_validator import EstoqueInsuficienteError
+
+        with self.assertRaises(EstoqueInsuficienteError) as ctx:
+            self.mascara.gerar_prova(autor=self.user)
+
+        self.assertIn('Déficits identificados', str(ctx.exception))
+        # Nenhuma prova deve ter sido persistida
+        self.assertEqual(Prova.objects.count(), 0)
+        self.assertEqual(ProvaQuestao.objects.count(), 0)
+
+    def test_gerar_prova_sucesso_quando_estoque_suficiente(self):
+        """Garante que com estoque completo a avaliação é criada e todas as questões são associadas."""
+        # Popula exatamente o estoque necessário:
+        # T1: 1 Fácil, 1 Difícil
+        Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Q T1 F',
+            autor=self.user,
+            ativo=True,
+        )
+        Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.DIFICIL,
+            enunciado='Q T1 D',
+            autor=self.user,
+            ativo=True,
+        )
+        # T2: 1 Fácil, 1 Difícil
+        Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top2,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Q T2 F',
+            autor=self.user,
+            ativo=True,
+        )
+        Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top2,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.DIFICIL,
+            enunciado='Q T2 D',
+            autor=self.user,
+            ativo=True,
+        )
+
+        relatorio = self.mascara.validar_estoque()
+        self.assertTrue(relatorio.esta_valido)
+        self.assertEqual(len(relatorio.deficits), 0)
+
+        prova = self.mascara.gerar_prova(autor=self.user)
+        self.assertIsNotNone(prova.pk)
+        self.assertEqual(prova.itens.count(), 4)
+        self.assertEqual(prova.mascara, self.mascara)
+
+    def test_view_mascara_gerar_prova_com_estoque_insuficiente_redireciona_com_erro(self):
+        """Testa o endpoint POST mascara_gerar_prova quando o estoque está insuficiente."""
+        from django.urls import reverse
+
+        from provas.models import Prova
+
+        url = reverse('provas:mascara_gerar_prova', kwargs={'pk': self.mascara.pk})
+        response = self.client.post(url, follow=True)
+
+        self.assertRedirects(response, reverse('provas:mascara_detail', kwargs={'pk': self.mascara.pk}))
+        self.assertContains(response, 'Geração bloqueada')
+        self.assertEqual(Prova.objects.count(), 0)
+
+    def test_view_mascara_gerar_prova_com_sucesso(self):
+        """Testa o endpoint POST mascara_gerar_prova gerando com sucesso e notificando o usuário."""
+        from django.urls import reverse
+
+        from provas.models import Prova
+
+        # Criando o estoque completo
+        for t in [self.top1, self.top2]:
+            for d in [Questao.Dificuldade.FACIL, Questao.Dificuldade.DIFICIL]:
+                Questao.objects.create(
+                    disciplina=self.disc,
+                    topico=t,
+                    tipo=Questao.Tipo.OBJETIVA,
+                    dificuldade=d,
+                    enunciado=f'Q {t.nome} {d}',
+                    autor=self.user,
+                    ativo=True,
+                )
+
+        url = reverse('provas:mascara_gerar_prova', kwargs={'pk': self.mascara.pk})
+        response = self.client.post(url, follow=True)
+
+        self.assertRedirects(response, reverse('provas:mascara_detail', kwargs={'pk': self.mascara.pk}))
+        self.assertContains(response, 'gerada com sucesso')
+        self.assertEqual(Prova.objects.count(), 1)
+
+
+
 
 
