@@ -161,20 +161,23 @@
           </div>
         </div>
 
-        <!-- Presets Rápidos -->
-        <div class="flex gap-1 mb-4 flex-wrap">
-          <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="40" data-medio="40" data-dificil="20" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
-            Equilibrada (40/40/20)
-          </button>
-          <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="50" data-medio="30" data-dificil="20" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
-            Formativa (50/30/20)
-          </button>
-          <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="20" data-medio="50" data-dificil="30" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
-            Aprofundada (20/50/30)
-          </button>
+        <!-- Presets Pedagógicos Rápidos -->
+        <div class="mb-3">
+          <div class="small text-muted font-bold mb-1">Presets Rápidos de Distribuição:</div>
+          <div class="flex gap-1 flex-wrap">
+            <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="40" data-medio="40" data-dificil="20" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+              Equilibrada (40/40/20)
+            </button>
+            <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="50" data-medio="30" data-dificil="20" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+              Formativa (50/30/20)
+            </button>
+            <button type="button" class="btn btn-outline small btn-preset-dif" data-facil="20" data-medio="50" data-dificil="30" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+              Aprofundada (20/50/30)
+            </button>
+          </div>
         </div>
 
-        <!-- Fácil -->
+        <!-- Nível Fácil -->
         <div class="mb-3 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold" style="color: var(--color-success);">
@@ -188,7 +191,7 @@
           </div>
         </div>
 
-        <!-- Médio -->
+        <!-- Nível Médio -->
         <div class="mb-3 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold" style="color: var(--fae-blue-primary);">
@@ -202,7 +205,7 @@
           </div>
         </div>
 
-        <!-- Difícil -->
+        <!-- Nível Difícil -->
         <div class="mb-2 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold" style="color: var(--color-danger);">
@@ -240,20 +243,22 @@
         </div>
         {% endif %}
 
-        <div class="flex justify-between items-center mb-3">
-          <span class="small text-muted">Defina a proporção dos conteúdos:</span>
-          <button type="button" class="btn btn-outline small" id="btn-balancear-topicos" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+        <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+          <button type="button" class="btn btn-primary small" id="btn-add-topico" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">
+            <i class="bi bi-plus-circle-fill"></i> Adicionar Tópico
+          </button>
+          <button type="button" class="btn btn-outline small" id="btn-balancear-topicos" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">
             <i class="bi bi-distribute-horizontal"></i> Balancear Igualmente
           </button>
         </div>
 
         <div id="topicos-container">
           {% for top_form in formset %}
-          <div class="topico-form-row mb-2 p-2" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
+          <div class="topico-form-row mb-2" data-form-index="{{ forloop.counter0 }}">
             {{ top_form.id }}
             <div class="grid grid-cols-12 gap-2 items-center">
               <div class="col-span-6">
-                <label class="small text-muted font-bold mb-0">Tópico:</label>
+                <label class="small text-muted font-bold mb-0">Tópico Curricular:</label>
                 {{ top_form.topico }}
               </div>
               <div class="col-span-3">
@@ -261,13 +266,16 @@
                 {{ top_form.percentual }}
               </div>
               <div class="col-span-2">
-                <label class="small text-muted font-bold mb-0">Qtd:</label>
+                <label class="small text-muted font-bold mb-0">Qtd Itens:</label>
                 {{ top_form.quantidade_questoes }}
               </div>
               <div class="col-span-1 text-center pt-3">
-                {% if top_form.DELETE %}
-                <span title="Excluir">{{ top_form.DELETE }}</span>
-                {% endif %}
+                <button type="button" class="btn-remove-topico" title="Remover tópico da matriz">
+                  <i class="bi bi-trash3-fill"></i>
+                </button>
+                <div class="d-none">
+                  {{ top_form.DELETE }}
+                </div>
               </div>
             </div>
             {% if top_form.errors %}
@@ -275,6 +283,10 @@
             {% endif %}
           </div>
           {% endfor %}
+        </div>
+
+        <div id="topicos-empty-msg" class="p-3 text-muted text-center small {% if formset.forms %}d-none{% endif %}" style="background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px;">
+          <i class="bi bi-info-circle"></i> Nenhum tópico especificado. O sorteio abrangerá todos os tópicos ativos da disciplina. Clique em <strong>"Adicionar Tópico"</strong> para definir proporções customizadas.
         </div>
 
       </div>
@@ -295,7 +307,7 @@
 
       <div class="grid grid-cols-12 gap-3 mb-3">
         <div class="col-span-12 p-3" style="background: #F8FAFC; border-left: 3px solid var(--fae-blue-primary); border-radius: 4px;">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between flex-wrap gap-2">
             <div>
               <div class="font-bold text-main" id="diag-titulo">Banco de Questões da FAETERJ-Rio</div>
               <div class="small text-muted mt-1" id="diag-info">
@@ -303,8 +315,8 @@
               </div>
             </div>
             <div class="text-right">
-              <span id="diag-saldo-total" class="font-bold font-mono" style="font-size: 1.25rem; color: var(--fae-blue-primary);">—</span>
-              <div class="small text-muted">questões no acervo</div>
+              <span id="diag-saldo-total" class="font-bold font-mono" style="font-size: 1.35rem; color: var(--fae-blue-primary);">—</span>
+              <div class="small text-muted">questões disponíveis</div>
             </div>
           </div>
         </div>
@@ -350,6 +362,37 @@
   </div>
 
 </form>
+
+<!-- Template de Linha Vazia para Inserção Dinâmica de Tópicos -->
+<template id="empty-topico-form-template">
+  <div class="topico-form-row mb-2" data-form-index="__prefix__">
+    <input type="hidden" name="topicos_distribuicao-__prefix__-id" id="id_topicos_distribuicao-__prefix__-id">
+    <div class="grid grid-cols-12 gap-2 items-center">
+      <div class="col-span-6">
+        <label class="small text-muted font-bold mb-0">Tópico Curricular:</label>
+        <select name="topicos_distribuicao-__prefix__-topico" class="form-select topico-select" id="id_topicos_distribuicao-__prefix__-topico">
+          <option value="">Selecione um tópico...</option>
+        </select>
+      </div>
+      <div class="col-span-3">
+        <label class="small text-muted font-bold mb-0">% Prova:</label>
+        <input type="number" name="topicos_distribuicao-__prefix__-percentual" value="0" min="0" max="100" class="form-input topico-percentual-input" id="id_topicos_distribuicao-__prefix__-percentual">
+      </div>
+      <div class="col-span-2">
+        <label class="small text-muted font-bold mb-0">Qtd Itens:</label>
+        <input type="number" name="topicos_distribuicao-__prefix__-quantidade_questoes" value="0" readonly class="form-input topico-qtd-input" id="id_topicos_distribuicao-__prefix__-quantidade_questoes">
+      </div>
+      <div class="col-span-1 text-center pt-3">
+        <button type="button" class="btn-remove-topico" title="Remover tópico da matriz">
+          <i class="bi bi-trash3-fill"></i>
+        </button>
+        <div class="d-none">
+          <input type="checkbox" name="topicos_distribuicao-__prefix__-DELETE" id="id_topicos_distribuicao-__prefix__-DELETE">
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 {% endblock %}
 
 {% block extra_js %}
@@ -379,45 +422,57 @@
   const resumoQtdDif = document.getElementById('resumo-qtd-dif');
   const badgeStatusDif = document.getElementById('badge-status-dif');
 
+  const topicosContainer = document.getElementById('topicos-container');
+  const totalFormsInput = document.getElementById('id_topicos_distribuicao-TOTAL_FORMS');
+  const emptyTemplate = document.getElementById('empty-topico-form-template');
+  const btnAddTopico = document.getElementById('btn-add-topico');
+  const btnBalancear = document.getElementById('btn-balancear-topicos');
+  const badgeTopicos = document.getElementById('badge-status-topicos');
+  const emptyMsg = document.getElementById('topicos-empty-msg');
+
+  let currentTopicosList = [];
+
   // Sincronização Sliders e Inputs de Dificuldade
   function syncDificuldade(source) {
     if (source === 'slider') {
-      inputFacil.value = sliderFacil.value;
-      inputMedio.value = sliderMedio.value;
-      inputDificil.value = sliderDificil.value;
+      if (inputFacil && sliderFacil) inputFacil.value = sliderFacil.value;
+      if (inputMedio && sliderMedio) inputMedio.value = sliderMedio.value;
+      if (inputDificil && sliderDificil) inputDificil.value = sliderDificil.value;
     } else {
-      sliderFacil.value = inputFacil.value;
-      sliderMedio.value = inputMedio.value;
-      sliderDificil.value = inputDificil.value;
+      if (sliderFacil && inputFacil) sliderFacil.value = inputFacil.value;
+      if (sliderMedio && inputMedio) sliderMedio.value = inputMedio.value;
+      if (sliderDificil && inputDificil) sliderDificil.value = inputDificil.value;
     }
 
-    const f = parseInt(inputFacil.value, 10) || 0;
-    const m = parseInt(inputMedio.value, 10) || 0;
-    const d = parseInt(inputDificil.value, 10) || 0;
-    const total = parseInt(totalInput.value, 10) || 10;
+    const f = parseInt(inputFacil ? inputFacil.value : 0, 10) || 0;
+    const m = parseInt(inputMedio ? inputMedio.value : 0, 10) || 0;
+    const d = parseInt(inputDificil ? inputDificil.value : 0, 10) || 0;
+    const total = parseInt(totalInput ? totalInput.value : 10, 10) || 10;
     const soma = f + m + d;
 
     // Atualiza barras
-    barFacil.style.width = `${f}%`;
-    barMedio.style.width = `${m}%`;
-    barDificil.style.width = `${d}%`;
+    if (barFacil) barFacil.style.width = `${f}%`;
+    if (barMedio) barMedio.style.width = `${m}%`;
+    if (barDificil) barDificil.style.width = `${d}%`;
 
     // Atualiza quantidades
     const qF = Math.round((total * f) / 100);
     const qM = Math.round((total * m) / 100);
     const qD = Math.round((total * d) / 100);
 
-    labelQtdFacil.textContent = `${qF} questões`;
-    labelQtdMedio.textContent = `${qM} questões`;
-    labelQtdDificil.textContent = `${qD} questões`;
-    resumoQtdDif.textContent = `${qF} Fáceis | ${qM} Médias | ${qD} Difíceis`;
+    if (labelQtdFacil) labelQtdFacil.textContent = `${qF} questões`;
+    if (labelQtdMedio) labelQtdMedio.textContent = `${qM} questões`;
+    if (labelQtdDificil) labelQtdDificil.textContent = `${qD} questões`;
+    if (resumoQtdDif) resumoQtdDif.textContent = `${qF} Fáceis | ${qM} Médias | ${qD} Difíceis`;
 
-    if (soma === 100) {
-      badgeStatusDif.className = 'badge-pill badge-pill-active';
-      badgeStatusDif.textContent = 'Soma: 100% ✅';
-    } else {
-      badgeStatusDif.className = 'badge-pill badge-pill-inactive';
-      badgeStatusDif.textContent = `Soma: ${soma}% (${soma < 100 ? 'Faltam ' + (100 - soma) + '%' : 'Excede em ' + (soma - 100) + '%'})`;
+    if (badgeStatusDif) {
+      if (soma === 100) {
+        badgeStatusDif.className = 'badge-pill badge-pill-active';
+        badgeStatusDif.textContent = 'Soma: 100% ✅';
+      } else {
+        badgeStatusDif.className = 'badge-pill badge-pill-danger';
+        badgeStatusDif.textContent = `Soma: ${soma}% (${soma < 100 ? 'Faltam ' + (100 - soma) + '%' : 'Excede em ' + (soma - 100) + '%'})`;
+      }
     }
   }
 
@@ -433,15 +488,16 @@
     totalInput.addEventListener('input', () => {
       syncDificuldade('input');
       recalcularQtdTopicos();
+      atualizarEstoqueDisciplina();
     });
   }
 
   // Presets de Dificuldade
   document.querySelectorAll('.btn-preset-dif').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      inputFacil.value = btn.dataset.facil;
-      inputMedio.value = btn.dataset.medio;
-      inputDificil.value = btn.dataset.dificil;
+      if (inputFacil) inputFacil.value = btn.dataset.facil;
+      if (inputMedio) inputMedio.value = btn.dataset.medio;
+      if (inputDificil) inputDificil.value = btn.dataset.dificil;
       syncDificuldade('input');
     });
   });
@@ -452,12 +508,13 @@
     const boxObj = document.getElementById('box-qtd-objetivas');
     const boxDis = document.getElementById('box-qtd-discursivas');
     if (mod === 'MISTA') {
-      boxObj.classList.remove('d-none');
-      boxDis.classList.remove('d-none');
+      if (boxObj) boxObj.classList.remove('d-none');
+      if (boxDis) boxDis.classList.remove('d-none');
     } else {
-      boxObj.classList.add('d-none');
-      boxDis.classList.add('d-none');
+      if (boxObj) boxObj.classList.add('d-none');
+      if (boxDis) boxDis.classList.add('d-none');
     }
+    atualizarEstoqueDisciplina();
   }
 
   if (modalidadeSelect) {
@@ -467,9 +524,14 @@
 
   // Tópicos e Balanceamento
   function recalcularQtdTopicos() {
-    const total = parseInt(totalInput.value, 10) || 10;
+    const total = parseInt(totalInput ? totalInput.value : 10, 10) || 10;
     let soma = 0;
+    let visibleCount = 0;
+
     document.querySelectorAll('.topico-form-row').forEach(function(row) {
+      if (row.style.display === 'none') return;
+      visibleCount++;
+
       const percInput = row.querySelector('.topico-percentual-input');
       const qtdInput = row.querySelector('.topico-qtd-input');
       if (percInput && qtdInput) {
@@ -479,28 +541,85 @@
       }
     });
 
-    const badgeTopicos = document.getElementById('badge-status-topicos');
+    if (emptyMsg) {
+      if (visibleCount === 0) {
+        emptyMsg.classList.remove('d-none');
+      } else {
+        emptyMsg.classList.add('d-none');
+      }
+    }
+
     if (badgeTopicos) {
-      if (soma === 100) {
+      if (visibleCount === 0) {
+        badgeTopicos.className = 'badge-pill badge-pill-inactive';
+        badgeTopicos.textContent = 'Distribuição Livre';
+      } else if (soma === 100) {
         badgeTopicos.className = 'badge-pill badge-pill-active';
         badgeTopicos.textContent = 'Soma: 100% ✅';
       } else {
-        badgeTopicos.className = 'badge-pill badge-pill-inactive';
-        badgeTopicos.textContent = `Soma: ${soma}%`;
+        badgeTopicos.className = 'badge-pill badge-pill-warning';
+        badgeTopicos.textContent = `Soma: ${soma}% (${soma < 100 ? 'Faltam ' + (100 - soma) + '%' : 'Excede ' + (soma - 100) + '%'})`;
       }
     }
   }
 
-  document.querySelectorAll('.topico-percentual-input').forEach(function(el) {
-    el.addEventListener('input', recalcularQtdTopicos);
-  });
+  function bindRowEvents(row) {
+    const percInput = row.querySelector('.topico-percentual-input');
+    if (percInput) {
+      percInput.addEventListener('input', recalcularQtdTopicos);
+    }
 
-  const btnBalancear = document.getElementById('btn-balancear-topicos');
+    const btnRemove = row.querySelector('.btn-remove-topico');
+    const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+
+    if (btnRemove) {
+      btnRemove.addEventListener('click', function() {
+        if (deleteCheckbox) {
+          deleteCheckbox.checked = true;
+          row.style.display = 'none';
+        } else {
+          row.remove();
+        }
+        recalcularQtdTopicos();
+      });
+    }
+  }
+
+  document.querySelectorAll('.topico-form-row').forEach(bindRowEvents);
+
+  // Adicionar Tópico Dinamicamente
+  if (btnAddTopico && emptyTemplate && totalFormsInput && topicosContainer) {
+    btnAddTopico.addEventListener('click', function() {
+      const currentCount = parseInt(totalFormsInput.value, 10) || 0;
+      const html = emptyTemplate.innerHTML.replace(/__prefix__/g, currentCount);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html.trim();
+      const newRow = tempDiv.firstChild;
+
+      // Popula o select com os tópicos da disciplina atual
+      const select = newRow.querySelector('.topico-select');
+      if (select && currentTopicosList.length > 0) {
+        select.innerHTML = '<option value="">Selecione um tópico...</option>';
+        currentTopicosList.forEach(function(t) {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.nome;
+          select.appendChild(opt);
+        });
+      }
+
+      topicosContainer.appendChild(newRow);
+      totalFormsInput.value = currentCount + 1;
+      bindRowEvents(newRow);
+      recalcularQtdTopicos();
+    });
+  }
+
+  // Balancear Tópicos Igualmente
   if (btnBalancear) {
     btnBalancear.addEventListener('click', function() {
       const activeRows = Array.from(document.querySelectorAll('.topico-form-row')).filter(function(row) {
-        const select = row.querySelector('.topico-select');
-        return select && select.value;
+        return row.style.display !== 'none';
       });
 
       if (activeRows.length === 0) return;
@@ -519,6 +638,24 @@
     });
   }
 
+  // Popula os selects existentes com os tópicos retornados
+  function populateTopicSelects(topicos) {
+    currentTopicosList = topicos || [];
+    document.querySelectorAll('.topico-select').forEach(function(select) {
+      const selectedVal = select.value;
+      select.innerHTML = '<option value="">Selecione um tópico...</option>';
+      currentTopicosList.forEach(function(t) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.nome;
+        if (String(t.id) === String(selectedVal)) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    });
+  }
+
   // Diagnóstico de Estoque via API AJAX
   function atualizarEstoqueDisciplina() {
     const discId = disciplinaSelect ? disciplinaSelect.value : '';
@@ -531,13 +668,21 @@
         const diagInfo = document.getElementById('diag-info');
         const badgeEstoque = document.getElementById('badge-diagnostico-estoque');
 
+        if (data.topicos) {
+          populateTopicSelects(data.topicos);
+        }
+
         if (data.estoque) {
           const totalAcervo = data.estoque.total || 0;
-          const totalNec = parseInt(totalInput.value, 10) || 10;
+          const totalNec = parseInt(totalInput ? totalInput.value : 10, 10) || 10;
 
           if (diagSaldo) diagSaldo.textContent = totalAcervo;
           if (diagInfo) {
-            diagInfo.innerHTML = `Acervo disponível em <strong>${data.disciplina_nome}</strong>: ${data.estoque.facil} Fáceis, ${data.estoque.medio} Médias, ${data.estoque.dificil} Difíceis (${data.estoque.objetivas} OBJ / ${data.estoque.discursivas} DIS).`;
+            diagInfo.innerHTML = `Acervo disponível em <strong>${data.disciplina_nome}</strong>: ` +
+              `<span class="badge-pill badge-pill-facil">${data.estoque.facil} Fáceis</span> ` +
+              `<span class="badge-pill badge-pill-medio">${data.estoque.medio} Médias</span> ` +
+              `<span class="badge-pill badge-pill-dificil">${data.estoque.dificil} Difíceis</span> ` +
+              `(${data.estoque.objetivas} Objetivas / ${data.estoque.discursivas} Discursivas).`;
           }
 
           if (badgeEstoque) {
@@ -548,7 +693,7 @@
               badgeEstoque.className = 'badge-pill badge-pill-active';
               badgeEstoque.textContent = 'Estoque Suficiente ✅';
             } else {
-              badgeEstoque.className = 'badge-pill badge-pill-inactive';
+              badgeEstoque.className = 'badge-pill badge-pill-danger';
               badgeEstoque.textContent = `Estoque Baixo (${totalAcervo}/${totalNec} itens)`;
             }
           }
