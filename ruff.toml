@@ -30,8 +30,8 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"**/tests/**" = ["S101"]        # asserts OK em testes
-"**/tests.py" = ["S101"]        # asserts OK em testes
+"**/tests/**" = ["S101", "S106"]  # asserts e senhas hardcoded OK em testes
+"**/tests.py" = ["S101", "S106"]  # asserts e senhas hardcoded OK em testes
 "**/settings.py" = ["S105"]     # variáveis de senha OK em settings
 "**/migrations/**" = ["E501"]   # migrations geradas podem ter linhas longas
 
