@@ -7,10 +7,12 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from simple_history.models import HistoricalRecords
 
+from banco_questoes.models import Questao
+
 logger = logging.getLogger(__name__)
 
 
-class MascaraProva(models.Model):
+class Mascara(models.Model):
     """
     Máscara de Prova (Blueprint / Matriz de Critérios).
 
@@ -138,6 +140,11 @@ class MascaraProva(models.Model):
     def __str__(self):
         return f'{self.titulo} ({self.disciplina.nome})'
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Sincroniza critérios normalizados de dificuldade
+        self.sincronizar_criterios_dificuldade()
+
     def clean(self):
         super().clean()
         errors = {}
@@ -193,14 +200,80 @@ class MascaraProva(models.Model):
             'D': qtd_dificil,
         }
 
+    def sincronizar_criterios_dificuldade(self):
+        """
+        Garante a sincronização dos registros normalizados em MascaraCriterioDificuldade.
+        """
+        distribuicao = self.calcular_distribuicao_dificuldade()
+        criterios_map = [
+            (Questao.Dificuldade.FACIL, self.percentual_facil, distribuicao['F']),
+            (Questao.Dificuldade.MEDIO, self.percentual_medio, distribuicao['M']),
+            (Questao.Dificuldade.DIFICIL, self.percentual_dificil, distribuicao['D']),
+        ]
 
-class MascaraTopico(models.Model):
+        for dif_code, perc, qtd in criterios_map:
+            MascaraCriterioDificuldade.objects.update_or_create(
+                mascara=self,
+                dificuldade=dif_code,
+                defaults={'percentual': perc, 'quantidade_questoes': qtd},
+            )
+
+    @property
+    def criterios_topico(self):
+        """Propriedade de conveniência para a convenção de critérios de tópicos."""
+        return self.topicos_distribuicao
+
+    @property
+    def topicos_distribuicao_compat(self):
+        """Compatibilidade."""
+        return self.topicos_distribuicao
+
+
+class MascaraCriterioDificuldade(models.Model):
     """
-    Associação e distribuição percentual de tópicos curriculares em uma Máscara de Prova.
+    Critério normalizado de distribuição por nível de dificuldade em uma Máscara de Prova.
     """
 
     mascara = models.ForeignKey(
-        MascaraProva,
+        Mascara,
+        on_delete=models.CASCADE,
+        related_name='criterios_dificuldade',
+        verbose_name='máscara de prova',
+    )
+    dificuldade = models.CharField(
+        'nível de dificuldade',
+        max_length=1,
+        choices=Questao.Dificuldade.choices,
+    )
+    percentual = models.PositiveIntegerField(
+        '% de dificuldade',
+        default=0,
+        validators=[MaxValueValidator(100)],
+        help_text='Percentual da avaliação dedicado a este nível de dificuldade.',
+    )
+    quantidade_questoes = models.PositiveIntegerField(
+        'quantidade calculada de questões',
+        default=0,
+        help_text='Número exato de questões calculadas para esta dificuldade.',
+    )
+
+    class Meta:
+        unique_together = [('mascara', 'dificuldade')]
+        ordering = ['dificuldade']
+        verbose_name = 'critério de dificuldade'
+        verbose_name_plural = 'critérios de dificuldade'
+
+    def __str__(self):
+        return f'{self.mascara.titulo} • Dificuldade {self.get_dificuldade_display()} ({self.percentual}%)'
+
+
+class MascaraCriterioTopico(models.Model):
+    """
+    Critério normalizado de distribuição por tópico curricular em uma Máscara de Prova.
+    """
+
+    mascara = models.ForeignKey(
+        Mascara,
         on_delete=models.CASCADE,
         related_name='topicos_distribuicao',
         verbose_name='máscara de prova',
@@ -208,11 +281,11 @@ class MascaraTopico(models.Model):
     topico = models.ForeignKey(
         'banco_questoes.Topico',
         on_delete=models.CASCADE,
-        related_name='mascaras_topico',
+        related_name='mascaras_criterio_topico',
         verbose_name='tópico curricular',
     )
     percentual = models.PositiveIntegerField(
-        '% do Tópico',
+        '% do tópico',
         default=0,
         validators=[MaxValueValidator(100)],
         help_text='Percentual da prova dedicado a este tópico.',
@@ -226,8 +299,8 @@ class MascaraTopico(models.Model):
     class Meta:
         unique_together = [('mascara', 'topico')]
         ordering = ['topico__nome']
-        verbose_name = 'distribuição de tópico'
-        verbose_name_plural = 'distribuições de tópicos'
+        verbose_name = 'critério de tópico'
+        verbose_name_plural = 'critérios de tópicos'
 
     def __str__(self):
         return f'{self.mascara.titulo} • {self.topico.nome} ({self.percentual}%)'
@@ -240,3 +313,8 @@ class MascaraTopico(models.Model):
             disc_mascara_id = getattr(mascara, 'disciplina_id', None)
             if disc_mascara_id and topico.disciplina_id != disc_mascara_id:
                 raise ValidationError(f'O tópico "{topico.nome}" não pertence à disciplina da máscara.')
+
+
+# Aliases para retrocompatibilidade contínua
+MascaraProva = Mascara
+MascaraTopico = MascaraCriterioTopico

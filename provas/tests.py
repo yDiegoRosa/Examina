@@ -5,7 +5,7 @@ from django.urls import resolve, reverse
 
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
-from .models import MascaraProva
+from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
 from .views import mascara_list
 
@@ -112,6 +112,86 @@ class MascaraProvaModelTest(TestCase):
         self.assertEqual(dist['M'], 4)
         self.assertEqual(dist['D'], 2)
         self.assertEqual(sum(dist.values()), 10)
+
+    def test_mascara_auto_syncs_criterios_dificuldade_on_save(self):
+        """Verifica que ao salvar uma máscara os critérios normalizados de dificuldade são sincronizados."""
+        mascara = Mascara(
+            titulo='AV1 Estrutura de Dados Sync',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        mascara.save()
+
+        criterios = MascaraCriterioDificuldade.objects.filter(mascara=mascara)
+        self.assertEqual(criterios.count(), 3)
+
+        crit_f = criterios.get(dificuldade='F')
+        crit_m = criterios.get(dificuldade='M')
+        crit_d = criterios.get(dificuldade='D')
+
+        self.assertEqual(crit_f.percentual, 40)
+        self.assertEqual(crit_f.quantidade_questoes, 4)
+        self.assertEqual(crit_m.percentual, 40)
+        self.assertEqual(crit_m.quantidade_questoes, 4)
+        self.assertEqual(crit_d.percentual, 20)
+        self.assertEqual(crit_d.quantidade_questoes, 2)
+        self.assertIn('Fácil (40%)', str(crit_f))
+
+    def test_mascara_criterio_topico_validation_other_discipline(self):
+        """Verifica que associar um tópico de outra disciplina levanta ValidationError no clean()."""
+        outra_disc = Disciplina.objects.create(nome='Cálculo I')
+        topico_outra_disc = Topico.objects.create(disciplina=outra_disc, nome='Derivadas')
+
+        mascara = Mascara.objects.create(
+            titulo='AV1 Estrutura de Dados',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+
+        crit_topico = MascaraCriterioTopico(
+            mascara=mascara,
+            topico=topico_outra_disc,
+            percentual=50,
+            quantidade_questoes=5,
+        )
+
+        with self.assertRaises(ValidationError) as ctx:
+            crit_topico.clean()
+
+        self.assertIn('não pertence à disciplina da máscara', str(ctx.exception))
+
+    def test_mascara_criterio_topico_valid_clean_and_str(self):
+        """Verifica criação e representação textual válida de MascaraCriterioTopico."""
+        mascara = Mascara.objects.create(
+            titulo='AV1 Estrutura de Dados',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+
+        crit_topico = MascaraCriterioTopico(
+            mascara=mascara,
+            topico=self.top1,
+            percentual=50,
+            quantidade_questoes=5,
+        )
+        crit_topico.clean()
+        crit_topico.save()
+
+        self.assertIn('Árvores (50%)', str(crit_topico))
+        self.assertEqual(mascara.criterios_topico.count(), 1)
+
 
 
 class MascaraViewsTest(TestCase):

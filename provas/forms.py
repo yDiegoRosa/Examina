@@ -3,16 +3,16 @@ from django.forms import inlineformset_factory
 
 from banco_questoes.models import Disciplina, Topico
 
-from .models import MascaraProva, MascaraTopico
+from .models import Mascara, MascaraCriterioTopico
 
 
-class MascaraProvaForm(forms.ModelForm):
+class MascaraForm(forms.ModelForm):
     """
     Formulário principal para criação e edição de Máscara de Prova (Blueprint).
     """
 
     class Meta:
-        model = MascaraProva
+        model = Mascara
         fields = [
             'titulo',
             'descricao',
@@ -117,7 +117,7 @@ class MascaraProvaForm(forms.ModelForm):
         qtd_obj = cleaned.get('quantidade_objetivas') or 0
         qtd_dis = cleaned.get('quantidade_discursivas') or 0
 
-        if modalidade == MascaraProva.Modalidade.MISTA and (qtd_obj + qtd_dis != total):
+        if modalidade == Mascara.Modalidade.MISTA and (qtd_obj + qtd_dis != total):
             self.add_error(
                 'quantidade_questoes',
                 f'Na modalidade mista, a soma de objetivas ({qtd_obj}) e discursivas ({qtd_dis}) deve ser igual ao total de questões ({total}).',
@@ -126,11 +126,11 @@ class MascaraProvaForm(forms.ModelForm):
         return cleaned
 
 
-class MascaraTopicoForm(forms.ModelForm):
-    """Formulário para distribuição percentual de um tópico específico."""
+class MascaraCriterioTopicoForm(forms.ModelForm):
+    """Formulário para distribuição percentual de um tópico curricular específico."""
 
     class Meta:
-        model = MascaraTopico
+        model = MascaraCriterioTopico
         fields = ['topico', 'percentual', 'quantidade_questoes']
         widgets = {
             'topico': forms.Select(attrs={'class': 'form-select topico-select'}),
@@ -151,8 +151,8 @@ class MascaraTopicoForm(forms.ModelForm):
             self.fields['topico'].queryset = Topico.objects.filter(ativo=True)
 
 
-class BaseMascaraTopicoFormSet(forms.BaseInlineFormSet):
-    """Validação customizada do inline formset de tópicos."""
+class BaseMascaraCriterioTopicoFormSet(forms.BaseInlineFormSet):
+    """Validação customizada do inline formset de critérios de tópicos."""
 
     def clean(self):
         super().clean()
@@ -183,11 +183,18 @@ class BaseMascaraTopicoFormSet(forms.BaseInlineFormSet):
             )
 
 
-MascaraTopicoFormSet = inlineformset_factory(
-    MascaraProva,
-    MascaraTopico,
-    form=MascaraTopicoForm,
-    formset=BaseMascaraTopicoFormSet,
+MascaraCriterioTopicoFormSet = inlineformset_factory(
+    Mascara,
+    MascaraCriterioTopico,
+    form=MascaraCriterioTopicoForm,
+    formset=BaseMascaraCriterioTopicoFormSet,
     extra=3,
     can_delete=True,
 )
+
+
+# Aliases para retrocompatibilidade
+MascaraProvaForm = MascaraForm
+MascaraTopicoForm = MascaraCriterioTopicoForm
+MascaraTopicoFormSet = MascaraCriterioTopicoFormSet
+BaseMascaraTopicoFormSet = BaseMascaraCriterioTopicoFormSet
