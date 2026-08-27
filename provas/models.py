@@ -152,8 +152,9 @@ class Mascara(models.Model):
         # 1. Validação da soma de dificuldade (deve fechar em 100%)
         soma_dificuldade = self.percentual_facil + self.percentual_medio + self.percentual_dificil
         if soma_dificuldade != 100:
+            diff_str = f'faltam {100 - soma_dificuldade}%' if soma_dificuldade < 100 else f'excede em {soma_dificuldade - 100}%'
             errors['percentual_facil'] = (
-                f'A soma dos percentuais de dificuldade deve ser exatamente 100% (atual: {soma_dificuldade}%).'
+                f'A soma dos percentuais de dificuldade (Fácil + Médio + Difícil) deve ser exatamente 100% (atual: {soma_dificuldade}% — {diff_str}).'
             )
 
         # 2. Validação da modalidade e contagens
@@ -313,6 +314,10 @@ class MascaraCriterioTopico(models.Model):
             disc_mascara_id = getattr(mascara, 'disciplina_id', None)
             if disc_mascara_id and topico.disciplina_id != disc_mascara_id:
                 raise ValidationError(f'O tópico "{topico.nome}" não pertence à disciplina da máscara.')
+        if self.percentual is not None and self.percentual <= 0:
+            raise ValidationError({'percentual': 'O percentual do tópico selecionado deve ser maior que 0%.'})
+        if self.percentual is not None and self.percentual > 100:
+            raise ValidationError({'percentual': 'O percentual do tópico não pode exceder 100%.'})
 
 
 # Aliases para retrocompatibilidade contínua

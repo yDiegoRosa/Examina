@@ -5,6 +5,7 @@ from django.urls import resolve, reverse
 
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
+from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
 from .views import mascara_list
@@ -442,3 +443,290 @@ class MascaraListPaginationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('disciplina=', response.context['querystring'])
         self.assertNotIn('page=', response.context['querystring'])
+
+
+class MascaraValidacaoPercentuaisTest(TestCase):
+    """Testes unitários e de integração para validação da soma dos percentuais."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='prof_valida', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Engenharia de Software')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Requisitos')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Arquitetura')
+        self.top3 = Topico.objects.create(disciplina=self.disc, nome='Testes')
+
+    def test_dificuldade_sum_under_100_fails_in_model_and_form(self):
+        """Verifica que soma de dificuldade inferior a 100% (ex: 90%) é rejeitada no Model e no Form."""
+        mascara = Mascara(
+            titulo='Prova Falha 90%',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=30,
+            percentual_medio=40,
+            percentual_dificil=20,  # 30+40+20 = 90%
+            autor=self.user,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            mascara.full_clean()
+        self.assertIn('faltam 10%', str(ctx.exception))
+
+        form_data = {
+            'titulo': 'Form Falha 90%',
+            'disciplina': self.disc.pk,
+            'quantidade_questoes': 10,
+            'modalidade': 'OBJ',
+            'percentual_facil': 30,
+            'percentual_medio': 40,
+            'percentual_dificil': 20,
+            'valor_total': '10.00',
+            'tempo_estimado_minutos': 60,
+        }
+        form = MascaraForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('percentual_facil', form.errors)
+        self.assertIn('faltam 10%', form.errors['percentual_facil'][0])
+
+    def test_dificuldade_sum_over_100_fails_in_model_and_form(self):
+        """Verifica que soma de dificuldade superior a 100% (ex: 120%) é rejeitada no Model e no Form."""
+        mascara = Mascara(
+            titulo='Prova Falha 120%',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=50,
+            percentual_medio=40,
+            percentual_dificil=30,  # 50+40+30 = 120%
+            autor=self.user,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            mascara.full_clean()
+        self.assertIn('excede em 20%', str(ctx.exception))
+
+        form_data = {
+            'titulo': 'Form Falha 120%',
+            'disciplina': self.disc.pk,
+            'quantidade_questoes': 10,
+            'modalidade': 'OBJ',
+            'percentual_facil': 50,
+            'percentual_medio': 40,
+            'percentual_dificil': 30,
+            'valor_total': '10.00',
+            'tempo_estimado_minutos': 60,
+        }
+        form = MascaraForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('percentual_facil', form.errors)
+        self.assertIn('excede em 20%', form.errors['percentual_facil'][0])
+
+    def test_dificuldade_sum_exact_100_passes(self):
+        """Verifica que soma de dificuldade exatamente 100% é válida no Model e no Form."""
+        mascara = Mascara(
+            titulo='Prova Válida 100%',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            modalidade='OBJ',
+            quantidade_objetivas=10,
+            quantidade_discursivas=0,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        mascara.full_clean()
+        mascara.save()
+        self.assertIsNotNone(mascara.pk)
+
+        form_data = {
+            'titulo': 'Form Válido 100%',
+            'disciplina': self.disc.pk,
+            'quantidade_questoes': 10,
+            'modalidade': 'OBJ',
+            'quantidade_objetivas': 10,
+            'quantidade_discursivas': 0,
+            'percentual_facil': 40,
+            'percentual_medio': 40,
+            'percentual_dificil': 20,
+            'valor_total': '10.00',
+            'tempo_estimado_minutos': 60,
+        }
+        form = MascaraForm(data=form_data)
+        self.assertTrue(form.is_valid())
+
+    def test_topicos_sum_under_100_fails_in_formset(self):
+        """Verifica que formset de tópicos somando menos de 100% (ex: 90%) é inválido."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '2',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': str(self.top1.pk),
+            'topicos_distribuicao-0-percentual': '50',
+            'topicos_distribuicao-0-quantidade_questoes': '5',
+            'topicos_distribuicao-1-topico': str(self.top2.pk),
+            'topicos_distribuicao-1-percentual': '40',  # 50 + 40 = 90%
+            'topicos_distribuicao-1-quantidade_questoes': '4',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertFalse(formset.is_valid())
+        self.assertIn('faltam 10%', formset.non_form_errors()[0])
+
+    def test_topicos_sum_over_100_fails_in_formset(self):
+        """Verifica que formset de tópicos somando mais de 100% (ex: 110%) é inválido."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base 2',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '2',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': str(self.top1.pk),
+            'topicos_distribuicao-0-percentual': '60',
+            'topicos_distribuicao-0-quantidade_questoes': '6',
+            'topicos_distribuicao-1-topico': str(self.top2.pk),
+            'topicos_distribuicao-1-percentual': '50',  # 60 + 50 = 110%
+            'topicos_distribuicao-1-quantidade_questoes': '5',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertFalse(formset.is_valid())
+        self.assertIn('excede em 10%', formset.non_form_errors()[0])
+
+    def test_topicos_sum_exact_100_passes_in_formset(self):
+        """Verifica que formset de tópicos somando exatamente 100% é válido."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base 3',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '2',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': str(self.top1.pk),
+            'topicos_distribuicao-0-percentual': '60',
+            'topicos_distribuicao-0-quantidade_questoes': '6',
+            'topicos_distribuicao-1-topico': str(self.top2.pk),
+            'topicos_distribuicao-1-percentual': '40',  # 60 + 40 = 100%
+            'topicos_distribuicao-1-quantidade_questoes': '4',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertTrue(formset.is_valid())
+
+    def test_topico_com_percentual_zero_fails(self):
+        """Verifica que selecionar um tópico com percentual zero levanta erro."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base 4',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '2',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': str(self.top1.pk),
+            'topicos_distribuicao-0-percentual': '100',
+            'topicos_distribuicao-0-quantidade_questoes': '10',
+            'topicos_distribuicao-1-topico': str(self.top2.pk),
+            'topicos_distribuicao-1-percentual': '0',
+            'topicos_distribuicao-1-quantidade_questoes': '0',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertFalse(formset.is_valid())
+        self.assertIn('maior que 0%', str(formset.errors))
+
+    def test_percentual_sem_topico_fails(self):
+        """Verifica que informar percentual sem selecionar tópico correspondente levanta erro."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base 5',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '1',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': '',
+            'topicos_distribuicao-0-percentual': '100',
+            'topicos_distribuicao-0-quantidade_questoes': '10',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertFalse(formset.is_valid())
+        self.assertIn('topico', str(formset.errors))
+
+    def test_topico_duplicado_fails(self):
+        """Verifica que selecionar o mesmo tópico duas vezes levanta erro de duplicidade."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base 6',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '2',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': str(self.top1.pk),
+            'topicos_distribuicao-0-percentual': '50',
+            'topicos_distribuicao-0-quantidade_questoes': '5',
+            'topicos_distribuicao-1-topico': str(self.top1.pk),
+            'topicos_distribuicao-1-percentual': '50',
+            'topicos_distribuicao-1-quantidade_questoes': '5',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertFalse(formset.is_valid())
+        self.assertTrue(any(formset.errors))
+
+    def test_distribuicao_livre_sem_topicos_passes(self):
+        """Verifica que formulário sem tópicos (distribuição livre) é válido."""
+        mascara = Mascara.objects.create(
+            titulo='Mascara Base 7',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '0',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
+        self.assertTrue(formset.is_valid())
+

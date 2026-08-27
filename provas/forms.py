@@ -107,9 +107,10 @@ class MascaraForm(forms.ModelForm):
         soma = facil + medio + dificil
 
         if soma != 100:
+            diff_str = f'faltam {100 - soma}%' if soma < 100 else f'excede em {soma - 100}%'
             self.add_error(
                 'percentual_facil',
-                f'A soma dos percentuais de dificuldade deve ser exatamente 100% (atual: {soma}%).',
+                f'A soma dos percentuais de dificuldade (Fácil + Médio + Difícil) deve ser exatamente 100% (atual: {soma}% — {diff_str}).',
             )
 
         modalidade = cleaned.get('modalidade')
@@ -168,18 +169,25 @@ class BaseMascaraCriterioTopicoFormSet(forms.BaseInlineFormSet):
                 continue
 
             topico = form.cleaned_data.get('topico')
-            percentual = form.cleaned_data.get('percentual', 0)
+            percentual = form.cleaned_data.get('percentual')
 
-            if topico:
+            if topico and (percentual is None or percentual <= 0):
+                form.add_error('percentual', 'Informe um percentual maior que 0% para o tópico selecionado.')
+
+            if not topico and percentual and percentual > 0:
+                form.add_error('topico', 'Selecione um tópico correspondente ao percentual informado.')
+
+            if topico and percentual and percentual > 0:
                 if topico.pk in topicos_vistos:
-                    form.add_error('topico', 'Este tópico já foi selecionado nesta máscara.')
+                    form.add_error('topico', f'O tópico "{topico.nome}" já foi selecionado nesta máscara.')
                 topicos_vistos.add(topico.pk)
                 total_percentual += percentual
                 active_forms += 1
 
         if active_forms > 0 and total_percentual != 100:
+            diff_str = f'faltam {100 - total_percentual}%' if total_percentual < 100 else f'excede em {total_percentual - 100}%'
             raise forms.ValidationError(
-                f'A soma dos percentuais dos tópicos selecionados deve ser exatamente 100% (atual: {total_percentual}%).'
+                f'A soma dos percentuais dos tópicos selecionados deve ser exatamente 100% (atual: {total_percentual}% — {diff_str}).'
             )
 
 

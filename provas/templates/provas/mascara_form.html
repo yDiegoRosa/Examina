@@ -702,9 +702,93 @@
       .catch(err => console.error('Erro ao buscar estoque:', err));
   }
 
-  if (disciplinaSelect) {
-    disciplinaSelect.addEventListener('change', atualizarEstoqueDisciplina);
-    atualizarEstoqueDisciplina();
+  // Validação Pre-Submit no Cliente
+  const formElement = document.querySelector('form');
+  if (formElement) {
+    formElement.addEventListener('submit', function(e) {
+      const f = parseInt(inputFacil ? inputFacil.value : 0, 10) || 0;
+      const m = parseInt(inputMedio ? inputMedio.value : 0, 10) || 0;
+      const d = parseInt(inputDificil ? inputDificil.value : 0, 10) || 0;
+      const somaDif = f + m + d;
+
+      if (somaDif !== 100) {
+        e.preventDefault();
+        const diffStr = somaDif < 100 ? `faltam ${100 - somaDif}%` : `excede em ${somaDif - 100}%`;
+        alert(`Atenção: A soma dos percentuais de dificuldade deve ser exatamente 100% (atual: ${somaDif}% — ${diffStr}). Ajuste os valores antes de salvar.`);
+        if (inputFacil) inputFacil.focus();
+        return false;
+      }
+
+      // Validação de tópicos
+      let somaTopicos = 0;
+      let visibleTopicos = 0;
+      let hasError = false;
+      const seenTopics = new Set();
+
+      document.querySelectorAll('.topico-form-row').forEach(function(row) {
+        if (row.style.display === 'none') return;
+        const select = row.querySelector('.topico-select');
+        const percInput = row.querySelector('.topico-percentual-input');
+        const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+
+        if (deleteCheckbox && deleteCheckbox.checked) return;
+
+        const topicVal = select ? select.value : '';
+        const percVal = parseInt(percInput ? percInput.value : 0, 10) || 0;
+
+        if (topicVal || percVal > 0) {
+          visibleTopicos++;
+          if (!topicVal) {
+            alert('Por favor, selecione um tópico para o percentual informado.');
+            if (select) select.focus();
+            hasError = true;
+            return;
+          }
+          if (percVal <= 0) {
+            alert('O percentual de cada tópico selecionado deve ser maior que 0%.');
+            if (percInput) percInput.focus();
+            hasError = true;
+            return;
+          }
+          if (seenTopics.has(topicVal)) {
+            alert('Não é permitido selecionar o mesmo tópico mais de uma vez.');
+            if (select) select.focus();
+            hasError = true;
+            return;
+          }
+          seenTopics.add(topicVal);
+          somaTopicos += percVal;
+        }
+      });
+
+      if (hasError) {
+        e.preventDefault();
+        return false;
+      }
+
+      if (visibleTopicos > 0 && somaTopicos !== 100) {
+        e.preventDefault();
+        const diffTopicosStr = somaTopicos < 100 ? `faltam ${100 - somaTopicos}%` : `excede em ${somaTopicos - 100}%`;
+        alert(`Atenção: A soma dos percentuais dos tópicos deve ser exatamente 100% (atual: ${somaTopicos}% — ${diffTopicosStr}). Utilize o botão "Balancear Igualmente" ou ajuste manualmente.`);
+        return false;
+      }
+
+      // Validação modalidade mista
+      const mod = modalidadeSelect ? modalidadeSelect.value : '';
+      if (mod === 'MISTA') {
+        const total = parseInt(totalInput ? totalInput.value : 0, 10) || 0;
+        const objInput = document.getElementById('id_quantidade_objetivas');
+        const disInput = document.getElementById('id_quantidade_discursivas');
+        const qObj = parseInt(objInput ? objInput.value : 0, 10) || 0;
+        const qDis = parseInt(disInput ? disInput.value : 0, 10) || 0;
+        if (qObj + qDis !== total) {
+          e.preventDefault();
+          alert(`Na modalidade mista, a soma de objetivas (${qObj}) e discursivas (${qDis}) deve ser igual ao total de questões (${total}).`);
+          if (objInput) objInput.focus();
+          return false;
+        }
+      }
+    });
   }
 
   syncDificuldade('input');
