@@ -1,0 +1,2 @@
+# Este diretório armazena os backups MySQL gerados por scripts/backup_mysql.sh
+# Os arquivos .sql.gz são ignorados pelo .gitignore — apenas este .gitkeep é versionado.

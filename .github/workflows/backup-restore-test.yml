@@ -1,0 +1,267 @@
+name: "🗄️ Backup — Restore Test"
+
+# Executa semanalmente (domingo às 03h UTC = 00h Brasília)
+# e pode ser disparado manualmente a qualquer momento
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: "Saída verbosa"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# ────────────────────────────────────────────────────────────────────────────
+# Variáveis compartilhadas entre jobs
+# ────────────────────────────────────────────────────────────────────────────
+env:
+  MYSQL_DATABASE:   examina_db
+  MYSQL_USER:       examina_user
+  MYSQL_PASSWORD:   ci_test_password
+  MYSQL_ROOT_PASSWORD: ci_root_password
+  MYSQL_HOST:       127.0.0.1
+  MYSQL_PORT:       3306
+  TEST_DB:          examina_backup_test
+  BACKUP_FILE:      /tmp/ci_backup.sql.gz
+
+jobs:
+  # ══════════════════════════════════════════════════════════════════════════
+  # backup-restore-test
+  # Fluxo:
+  #   1. Sobe MySQL via service
+  #   2. Migra o schema Django + insere dados de seed
+  #   3. Gera backup com mysqldump → .sql.gz
+  #   4. Restaura em banco isolado
+  #   5. Valida integridade (tabelas e linhas)
+  # ══════════════════════════════════════════════════════════════════════════
+  backup-restore-test:
+    name: "🔄 Backup + Restore Integrity Test"
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE:       ${{ env.MYSQL_DATABASE }}
+          MYSQL_USER:           ${{ env.MYSQL_USER }}
+          MYSQL_PASSWORD:       ${{ env.MYSQL_PASSWORD }}
+          MYSQL_ROOT_PASSWORD:  ${{ env.MYSQL_ROOT_PASSWORD }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -p$MYSQL_ROOT_PASSWORD"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+          --health-start-period=20s
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+
+      # ── Python ────────────────────────────────────────────────────────────
+      - name: "🐍 Setup Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: "📦 Install dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── Django: Migrations + Seed ─────────────────────────────────────────
+      - name: "🗃️ Apply Django migrations"
+        env:
+          SECRET_KEY:    ci-secret-key-not-for-production
+          DEBUG:         "True"
+          ALLOWED_HOSTS: localhost,127.0.0.1
+          DATABASE_URL:  mysql://${{ env.MYSQL_USER }}:${{ env.MYSQL_PASSWORD }}@${{ env.MYSQL_HOST }}:${{ env.MYSQL_PORT }}/${{ env.MYSQL_DATABASE }}
+        run: python manage.py migrate --run-syncdb
+
+      - name: "🌱 Seed test data via Django shell"
+        env:
+          SECRET_KEY:    ci-secret-key-not-for-production
+          DEBUG:         "True"
+          ALLOWED_HOSTS: localhost,127.0.0.1
+          DATABASE_URL:  mysql://${{ env.MYSQL_USER }}:${{ env.MYSQL_PASSWORD }}@${{ env.MYSQL_HOST }}:${{ env.MYSQL_PORT }}/${{ env.MYSQL_DATABASE }}
+        run: |
+          python manage.py shell << 'EOF'
+          from django.contrib.auth import get_user_model
+          from banco_questoes.models import Disciplina, Questao
+
+          User = get_user_model()
+
+          # Usuário de teste
+          user, _ = User.objects.get_or_create(
+              username='ci_test_user',
+              defaults={'email': 'ci@test.local', 'is_staff': True}
+          )
+
+          # Disciplina de teste
+          disc, _ = Disciplina.objects.get_or_create(
+              nome='CI_Disciplina_Teste',
+              defaults={'descricao': 'Criada pelo CI para teste de restore'}
+          )
+
+          # Questão de teste
+          if not Questao.objects.filter(origem='CI_BACKUP_TEST').exists():
+              Questao.objects.create(
+                  tipo=Questao.Tipo.DISCURSIVA,
+                  dificuldade=Questao.Dificuldade.FACIL,
+                  disciplina=disc,
+                  origem='CI_BACKUP_TEST',
+                  enunciado='Questão gerada pelo CI para teste de backup/restore.',
+                  autor=user,
+              )
+
+          print(f"✅ Seed OK — Disciplinas: {Disciplina.objects.count()}, Questões: {Questao.objects.count()}")
+          EOF
+
+      # ── Backup ────────────────────────────────────────────────────────────
+      - name: "💾 Generate mysqldump backup"
+        run: |
+          mysqldump \
+            --host=${{ env.MYSQL_HOST }} \
+            --port=${{ env.MYSQL_PORT }} \
+            --user=${{ env.MYSQL_USER }} \
+            --password=${{ env.MYSQL_PASSWORD }} \
+            --single-transaction \
+            --routines \
+            --triggers \
+            --events \
+            --add-drop-table \
+            --create-options \
+            --extended-insert \
+            --set-gtid-purged=OFF \
+            ${{ env.MYSQL_DATABASE }} \
+          | gzip > ${{ env.BACKUP_FILE }}
+
+          echo "📦 Backup gerado: $(du -sh ${{ env.BACKUP_FILE }} | cut -f1)"
+
+      - name: "🔍 Verify backup file is not empty"
+        run: |
+          SIZE=$(stat -c%s "${{ env.BACKUP_FILE }}")
+          echo "Tamanho do backup: ${SIZE} bytes"
+          if [[ "$SIZE" -lt 1024 ]]; then
+            echo "❌ Backup parece vazio ou corrompido (${SIZE} bytes)"
+            exit 1
+          fi
+          echo "✅ Backup tem tamanho válido"
+
+      # ── Restore ───────────────────────────────────────────────────────────
+      - name: "🗄️ Create isolated restore target database"
+        run: |
+          mysql \
+            --host=${{ env.MYSQL_HOST }} \
+            --port=${{ env.MYSQL_PORT }} \
+            --user=root \
+            --password=${{ env.MYSQL_ROOT_PASSWORD }} \
+            --execute="
+              DROP DATABASE IF EXISTS \`${{ env.TEST_DB }}\`;
+              CREATE DATABASE \`${{ env.TEST_DB }}\`
+                CHARACTER SET utf8mb4
+                COLLATE utf8mb4_unicode_ci;
+              GRANT ALL PRIVILEGES ON \`${{ env.TEST_DB }}\`.* TO '${{ env.MYSQL_USER }}'@'%';
+              FLUSH PRIVILEGES;
+            "
+          echo "✅ Banco de teste '${TEST_DB}' criado"
+
+      - name: "♻️ Restore backup into test database"
+        run: |
+          zcat ${{ env.BACKUP_FILE }} | mysql \
+            --host=${{ env.MYSQL_HOST }} \
+            --port=${{ env.MYSQL_PORT }} \
+            --user=${{ env.MYSQL_USER }} \
+            --password=${{ env.MYSQL_PASSWORD }} \
+            ${{ env.TEST_DB }}
+
+          echo "✅ Restauração concluída no banco '${TEST_DB}'"
+
+      # ── Validação ─────────────────────────────────────────────────────────
+      - name: "🧪 Validate restored data integrity"
+        run: |
+          FAIL=0
+
+          # Contagem total de tabelas no banco restaurado
+          TABLE_COUNT=$(mysql \
+            --host=${{ env.MYSQL_HOST }} \
+            --port=${{ env.MYSQL_PORT }} \
+            --user=${{ env.MYSQL_USER }} \
+            --password=${{ env.MYSQL_PASSWORD }} \
+            --silent --skip-column-names \
+            --execute="SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${{ env.TEST_DB }}';" \
+          2>/dev/null)
+
+          echo "📊 Total de tabelas restauradas: ${TABLE_COUNT}"
+          if [[ "$TABLE_COUNT" -lt 5 ]]; then
+            echo "❌ Esperado ao menos 5 tabelas, encontrado: ${TABLE_COUNT}"
+            FAIL=1
+          fi
+
+          # Função auxiliar: valida que tabela existe e tem >= N linhas
+          validate_table() {
+            local table="$1"
+            local min_rows="$2"
+            local count
+            count=$(mysql \
+              --host=${{ env.MYSQL_HOST }} \
+              --port=${{ env.MYSQL_PORT }} \
+              --user=${{ env.MYSQL_USER }} \
+              --password=${{ env.MYSQL_PASSWORD }} \
+              --silent --skip-column-names \
+              --execute="SELECT COUNT(*) FROM \`${{ env.TEST_DB }}\`.\`${table}\`;" \
+            2>/dev/null || echo "-1")
+            if [[ "$count" -lt "$min_rows" ]]; then
+              echo "❌ Tabela '${table}': esperado >= ${min_rows} linha(s), encontrado: ${count}"
+              FAIL=1
+            else
+              echo "✅ Tabela '${table}': ${count} linha(s) (ok)"
+            fi
+          }
+
+          # Validar tabelas-chave do Examina
+          validate_table "banco_questoes_disciplina"  1
+          validate_table "banco_questoes_questao"     1
+          validate_table "auth_user"                  1
+
+          if [[ "$FAIL" -ne 0 ]]; then
+            echo ""
+            echo "════════════════════════════════════════"
+            echo "❌ TESTE DE RESTAURAÇÃO FALHOU"
+            echo "════════════════════════════════════════"
+            exit 1
+          fi
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "✅ TESTE DE RESTAURAÇÃO PASSOU"
+          echo "   Banco restaurado e validado com sucesso"
+          echo "════════════════════════════════════════"
+
+      # ── Cleanup ───────────────────────────────────────────────────────────
+      - name: "🧹 Drop test database"
+        if: always()
+        run: |
+          mysql \
+            --host=${{ env.MYSQL_HOST }} \
+            --port=${{ env.MYSQL_PORT }} \
+            --user=root \
+            --password=${{ env.MYSQL_ROOT_PASSWORD }} \
+            --execute="DROP DATABASE IF EXISTS \`${{ env.TEST_DB }}\`;" \
+          && echo "🧹 Banco de teste removido" || true
+
+      # ── Salvar backup como artefato do workflow ────────────────────────────
+      - name: "📤 Upload backup artifact"
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "mysql-backup-${{ github.run_id }}"
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 7

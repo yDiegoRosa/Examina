@@ -7,6 +7,10 @@ __pycache__/
 logs/
 *.log
 
+# MySQL Backups (arquivos gerados — não comitar dumps no repositório)
+backups/*.sql.gz
+backups/*.sql
+
 # C extensions
 *.so
 
