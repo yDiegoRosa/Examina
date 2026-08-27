@@ -215,12 +215,15 @@ def mascara_detail(request, pk):
         },
     }
 
+    matriz_metas = mascara.calcular_matriz_metas()
+
     return render(
         request,
         'provas/mascara_detail.html',
         {
             'mascara': mascara,
             'distribuicao_dif': distribuicao_dif,
+            'matriz_metas': matriz_metas,
             'diagnostico': diagnostico,
         },
     )

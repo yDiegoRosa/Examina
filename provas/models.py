@@ -1,5 +1,4 @@
 import logging
-import math
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -175,31 +174,48 @@ class Mascara(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    def calcular_matriz_metas(self):
+        """
+        Calcula as metas de quantidade inteira de questões por célula (Tópico × Dificuldade)
+        utilizando o Método do Maior Resto (Hamilton-Hare).
+        """
+        from .services.matrix_calculator import calcular_metas_celulas
+
+        topicos_data = []
+        if self.pk:
+            criterios = self.topicos_distribuicao.select_related('topico').all()
+            for crit in criterios:
+                topicos_data.append(
+                    {
+                        'id': crit.topico_id,
+                        'nome': crit.topico.nome,
+                        'percentual': crit.percentual,
+                    }
+                )
+
+        return calcular_metas_celulas(
+            quantidade_total=self.quantidade_questoes,
+            percentual_facil=self.percentual_facil,
+            percentual_medio=self.percentual_medio,
+            percentual_dificil=self.percentual_dificil,
+            topicos=topicos_data if topicos_data else None,
+        )
+
     def calcular_distribuicao_dificuldade(self) -> dict[str, int]:
         """
-        Calcula a quantidade exata de questões inteiras para cada nível de dificuldade,
-        aplicando ajuste proporcional de arredondamento para garantir a soma exata.
+        Calcula a quantidade de questões inteiras para cada nível de dificuldade (F, M, D)
+        aplicando o Método do Maior Resto.
         """
-        total = self.quantidade_questoes
-        qtd_facil = math.floor((total * self.percentual_facil) / 100)
-        qtd_medio = math.floor((total * self.percentual_medio) / 100)
-        qtd_dificil = math.floor((total * self.percentual_dificil) / 100)
+        from .services.matrix_calculator import calcular_metas_celulas
 
-        # Distribui resíduo de arredondamento no maior percentual
-        residuo = total - (qtd_facil + qtd_medio + qtd_dificil)
-        if residuo > 0:
-            if self.percentual_facil >= self.percentual_medio and self.percentual_facil >= self.percentual_dificil:
-                qtd_facil += residuo
-            elif self.percentual_medio >= self.percentual_dificil:
-                qtd_medio += residuo
-            else:
-                qtd_dificil += residuo
-
-        return {
-            'F': qtd_facil,
-            'M': qtd_medio,
-            'D': qtd_dificil,
-        }
+        resultado = calcular_metas_celulas(
+            quantidade_total=self.quantidade_questoes,
+            percentual_facil=self.percentual_facil,
+            percentual_medio=self.percentual_medio,
+            percentual_dificil=self.percentual_dificil,
+            topicos=None,
+        )
+        return resultado.totais_por_dificuldade
 
     def sincronizar_criterios_dificuldade(self):
         """

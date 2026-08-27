@@ -773,3 +773,152 @@ class MascaraValidacaoPercentuaisTest(TestCase):
             self.assertNotIn(topico_outra, qs)
 
 
+class MatrizMetasCalculoTest(TestCase):
+    """Testes unitários e de integração para o cálculo de metas por célula (Maior Resto)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='docente_matriz', password='secret_password')  # noqa: S106
+        self.client.login(username='docente_matriz', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Engenharia de Software')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Arquitetura de Software')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Padrões de Projeto')
+        self.top3 = Topico.objects.create(disciplina=self.disc, nome='Testes Automatizados')
+
+    def test_calcular_metas_celulas_caso_padrao_soma_exata(self):
+        """Verifica cálculo de cotas e distribuição do maior resto em caso com 10 questões e 3 tópicos."""
+        from provas.services.matrix_calculator import calcular_metas_celulas
+
+        topicos = [
+            {'id': 1, 'nome': 'Tópico 1', 'percentual': 50},
+            {'id': 2, 'nome': 'Tópico 2', 'percentual': 30},
+            {'id': 3, 'nome': 'Tópico 3', 'percentual': 20},
+        ]
+        res = calcular_metas_celulas(
+            quantidade_total=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            topicos=topicos,
+        )
+
+        self.assertEqual(res.total_questoes, 10)
+        self.assertEqual(len(res.linhas), 3)
+        self.assertEqual(len(res.celulas), 9)
+
+        # Soma total de todas as células deve ser estritamente igual a 10
+        total_alocado = sum(c.quantidade for c in res.celulas)
+        self.assertEqual(total_alocado, 10)
+
+        # Verificação das cotas individuais
+        # T1 (50%): F=2, M=2, D=1 (soma 5)
+        self.assertEqual(res.get_quantidade(1, 'F'), 2)
+        self.assertEqual(res.get_quantidade(1, 'M'), 2)
+        self.assertEqual(res.get_quantidade(1, 'D'), 1)
+
+        # T2 (30%): F=1, M=1, D=1 (soma 3)
+        self.assertEqual(res.get_quantidade(2, 'F'), 1)
+        self.assertEqual(res.get_quantidade(2, 'M'), 1)
+        self.assertEqual(res.get_quantidade(2, 'D'), 1)
+
+        # T3 (20%): F=1, M=1, D=0 (soma 2)
+        self.assertEqual(res.get_quantidade(3, 'F'), 1)
+        self.assertEqual(res.get_quantidade(3, 'M'), 1)
+        self.assertEqual(res.get_quantidade(3, 'D'), 0)
+
+        # Totais por dificuldade
+        self.assertEqual(res.totais_por_dificuldade['F'], 4)
+        self.assertEqual(res.totais_por_dificuldade['M'], 4)
+        self.assertEqual(res.totais_por_dificuldade['D'], 2)
+
+    def test_calcular_metas_celulas_distribuicao_livre(self):
+        """Verifica que quando não há tópicos específicos, a matriz é gerada em modo livre somando o total."""
+        from provas.services.matrix_calculator import calcular_metas_celulas
+
+        res = calcular_metas_celulas(
+            quantidade_total=10,
+            percentual_facil=33,
+            percentual_medio=34,
+            percentual_dificil=33,
+            topicos=None,
+        )
+        self.assertTrue(res.eh_distribuicao_livre)
+        self.assertEqual(res.total_questoes, 10)
+        self.assertEqual(sum(c.quantidade for c in res.celulas), 10)
+        self.assertEqual(sum(res.totais_por_dificuldade.values()), 10)
+
+    def test_invariante_soma_diversos_tamanhos_prova(self):
+        """Garante a invariante de soma = total para múltiplos tamanhos de prova e distribuições assimétricas."""
+        from provas.services.matrix_calculator import calcular_metas_celulas
+
+        topicos = [
+            {'id': 1, 'nome': 'T1', 'percentual': 45},
+            {'id': 2, 'nome': 'T2', 'percentual': 35},
+            {'id': 3, 'nome': 'T3', 'percentual': 20},
+        ]
+
+        for n in [1, 3, 5, 7, 8, 10, 13, 15, 20, 33, 50, 100]:
+            res = calcular_metas_celulas(
+                quantidade_total=n,
+                percentual_facil=30,
+                percentual_medio=50,
+                percentual_dificil=20,
+                topicos=topicos,
+            )
+            soma_celulas = sum(c.quantidade for c in res.celulas)
+            soma_linhas = sum(linha.total_questoes for linha in res.linhas)
+            soma_cols = sum(res.totais_por_dificuldade.values())
+
+            self.assertEqual(soma_celulas, n, f'Falha na soma de células para N={n}')
+            self.assertEqual(soma_linhas, n, f'Falha na soma de linhas para N={n}')
+            self.assertEqual(soma_cols, n, f'Falha na soma de colunas para N={n}')
+            self.assertTrue(all(c.quantidade >= 0 for c in res.celulas))
+
+    def test_mascara_model_calcular_matriz_metas_integracao(self):
+        """Verifica o método calcular_matriz_metas() no modelo Mascara persistido no banco."""
+        mascara = Mascara.objects.create(
+            titulo='Prova Final de ES',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        MascaraCriterioTopico.objects.create(mascara=mascara, topico=self.top1, percentual=60)
+        MascaraCriterioTopico.objects.create(mascara=mascara, topico=self.top2, percentual=40)
+
+        resultado = mascara.calcular_matriz_metas()
+        self.assertEqual(resultado.total_questoes, 10)
+        self.assertEqual(len(resultado.linhas), 2)
+        self.assertEqual(sum(c.quantidade for c in resultado.celulas), 10)
+        self.assertEqual(resultado.get_quantidade(self.top1.pk, 'F'), 2)
+        self.assertEqual(resultado.get_quantidade(self.top1.pk, 'M'), 2)
+
+    def test_mascara_detail_view_contem_matriz_metas(self):
+        """Verifica que a view mascara_detail injeta e renderiza a matriz de metas com sucesso."""
+        from django.urls import reverse
+
+        mascara = Mascara.objects.create(
+            titulo='Prova View Matriz',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        MascaraCriterioTopico.objects.create(mascara=mascara, topico=self.top1, percentual=50)
+        MascaraCriterioTopico.objects.create(mascara=mascara, topico=self.top2, percentual=50)
+
+        url = reverse('provas:mascara_detail', kwargs={'pk': mascara.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('matriz_metas', response.context)
+        self.assertEqual(response.context['matriz_metas'].total_questoes, 10)
+        self.assertContains(response, 'Matriz de Metas por Célula (Tópico × Dificuldade)')
+
+
+
