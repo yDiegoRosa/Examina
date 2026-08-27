@@ -9,7 +9,7 @@ from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .filters import QuestaoFilter
-from .forms import AlternativaFormSet, QuestaoForm
+from .forms import AlternativaFormSet, CSVUploadForm, QuestaoForm
 from .importer import CSVImportService
 from .models import Questao
 from .parser import CSVParseError
@@ -497,33 +497,46 @@ def questao_import(request):
     relatorio = None
 
     if request.method == 'POST':
-        arquivo = request.FILES.get('csv_file') or request.FILES.get('arquivo')
-        if not arquivo:
-            messages.error(request, 'Selecione um arquivo Excel (.xlsx) ou CSV para realizar a importação.')
-            return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
+        upload_form = CSVUploadForm(request.POST, request.FILES)
 
-        nome_arquivo = arquivo.name.lower()
-        if not nome_arquivo.endswith(('.csv', '.xlsx', '.xls')):
-            messages.error(
+        if not upload_form.is_valid():
+            # Mensagem de erro vinda de clean_arquivo() (extensão, tamanho, magic bytes)
+            for error in upload_form.errors.get('arquivo', []):
+                messages.error(request, error)
+            return render(
                 request,
-                'Formato inválido. O arquivo deve possuir a extensão .xlsx ou .csv.',
+                'banco_questoes/questao_import.html',
+                {'titulo': 'Importação em Lote', 'upload_form': upload_form},
             )
-            return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
+
+        arquivo = upload_form.cleaned_data['arquivo']
 
         try:
             relatorio = CSVImportService.import_file(arquivo, filename=arquivo.name, autor=request.user)
         except CSVParseError as err:
             logger.warning('Erro de formato durante importação: %s', err)
             messages.error(request, f'Erro ao ler o arquivo: {err}')
-            return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
+            return render(
+                request,
+                'banco_questoes/questao_import.html',
+                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+            )
         except Exception as exc:
             logger.exception('Erro inesperado durante importação: %s', exc)
             messages.error(request, f'Ocorreu um erro interno durante o processamento: {exc}')
-            return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
+            return render(
+                request,
+                'banco_questoes/questao_import.html',
+                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+            )
 
         if relatorio.total_processadas == 0:
             messages.warning(request, 'O arquivo enviado não contém linhas de dados para importação.')
-            return render(request, 'banco_questoes/questao_import.html', {'titulo': 'Importação em Lote'})
+            return render(
+                request,
+                'banco_questoes/questao_import.html',
+                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+            )
 
         if relatorio.total_sucesso > 0:
             messages.success(
@@ -535,6 +548,8 @@ def questao_import(request):
                 request,
                 f'Atenção: {relatorio.total_rejeitadas} questão(ões) foram rejeitadas devido a inconsistências/duplicidade.',
             )
+    else:
+        upload_form = CSVUploadForm()
 
     return render(
         request,
@@ -542,6 +557,7 @@ def questao_import(request):
         {
             'relatorio': relatorio,
             'titulo': 'Importação em Lote de Questões',
+            'upload_form': upload_form,
         },
     )
 

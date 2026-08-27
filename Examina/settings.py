@@ -34,7 +34,11 @@ if sys.platform == 'win32':
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Initialize environ
-env = environ.Env(DEBUG=(bool, False), ALLOWED_HOSTS=(list, []))
+env = environ.Env(
+    DEBUG=(bool, False),
+    ALLOWED_HOSTS=(list, []),
+    CSRF_TRUSTED_ORIGINS=(list, []),
+)
 
 # Read .env file if present
 environ.Env.read_env(BASE_DIR / '.env')
@@ -189,6 +193,60 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'banco_questoes:questao_list'
 LOGOUT_REDIRECT_URL = 'login'
+
+# ---------------------------------------------------------------------------
+# CSRF trusted origins (required when behind a reverse proxy)
+# ---------------------------------------------------------------------------
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+
+# ---------------------------------------------------------------------------
+# Upload limits
+# ---------------------------------------------------------------------------
+# Maximum size (in MB) accepted for CSV/XLSX imports
+CSV_UPLOAD_MAX_SIZE_MB = env.int('CSV_UPLOAD_MAX_SIZE_MB', default=5)
+
+# ---------------------------------------------------------------------------
+# Production-only security hardening
+# https://docs.djangoproject.com/en/stable/topics/security/
+# https://docs.djangoproject.com/en/stable/ref/middleware/#module-django.middleware.security
+# ---------------------------------------------------------------------------
+if not DEBUG:
+    # -- HTTPS enforcement --------------------------------------------------
+    # Redirect every HTTP request to HTTPS.
+    SECURE_SSL_REDIRECT = True
+
+    # Instruct browsers to only use HTTPS for 1 year, including subdomains.
+    # NOTE: Once deployed with HSTS, downgrading back to HTTP requires time.
+    SECURE_HSTS_SECONDS = 31_536_000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # -- Secure cookies -----------------------------------------------------
+    # Session and CSRF cookies are only sent over HTTPS.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # Prevent JavaScript from reading the session cookie (mitigates XSS theft).
+    SESSION_COOKIE_HTTPONLY = True
+    # CSRF_COOKIE_HTTPONLY intentionally left False (Django's JS helpers need it).
+
+    # SameSite=Lax: cookies are not sent on cross-site sub-requests (images,
+    # frames) but are sent when the user navigates to the site (e.g. clicking
+    # a link). This is a good balance between security and usability.
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+
+    # -- Security headers ---------------------------------------------------
+    # Prevent browsers from MIME-sniffing a response away from the declared
+    # content-type (sets X-Content-Type-Options: nosniff).
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    # Sets Referrer-Policy header to avoid leaking full URLs to third parties.
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+    # X-Frame-Options is already set to DENY by XFrameOptionsMiddleware;
+    # confirm the value here for explicitness.
+    X_FRAME_OPTIONS = 'DENY'
 
 
 # ---------------------------------------------------------------------------
