@@ -730,3 +730,46 @@ class MascaraValidacaoPercentuaisTest(TestCase):
         formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara)
         self.assertTrue(formset.is_valid())
 
+    def test_topico_outra_disciplina_rejeitado_no_formset(self):
+        """Verifica que associar um tópico de outra disciplina no formset é rejeitado."""
+        outra_disc = Disciplina.objects.create(nome='Cálculo Vetorial')
+        topico_invalido = Topico.objects.create(disciplina=outra_disc, nome='Gradiente e Rotacional')
+
+        mascara = Mascara.objects.create(
+            titulo='Mascara Filtro Disciplina',
+            disciplina=self.disc,
+            quantidade_questoes=10,
+            percentual_facil=40,
+            percentual_medio=40,
+            percentual_dificil=20,
+            autor=self.user,
+        )
+        formset_data = {
+            'topicos_distribuicao-TOTAL_FORMS': '2',
+            'topicos_distribuicao-INITIAL_FORMS': '0',
+            'topicos_distribuicao-MIN_NUM_FORMS': '0',
+            'topicos_distribuicao-MAX_NUM_FORMS': '1000',
+            'topicos_distribuicao-0-topico': str(self.top1.pk),
+            'topicos_distribuicao-0-percentual': '50',
+            'topicos_distribuicao-0-quantidade_questoes': '5',
+            'topicos_distribuicao-1-topico': str(topico_invalido.pk),
+            'topicos_distribuicao-1-percentual': '50',
+            'topicos_distribuicao-1-quantidade_questoes': '5',
+        }
+        formset = MascaraCriterioTopicoFormSet(data=formset_data, instance=mascara, disciplina=self.disc)
+        self.assertFalse(formset.is_valid())
+        self.assertIn('topico', formset.errors[1])
+
+    def test_formset_inicializa_com_queryset_filtrado_por_disciplina(self):
+        """Verifica que ao instanciar o formset com disciplina os campos select contêm apenas tópicos da disciplina."""
+        outra_disc = Disciplina.objects.create(nome='Física Teórica')
+        topico_outra = Topico.objects.create(disciplina=outra_disc, nome='Termodinâmica')
+
+        formset = MascaraCriterioTopicoFormSet(disciplina=self.disc)
+        for form in formset.forms:
+            qs = form.fields['topico'].queryset
+            self.assertIn(self.top1, qs)
+            self.assertIn(self.top2, qs)
+            self.assertNotIn(topico_outra, qs)
+
+

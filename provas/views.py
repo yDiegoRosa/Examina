@@ -76,7 +76,9 @@ def mascara_create(request):
     """Cria uma nova Máscara de Avaliação com matriz de dificuldade e tópicos."""
     if request.method == 'POST':
         form = MascaraProvaForm(request.POST)
-        formset = MascaraTopicoFormSet(request.POST)
+        disc_id = request.POST.get('disciplina')
+        disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else None
+        formset = MascaraTopicoFormSet(request.POST, disciplina=disciplina_post)
 
         if form.is_valid():
             disciplina = form.cleaned_data['disciplina']
@@ -84,7 +86,7 @@ def mascara_create(request):
             formset = MascaraTopicoFormSet(
                 request.POST,
                 instance=mascara_temp,
-                form_kwargs={'disciplina': disciplina},
+                disciplina=disciplina,
             )
 
             if formset.is_valid():
@@ -98,8 +100,10 @@ def mascara_create(request):
                 messages.success(request, f'Máscara "{mascara_temp.titulo}" criada com sucesso!')
                 return redirect('provas:mascara_detail', pk=mascara_temp.pk)
     else:
-        form = MascaraProvaForm()
-        formset = MascaraTopicoFormSet()
+        disc_param = request.GET.get('disciplina')
+        disciplina_init = Disciplina.objects.filter(pk=disc_param, ativo=True).first() if disc_param else None
+        form = MascaraProvaForm(initial={'disciplina': disciplina_init} if disciplina_init else None)
+        formset = MascaraTopicoFormSet(disciplina=disciplina_init)
 
     return render(
         request,
@@ -122,24 +126,34 @@ def mascara_update(request, pk):
 
     if request.method == 'POST':
         form = MascaraProvaForm(request.POST, instance=mascara)
+        disc_id = request.POST.get('disciplina')
+        disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else mascara.disciplina
         formset = MascaraTopicoFormSet(
             request.POST,
             instance=mascara,
-            form_kwargs={'disciplina': mascara.disciplina},
+            disciplina=disciplina_post,
         )
 
-        if form.is_valid() and formset.is_valid():
-            with transaction.atomic():
-                mascara = form.save()
-                formset.save()
+        if form.is_valid():
+            disciplina = form.cleaned_data['disciplina']
+            formset = MascaraTopicoFormSet(
+                request.POST,
+                instance=mascara,
+                disciplina=disciplina,
+            )
 
-            messages.success(request, f'Máscara "{mascara.titulo}" atualizada com sucesso!')
-            return redirect('provas:mascara_detail', pk=mascara.pk)
+            if formset.is_valid():
+                with transaction.atomic():
+                    mascara = form.save()
+                    formset.save()
+
+                messages.success(request, f'Máscara "{mascara.titulo}" atualizada com sucesso!')
+                return redirect('provas:mascara_detail', pk=mascara.pk)
     else:
         form = MascaraProvaForm(instance=mascara)
         formset = MascaraTopicoFormSet(
             instance=mascara,
-            form_kwargs={'disciplina': mascara.disciplina},
+            disciplina=mascara.disciplina,
         )
 
     return render(

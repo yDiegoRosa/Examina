@@ -638,22 +638,57 @@
     });
   }
 
-  // Popula os selects existentes com os tópicos retornados
+  // Popula os selects existentes e o template com os tópicos retornados da disciplina
   function populateTopicSelects(topicos) {
     currentTopicosList = topicos || [];
+
+    // 1. Atualiza selects nas linhas existentes
     document.querySelectorAll('.topico-select').forEach(function(select) {
-      const selectedVal = select.value;
-      select.innerHTML = '<option value="">Selecione um tópico...</option>';
+      const selectedVal = String(select.value);
+      let matchFound = false;
+
+      select.innerHTML = currentTopicosList.length > 0
+        ? '<option value="">Selecione um tópico...</option>'
+        : '<option value="">Nenhum tópico encontrado para esta disciplina</option>';
+
       currentTopicosList.forEach(function(t) {
         const opt = document.createElement('option');
-        opt.value = t.id;
+        opt.value = String(t.id);
         opt.textContent = t.nome;
-        if (String(t.id) === String(selectedVal)) {
+        if (String(t.id) === selectedVal) {
           opt.selected = true;
+          matchFound = true;
         }
         select.appendChild(opt);
       });
+
+      // Se o tópico selecionado anteriormente não pertence à nova disciplina, reseta
+      if (selectedVal && !matchFound) {
+        select.value = '';
+      }
     });
+
+    // 2. Atualiza o template de novo tópico dinâmico
+    if (emptyTemplate) {
+      const templateSelect = emptyTemplate.content
+        ? emptyTemplate.content.querySelector('.topico-select')
+        : emptyTemplate.querySelector('.topico-select');
+
+      if (templateSelect) {
+        templateSelect.innerHTML = currentTopicosList.length > 0
+          ? '<option value="">Selecione um tópico...</option>'
+          : '<option value="">Nenhum tópico encontrado para esta disciplina</option>';
+
+        currentTopicosList.forEach(function(t) {
+          const opt = document.createElement('option');
+          opt.value = String(t.id);
+          opt.textContent = t.nome;
+          templateSelect.appendChild(opt);
+        });
+      }
+    }
+
+    recalcularQtdTopicos();
   }
 
   // Diagnóstico de Estoque via API AJAX

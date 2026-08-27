@@ -412,6 +412,53 @@
     });
   }
 
+  // Sincronização Dinâmica de Tópicos por Disciplina
+  const disciplinaSelect = document.getElementById('id_disciplina');
+  const topicoSelect = document.getElementById('id_topico');
+
+  function atualizarTopicosPorDisciplina() {
+    if (!disciplinaSelect || !topicoSelect) return;
+    const discId = disciplinaSelect.value;
+    const selectedTopicoVal = String(topicoSelect.value);
+
+    if (!discId) {
+      topicoSelect.innerHTML = '<option value="">Selecione uma disciplina primeiro...</option>';
+      return;
+    }
+
+    fetch(`{% url 'banco_questoes:api_topicos_por_disciplina' %}?disciplina_id=${discId}`)
+      .then(res => res.json())
+      .then(data => {
+        let matchFound = false;
+        topicoSelect.innerHTML = data.topicos && data.topicos.length > 0
+          ? '<option value="">Selecione um tópico...</option>'
+          : '<option value="">Nenhum tópico cadastrado para esta disciplina</option>';
+
+        (data.topicos || []).forEach(function(t) {
+          const opt = document.createElement('option');
+          opt.value = String(t.id);
+          opt.textContent = t.nome;
+          if (String(t.id) === selectedTopicoVal) {
+            opt.selected = true;
+            matchFound = true;
+          }
+          topicoSelect.appendChild(opt);
+        });
+
+        if (selectedTopicoVal && !matchFound) {
+          topicoSelect.value = '';
+        }
+      })
+      .catch(err => console.error('Erro ao carregar tópicos da disciplina:', err));
+  }
+
+  if (disciplinaSelect) {
+    disciplinaSelect.addEventListener('change', atualizarTopicosPorDisciplina);
+    if (disciplinaSelect.value && (!topicoSelect.value || topicoSelect.options.length <= 1)) {
+      atualizarTopicosPorDisciplina();
+    }
+  }
+
   updateRemoveButtons();
 })();
 </script>

@@ -146,14 +146,31 @@ class MascaraCriterioTopicoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         disciplina = kwargs.pop('disciplina', None)
         super().__init__(*args, **kwargs)
+        if not disciplina and self.instance and getattr(self.instance, 'mascara_id', None):
+            disciplina = getattr(self.instance.mascara, 'disciplina', None)
+
         if disciplina:
-            self.fields['topico'].queryset = Topico.objects.filter(disciplina=disciplina, ativo=True)
+            self.fields['topico'].queryset = Topico.objects.filter(
+                disciplina=disciplina, ativo=True
+            ).order_by('nome')
         else:
-            self.fields['topico'].queryset = Topico.objects.filter(ativo=True)
+            self.fields['topico'].queryset = Topico.objects.filter(ativo=True).order_by('nome')
 
 
 class BaseMascaraCriterioTopicoFormSet(forms.BaseInlineFormSet):
     """Validação customizada do inline formset de critérios de tópicos."""
+
+    def __init__(self, *args, **kwargs):
+        self.disciplina = kwargs.pop('disciplina', None)
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        if self.disciplina:
+            kwargs['disciplina'] = self.disciplina
+        elif self.instance and getattr(self.instance, 'disciplina_id', None):
+            kwargs['disciplina'] = self.instance.disciplina
+        return kwargs
 
     def clean(self):
         super().clean()
@@ -164,12 +181,23 @@ class BaseMascaraCriterioTopicoFormSet(forms.BaseInlineFormSet):
         topicos_vistos = set()
         active_forms = 0
 
+        # Identifica a disciplina vinculada à máscara
+        disc_vinculada = self.disciplina or (
+            self.instance.disciplina if getattr(self.instance, 'disciplina_id', None) else None
+        )
+
         for form in self.forms:
             if not form.cleaned_data or form.cleaned_data.get('DELETE'):
                 continue
 
             topico = form.cleaned_data.get('topico')
             percentual = form.cleaned_data.get('percentual')
+
+            if topico and disc_vinculada and topico.disciplina_id != disc_vinculada.pk:
+                form.add_error(
+                    'topico',
+                    f'O tópico "{topico.nome}" não pertence à disciplina selecionada ({disc_vinculada.nome}).',
+                )
 
             if topico and (percentual is None or percentual <= 0):
                 form.add_error('percentual', 'Informe um percentual maior que 0% para o tópico selecionado.')

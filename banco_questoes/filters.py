@@ -1,3 +1,5 @@
+import contextlib
+
 import django_filters
 from django import forms
 from django.contrib.auth import get_user_model
@@ -59,6 +61,14 @@ class QuestaoFilter(django_filters.FilterSet):
         empty_label='Todos os autores',
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+
+    def __init__(self, data=None, *args, **kwargs):
+        super().__init__(data, *args, **kwargs)
+        if data and data.get('disciplina'):
+            with contextlib.suppress(ValueError, TypeError):
+                self.filters['topico'].extra['queryset'] = Topico.objects.filter(
+                    disciplina_id=data.get('disciplina'), ativo=True
+                ).order_by('nome')
 
     class Meta:
         model = Questao

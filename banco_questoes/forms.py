@@ -2,7 +2,7 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
-from .models import Alternativa, Questao
+from .models import Alternativa, Disciplina, Questao, Topico
 
 # ---------------------------------------------------------------------------
 # Extensões e magic bytes aceitos para importação
@@ -230,6 +230,23 @@ class QuestaoForm(forms.ModelForm):
             ),
             'ativo': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['disciplina'].queryset = Disciplina.objects.filter(ativo=True).order_by('nome')
+
+        disciplina_id = None
+        if self.is_bound:
+            disciplina_id = self.data.get('disciplina')
+        elif self.instance and self.instance.pk and self.instance.disciplina_id:
+            disciplina_id = self.instance.disciplina_id
+
+        if disciplina_id:
+            self.fields['topico'].queryset = Topico.objects.filter(
+                disciplina_id=disciplina_id, ativo=True
+            ).order_by('nome')
+        else:
+            self.fields['topico'].queryset = Topico.objects.filter(ativo=True).order_by('nome')
 
     # ------------------------------------------------------------------
     # Field-level validation

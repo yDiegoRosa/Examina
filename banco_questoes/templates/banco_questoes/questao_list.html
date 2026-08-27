@@ -303,3 +303,48 @@
   {% endif %}
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+  const discSelect = document.getElementById('id_disciplina');
+  const topicoSelect = document.getElementById('id_topico');
+
+  if (discSelect && topicoSelect) {
+    discSelect.addEventListener('change', function() {
+      const discId = discSelect.value;
+      const currentTopico = topicoSelect.value;
+
+      if (!discId) {
+        topicoSelect.innerHTML = '<option value="">Todos os tópicos</option>';
+        return;
+      }
+
+      fetch(`{% url 'banco_questoes:api_topicos_por_disciplina' %}?disciplina_id=${discId}`)
+        .then(res => res.json())
+        .then(data => {
+          let matchFound = false;
+          topicoSelect.innerHTML = '<option value="">Todos os tópicos</option>';
+
+          (data.topicos || []).forEach(function(t) {
+            const opt = document.createElement('option');
+            opt.value = String(t.id);
+            opt.textContent = t.nome;
+            if (String(t.id) === String(currentTopico)) {
+              opt.selected = true;
+              matchFound = true;
+            }
+            topicoSelect.appendChild(opt);
+          });
+
+          if (currentTopico && !matchFound) {
+            topicoSelect.value = '';
+          }
+        })
+        .catch(err => console.error('Erro ao atualizar tópicos no filtro:', err));
+    });
+  }
+})();
+</script>
+{% endblock %}

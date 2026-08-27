@@ -5,13 +5,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseNotAllowed
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .filters import QuestaoFilter
 from .forms import AlternativaFormSet, CSVUploadForm, QuestaoForm
 from .importer import CSVImportService
-from .models import Questao
+from .models import Disciplina, Questao, Topico
 from .parser import CSVParseError
 
 logger = logging.getLogger(__name__)
@@ -678,3 +678,29 @@ def questao_history(request, pk):
             'titulo': f'Histórico — Q{questao.pk}',
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# API / AJAX: Tópicos por Disciplina
+# ---------------------------------------------------------------------------
+@login_required
+def api_topicos_por_disciplina(request):
+    """Retorna JSON com tópicos ativos de uma disciplina específica."""
+    disciplina_id = request.GET.get('disciplina_id')
+    if not disciplina_id:
+        return JsonResponse({'topicos': []})
+
+    disciplina = get_object_or_404(Disciplina, pk=disciplina_id, ativo=True)
+    topicos = list(
+        Topico.objects.filter(disciplina=disciplina, ativo=True)
+        .values('id', 'nome')
+        .order_by('nome')
+    )
+    return JsonResponse(
+        {
+            'disciplina_id': disciplina.pk,
+            'disciplina_nome': disciplina.nome,
+            'topicos': topicos,
+        }
+    )
+
