@@ -157,6 +157,7 @@ def gerar_prova_automatizada(
     - Valida o estoque por célula antes de qualquer comit no banco de dados.
     - Lança `EstoqueInsuficienteError` se faltar qualquer questão, impedindo provas incompletas.
     - Executa a persistência dentro de uma transação atômica (`transaction.atomic`).
+    - Congela snapshots JSON da máscara, critérios e questões no instante da geração.
 
     Args:
         mascara: Instância de Mascara.
@@ -174,6 +175,13 @@ def gerar_prova_automatizada(
     from django.db import transaction
 
     from provas.models import Prova, ProvaQuestao
+    from provas.services.snapshot_builder import (
+        construir_snapshot_criterios_dificuldade,
+        construir_snapshot_criterios_topico,
+        construir_snapshot_mascara,
+        construir_snapshot_matriz_metas,
+        construir_snapshot_questao,
+    )
     from provas.services.stock_validator import (
         EstoqueInsuficienteError,
         validar_disponibilidade_estoque,
@@ -184,7 +192,13 @@ def gerar_prova_automatizada(
     if not relatorio.esta_valido:
         raise EstoqueInsuficienteError(relatorio)
 
-    # 2. Seleção e persistência atômica
+    # 2. Construção dos snapshots da máscara (antes da transação para não segurar lock)
+    snap_mascara = construir_snapshot_mascara(mascara)
+    snap_criterios_dif = construir_snapshot_criterios_dificuldade(mascara)
+    snap_criterios_top = construir_snapshot_criterios_topico(mascara)
+    snap_matriz = construir_snapshot_matriz_metas(mascara)
+
+    # 3. Seleção e persistência atômica
     with transaction.atomic():
         questoes = selecionar_questoes_por_matriz(
             mascara=mascara,
@@ -202,6 +216,10 @@ def gerar_prova_automatizada(
             titulo=titulo_prova,
             numero_caderno=numero_caderno,
             autor=autor or mascara.autor,
+            snapshot_mascara=snap_mascara,
+            snapshot_criterios_dificuldade=snap_criterios_dif,
+            snapshot_criterios_topico=snap_criterios_top,
+            snapshot_matriz_metas=snap_matriz,
         )
 
         # Cálculo da pontuação proporcional por item
@@ -214,6 +232,7 @@ def gerar_prova_automatizada(
                 numero=idx + 1,
                 ordem=idx + 1,
                 pontuacao=pontuacao_item,
+                snapshot_questao=construir_snapshot_questao(q),
             )
             for idx, q in enumerate(questoes)
         ]

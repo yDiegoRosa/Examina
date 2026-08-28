@@ -10,6 +10,13 @@ from .question_selector import (
     gerar_prova_automatizada,
     selecionar_questoes_por_matriz,
 )
+from .snapshot_builder import (
+    construir_snapshot_criterios_dificuldade,
+    construir_snapshot_criterios_topico,
+    construir_snapshot_mascara,
+    construir_snapshot_matriz_metas,
+    construir_snapshot_questao,
+)
 from .stock_validator import (
     CelulaDiagnosticoEstoque,
     EstoqueInsuficienteError,
@@ -29,8 +36,14 @@ __all__ = [
     'PDFGeneratorService',
     'RelatorioDiagnosticoEstoque',
     'calcular_metas_celulas',
+    'construir_snapshot_criterios_dificuldade',
+    'construir_snapshot_criterios_topico',
+    'construir_snapshot_mascara',
+    'construir_snapshot_matriz_metas',
+    'construir_snapshot_questao',
     'consultar_questoes_candidatas_priorizadas',
     'gerar_prova_automatizada',
     'selecionar_questoes_por_matriz',
     'validar_disponibilidade_estoque',
 ]
+

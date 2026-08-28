@@ -1220,5 +1220,161 @@ class BloqueioEstoqueInsuficienteTest(TestCase):
 
 
 
+class SnapshotProvaTest(TestCase):
+    """
+    Testes de integridade e imutabilidade dos snapshots JSON
+    registrados nos models Prova e ProvaQuestao.
+    """
 
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='prof_snapshot', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Algoritmos Snapshot')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Grafos')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Ordenação')
+
+        self.mascara = Mascara.objects.create(
+            titulo='AV Snapshot Test',
+            disciplina=self.disc,
+            quantidade_questoes=4,
+            modalidade=Mascara.Modalidade.OBJETIVA,
+            percentual_facil=50,
+            percentual_medio=50,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        from provas.models import MascaraCriterioTopico
+
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top1, percentual=50)
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top2, percentual=50)
+
+        # Estoque: 1 questão por célula (4 no total) — exatamente suficiente
+        for t in [self.top1, self.top2]:
+            for d in [Questao.Dificuldade.FACIL, Questao.Dificuldade.MEDIO]:
+                q = Questao.objects.create(
+                    disciplina=self.disc,
+                    topico=t,
+                    tipo=Questao.Tipo.OBJETIVA,
+                    dificuldade=d,
+                    enunciado=f'Enunciado snapshot {t.nome} {d}',
+                    origem='ENADE 2025',
+                    numero_questao='Q1',
+                    autor=self.user,
+                    ativo=True,
+                )
+                Alternativa.objects.create(questao=q, letra='A', texto='Opção A', correta=True)
+                Alternativa.objects.create(questao=q, letra='B', texto='Opção B', correta=False)
+
+        self.prova = self.mascara.gerar_prova(autor=self.user)
+
+    def test_snapshot_mascara_contem_campos_esperados(self):
+        """Verifica que snapshot_mascara contém todos os parâmetros da máscara."""
+        snap = self.prova.snapshot_mascara
+        campos_obrigatorios = [
+            'mascara_id', 'titulo', 'disciplina_id', 'disciplina_nome',
+            'quantidade_questoes', 'modalidade', 'modalidade_display',
+            'quantidade_objetivas', 'quantidade_discursivas',
+            'percentual_facil', 'percentual_medio', 'percentual_dificil',
+            'valor_total', 'tempo_estimado_minutos',
+            'embaralhar_questoes', 'embaralhar_alternativas', 'priorizar_enade',
+        ]
+        for campo in campos_obrigatorios:
+            self.assertIn(campo, snap, f'Campo "{campo}" ausente no snapshot_mascara')
+
+        self.assertEqual(snap['mascara_id'], self.mascara.pk)
+        self.assertEqual(snap['titulo'], 'AV Snapshot Test')
+        self.assertEqual(snap['quantidade_questoes'], 4)
+        self.assertEqual(snap['percentual_facil'], 50)
+
+    def test_snapshot_criterios_dificuldade_contem_3_itens(self):
+        """Verifica que snapshot_criterios_dificuldade tem exatamente 3 critérios (F, M, D)."""
+        snap = self.prova.snapshot_criterios_dificuldade
+        self.assertEqual(len(snap), 3)
+
+        dificuldades_presentes = {item['dificuldade'] for item in snap}
+        self.assertEqual(dificuldades_presentes, {'F', 'M', 'D'})
+
+        for item in snap:
+            self.assertIn('percentual', item)
+            self.assertIn('quantidade', item)
+            self.assertIn('dificuldade_display', item)
+
+    def test_snapshot_criterios_topico_contem_topicos_configurados(self):
+        """Verifica que snapshot_criterios_topico contém os tópicos da máscara."""
+        snap = self.prova.snapshot_criterios_topico
+        self.assertEqual(len(snap), 2)
+
+        nomes = {item['topico_nome'] for item in snap}
+        self.assertIn('Grafos', nomes)
+        self.assertIn('Ordenação', nomes)
+
+        for item in snap:
+            self.assertIn('topico_id', item)
+            self.assertIn('percentual', item)
+            self.assertIn('quantidade', item)
+
+    def test_snapshot_matriz_metas_soma_igual_total(self):
+        """Verifica que snapshot_matriz_metas preserva a soma correta de questões."""
+        snap = self.prova.snapshot_matriz_metas
+        self.assertIn('total_questoes', snap)
+        self.assertIn('celulas', snap)
+        self.assertEqual(snap['total_questoes'], 4)
+
+        soma_celulas = sum(cel['quantidade'] for cel in snap['celulas'])
+        self.assertEqual(soma_celulas, 4)
+
+    def test_snapshot_questao_em_cada_prova_questao(self):
+        """Verifica que cada ProvaQuestao possui snapshot com enunciado, alternativas e metadados."""
+        itens = self.prova.itens.all()
+        self.assertEqual(itens.count(), 4)
+
+        for item in itens:
+            snap = item.snapshot_questao
+            self.assertIn('questao_id', snap)
+            self.assertIn('tipo', snap)
+            self.assertIn('dificuldade', snap)
+            self.assertIn('enunciado', snap)
+            self.assertIn('alternativas', snap)
+            self.assertIn('disciplina_nome', snap)
+            self.assertIn('topico_nome', snap)
+
+            # Questões objetivas devem ter alternativas
+            self.assertEqual(snap['tipo'], 'OBJ')
+            self.assertGreater(len(snap['alternativas']), 0)
+            self.assertTrue(any(alt['correta'] for alt in snap['alternativas']))
+
+    def test_snapshot_imutavel_apos_alteracao_mascara(self):
+        """Garante que o snapshot não é afetado por alterações posteriores na máscara."""
+        titulo_original = self.prova.snapshot_mascara['titulo']
+        percentual_original = self.prova.snapshot_mascara['percentual_facil']
+
+        # Altera a máscara
+        self.mascara.titulo = 'AV Alterada Depois'
+        self.mascara.percentual_facil = 30
+        self.mascara.percentual_medio = 50
+        self.mascara.percentual_dificil = 20
+        self.mascara.save()
+
+        # Recarrega a prova do banco
+        self.prova.refresh_from_db()
+
+        self.assertEqual(self.prova.snapshot_mascara['titulo'], titulo_original)
+        self.assertEqual(self.prova.snapshot_mascara['percentual_facil'], percentual_original)
+
+    def test_snapshot_imutavel_apos_alteracao_questao(self):
+        """Garante que o snapshot da questão não muda se a questão for editada depois."""
+        item = self.prova.itens.first()
+        enunciado_original = item.snapshot_questao['enunciado']
+
+        # Altera o enunciado da questão original
+        questao = item.questao
+        questao.enunciado = 'Enunciado completamente diferente após edição'
+        questao.save()
+
+        # Recarrega o item do banco
+        item.refresh_from_db()
+
+        self.assertEqual(item.snapshot_questao['enunciado'], enunciado_original)
+        self.assertNotEqual(item.questao.enunciado, enunciado_original)
 

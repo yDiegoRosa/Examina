@@ -397,6 +397,10 @@ class Prova(models.Model):
     """
     Avaliação acadêmica gerada a partir de uma Máscara de Prova.
     Rastreia cadernos de prova, data de aplicação e histórico de utilização de questões (RF07).
+
+    Os campos ``snapshot_*`` congelam o estado exato dos parâmetros da máscara
+    e da matriz de metas no instante da geração, garantindo rastreabilidade
+    e auditabilidade mesmo que os registros originais sejam alterados.
     """
 
     mascara = models.ForeignKey(
@@ -421,6 +425,33 @@ class Prova(models.Model):
         related_name='provas_geradas',
         verbose_name='docente responsável',
     )
+
+    # ── Snapshots JSON (registro imutável no momento da geração) ──────────
+    snapshot_mascara = models.JSONField(
+        'snapshot da máscara',
+        default=dict,
+        blank=True,
+        help_text='Parâmetros completos da máscara congelados no instante da geração.',
+    )
+    snapshot_criterios_dificuldade = models.JSONField(
+        'snapshot dos critérios de dificuldade',
+        default=list,
+        blank=True,
+        help_text='Critérios F/M/D com percentuais e quantidades calculadas.',
+    )
+    snapshot_criterios_topico = models.JSONField(
+        'snapshot dos critérios de tópico',
+        default=list,
+        blank=True,
+        help_text='Tópicos curriculares com percentuais e quantidades calculadas.',
+    )
+    snapshot_matriz_metas = models.JSONField(
+        'snapshot da matriz de metas',
+        default=dict,
+        blank=True,
+        help_text='Matriz 2D completa (Tópico × Dificuldade) com metas inteiras por célula.',
+    )
+
     criado_em = models.DateTimeField('data de geração', auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -438,6 +469,9 @@ class Prova(models.Model):
 class ProvaQuestao(models.Model):
     """
     Item/associação de uma questão a uma prova gerada específica.
+
+    O campo ``snapshot_questao`` preserva enunciado, alternativas, tipo,
+    dificuldade e demais dados da questão no instante da inclusão na prova.
     """
 
     prova = models.ForeignKey(
@@ -460,6 +494,15 @@ class ProvaQuestao(models.Model):
         decimal_places=2,
         default=1.00,
     )
+
+    # ── Snapshot JSON (registro imutável da questão) ──────────────────────
+    snapshot_questao = models.JSONField(
+        'snapshot da questão',
+        default=dict,
+        blank=True,
+        help_text='Dados completos da questão congelados no momento da inclusão na prova.',
+    )
+
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
