@@ -248,5 +248,11 @@ def gerar_prova_automatizada(
         ]
         ProvaQuestao.objects.bulk_create(itens_prova)
 
+        # Gera versões A/B/C persistidas com permutações de questões e alternativas
+        from provas.services.version_generator import gerar_versoes_prova
+
+        gerar_versoes_prova(prova=prova, quantidade_versoes=3)
+
     return prova
+
 
