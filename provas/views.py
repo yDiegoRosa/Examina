@@ -824,8 +824,7 @@ def prova_pdf(request, pk):
     )
 
     itens = (
-        prova.itens
-        .select_related('questao', 'questao__topico', 'questao__disciplina')
+        prova.itens.select_related('questao', 'questao__topico', 'questao__disciplina')
         .prefetch_related('questao__alternativas')
         .order_by('ordem')
     )
@@ -903,4 +902,3 @@ def prova_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
-
