@@ -15,8 +15,7 @@ services:
     networks:
       - examina_net
     healthcheck:
-      # Testa se a porta 3306 realmente aceita conexão usando python embutido no container
-      test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 3306))"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 3s
       timeout: 3s
       retries: 15

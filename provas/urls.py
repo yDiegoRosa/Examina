@@ -16,6 +16,7 @@ urlpatterns = [
     # Revisão da Prova Gerada & Troca Individual de Questões
     path('provas/nova-manual/', views.prova_manual_create, name='prova_manual_create'),
     path('provas/<int:pk>/revisao/', views.prova_revisao, name='prova_revisao'),
+    path('provas/<int:pk>/capa-pdf/', views.prova_capa_pdf, name='prova_capa_pdf'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),
     path('itens/<int:item_pk>/substituir/', views.item_substituir_questao, name='item_substituir_questao'),
     # AJAX / APIs
