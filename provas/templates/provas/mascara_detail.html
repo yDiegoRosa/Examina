@@ -288,4 +288,62 @@
     </div>
   </div>
 </div>
+
+<!-- Provas Geradas Recentes -->
+<div class="card-surface p-4 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
+        <i class="bi bi-clock-history" style="color: var(--fae-gold);"></i> Provas Geradas Recentes
+      </h3>
+      <p class="text-muted small mb-0">
+        Últimas avaliações geradas a partir desta máscara com link para revisão detalhada.
+      </p>
+    </div>
+  </div>
+
+  {% if provas_recentes %}
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">#</th>
+          <th>Título</th>
+          <th style="width: 100px;" class="text-center">Caderno</th>
+          <th style="width: 100px;" class="text-center">Questões</th>
+          <th style="width: 140px;">Docente</th>
+          <th style="width: 160px;">Data de Geração</th>
+          <th style="width: 130px;" class="text-center">Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in provas_recentes %}
+        <tr>
+          <td class="font-mono font-bold text-muted">{{ p.pk }}</td>
+          <td class="font-bold text-main">{{ p.titulo|truncatechars:50 }}</td>
+          <td class="text-center">
+            <span class="badge-pill badge-pill-medio small">Cad. {{ p.numero_caderno }}</span>
+          </td>
+          <td class="text-center font-mono font-bold">{{ p.total_questoes }}</td>
+          <td class="text-secondary small">
+            {% if p.autor %}{{ p.autor.get_full_name|default:p.autor.username }}{% else %}—{% endif %}
+          </td>
+          <td class="text-muted small font-mono">{{ p.criado_em|date:"d/m/Y H:i" }}</td>
+          <td class="text-center">
+            <a href="{% url 'provas:prova_revisao' pk=p.pk %}" class="btn btn-outline" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;">
+              <i class="bi bi-clipboard2-check"></i> Revisar
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="p-4 text-muted text-center" style="background: #F8FAFC; border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+    <i class="bi bi-journal-x mb-1" style="font-size: 1.5rem; display: block; opacity: 0.5;"></i>
+    Nenhuma prova gerada a partir desta máscara ainda.
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

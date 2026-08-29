@@ -1214,9 +1214,10 @@ class BloqueioEstoqueInsuficienteTest(TestCase):
         url = reverse('provas:mascara_gerar_prova', kwargs={'pk': self.mascara.pk})
         response = self.client.post(url, follow=True)
 
-        self.assertRedirects(response, reverse('provas:mascara_detail', kwargs={'pk': self.mascara.pk}))
-        self.assertContains(response, 'gerada com sucesso')
         self.assertEqual(Prova.objects.count(), 1)
+        prova = Prova.objects.first()
+        self.assertRedirects(response, reverse('provas:prova_revisao', kwargs={'pk': prova.pk}))
+        self.assertContains(response, 'gerada com sucesso')
 
 
 
@@ -1377,4 +1378,110 @@ class SnapshotProvaTest(TestCase):
 
         self.assertEqual(item.snapshot_questao['enunciado'], enunciado_original)
         self.assertNotEqual(item.questao.enunciado, enunciado_original)
+
+
+class ProvaRevisaoViewTest(TestCase):
+    """
+    Testes da tela de revisão da seleção (meta vs. atual) para provas geradas.
+    """
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='prof_revisao', password='secret_password')  # noqa: S106
+        self.client.login(username='prof_revisao', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Revisão Disciplina')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Tópico Rev A')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Tópico Rev B')
+
+        self.mascara = Mascara.objects.create(
+            titulo='AV Revisão Test',
+            disciplina=self.disc,
+            quantidade_questoes=4,
+            modalidade=Mascara.Modalidade.OBJETIVA,
+            percentual_facil=50,
+            percentual_medio=50,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        from provas.models import MascaraCriterioTopico
+
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top1, percentual=50)
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top2, percentual=50)
+
+        # Estoque completo
+        for t in [self.top1, self.top2]:
+            for d in [Questao.Dificuldade.FACIL, Questao.Dificuldade.MEDIO]:
+                q = Questao.objects.create(
+                    disciplina=self.disc,
+                    topico=t,
+                    tipo=Questao.Tipo.OBJETIVA,
+                    dificuldade=d,
+                    enunciado=f'Enunciado revisão {t.nome} {d}',
+                    autor=self.user,
+                    ativo=True,
+                )
+                Alternativa.objects.create(questao=q, letra='A', texto='Alt A', correta=True)
+                Alternativa.objects.create(questao=q, letra='B', texto='Alt B', correta=False)
+
+        self.prova = self.mascara.gerar_prova(autor=self.user)
+
+    def test_prova_revisao_requer_login(self):
+        """Verifica que a tela de revisão redireciona usuários anônimos."""
+        self.client.logout()
+        url = reverse('provas:prova_revisao', kwargs={'pk': self.prova.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
+
+    def test_prova_revisao_retorna_200_com_contexto(self):
+        """Verifica renderização da tela de revisão com contexto completo."""
+        url = reverse('provas:prova_revisao', kwargs={'pk': self.prova.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Comparativo Meta vs. Atual')
+        self.assertContains(response, 'Questões Selecionadas')
+        self.assertIn('comparativo_celulas', response.context)
+        self.assertIn('linhas_comparativo', response.context)
+        self.assertIn('resumo_dificuldade', response.context)
+        self.assertIn('total_meta', response.context)
+        self.assertIn('total_atual', response.context)
+
+    def test_comparativo_meta_vs_atual_correto(self):
+        """Verifica que meta vs. atual está correto e conforme."""
+        url = reverse('provas:prova_revisao', kwargs={'pk': self.prova.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.context['total_meta'], 4)
+        self.assertEqual(response.context['total_atual'], 4)
+
+        # Todas as células devem ter status 'ok' pois o estoque era exatamente suficiente
+        for cel in response.context['comparativo_celulas']:
+            self.assertEqual(cel['status'], 'ok', f'Célula {cel["topico_nome"]}/{cel["dificuldade"]} divergente')
+
+    def test_mascara_gerar_prova_redireciona_para_revisao(self):
+        """Verifica que após gerar a prova, o redirect vai para a tela de revisão."""
+        from provas.models import Prova as ProvaModel
+
+        # Criar mais estoque para uma segunda geração
+        for t in [self.top1, self.top2]:
+            for d in [Questao.Dificuldade.FACIL, Questao.Dificuldade.MEDIO]:
+                q = Questao.objects.create(
+                    disciplina=self.disc,
+                    topico=t,
+                    tipo=Questao.Tipo.OBJETIVA,
+                    dificuldade=d,
+                    enunciado=f'Extra revisão {t.nome} {d}',
+                    autor=self.user,
+                    ativo=True,
+                )
+                Alternativa.objects.create(questao=q, letra='A', texto='Alt A', correta=True)
+
+        url = reverse('provas:mascara_gerar_prova', kwargs={'pk': self.mascara.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 302)
+        nova_prova = ProvaModel.objects.latest('criado_em')
+        expected_url = reverse('provas:prova_revisao', kwargs={'pk': nova_prova.pk})
+        self.assertEqual(response.url, expected_url)
 

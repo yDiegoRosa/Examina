@@ -13,6 +13,8 @@ urlpatterns = [
     path('mascaras/<int:pk>/editar/', views.mascara_update, name='mascara_update'),
     path('mascaras/<int:pk>/gerar/', views.mascara_gerar_prova, name='mascara_gerar_prova'),
     path('mascaras/<int:pk>/toggle-ativo/', views.mascara_toggle_ativo, name='mascara_toggle_ativo'),
+    # Revisão da Prova Gerada
+    path('provas/<int:pk>/revisao/', views.prova_revisao, name='prova_revisao'),
     # AJAX / APIs
     path('api/topicos-estoque/', views.api_topicos_e_estoque, name='api_topicos_estoque'),
     # Demonstração PDF

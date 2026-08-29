@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from banco_questoes.models import Disciplina, Questao, Topico
 
 from .forms import MascaraProvaForm, MascaraTopicoFormSet
-from .models import MascaraProva
+from .models import MascaraProva, Prova
 from .services.pdf_generator import PDFGeneratorService
 from .services.stock_validator import EstoqueInsuficienteError
 
@@ -219,6 +219,14 @@ def mascara_detail(request, pk):
     matriz_metas = mascara.calcular_matriz_metas()
     relatorio_estoque = mascara.validar_estoque()
 
+    # Últimas provas geradas a partir desta máscara
+    provas_recentes = (
+        mascara.provas_geradas
+        .select_related('autor')
+        .annotate(total_questoes=Count('itens'))
+        .order_by('-criado_em')[:5]
+    )
+
     return render(
         request,
         'provas/mascara_detail.html',
@@ -228,6 +236,7 @@ def mascara_detail(request, pk):
             'matriz_metas': matriz_metas,
             'diagnostico': diagnostico,
             'relatorio_estoque': relatorio_estoque,
+            'provas_recentes': provas_recentes,
         },
     )
 
@@ -250,13 +259,146 @@ def mascara_gerar_prova(request, pk):
             request,
             f'Avaliação "{prova.titulo}" gerada com sucesso contendo {prova.itens.count()} questões selecionadas!',
         )
-        return redirect('provas:mascara_detail', pk=mascara.pk)
+        return redirect('provas:prova_revisao', pk=prova.pk)
     except EstoqueInsuficienteError as err:
         messages.error(
             request,
             f'⚠️ Geração bloqueada: {err.mensagem}',
         )
         return redirect('provas:mascara_detail', pk=mascara.pk)
+
+
+# ---------------------------------------------------------------------------
+# Revisão da Seleção — Meta vs. Atual (Tópico × Dificuldade)
+# ---------------------------------------------------------------------------
+@login_required
+def prova_revisao(request, pk):
+    """Exibe a tela de revisão da seleção com indicadores meta vs. atual por célula."""
+    prova = get_object_or_404(
+        Prova.objects.select_related('mascara', 'mascara__disciplina', 'autor'),
+        pk=pk,
+    )
+    itens = (
+        prova.itens
+        .select_related('questao', 'questao__topico', 'questao__disciplina')
+        .prefetch_related('questao__alternativas')
+        .order_by('ordem')
+    )
+
+    # --- Metas a partir dos snapshots JSON (instante da geração) ---
+    snap_matriz = prova.snapshot_matriz_metas or {}
+    snap_celulas = snap_matriz.get('celulas', [])
+
+    # Indexar metas por (topico_id, dificuldade)
+    metas_por_celula = {}
+    for cel in snap_celulas:
+        chave = (cel.get('topico_id'), cel.get('dificuldade'))
+        metas_por_celula[chave] = cel.get('quantidade', 0)
+
+    # --- Distribuição real das questões selecionadas ---
+    atual_por_celula = {}
+    for item in itens:
+        q = item.questao
+        topico_id = q.topico_id
+        dif = q.dificuldade
+        chave = (topico_id, dif)
+        atual_por_celula[chave] = atual_por_celula.get(chave, 0) + 1
+
+    # --- Construção do comparativo por célula ---
+    todas_chaves = set(metas_por_celula.keys()) | set(atual_por_celula.keys())
+
+    # Mapas de nomes
+    topico_nomes = {}
+    for cel in snap_celulas:
+        topico_nomes[cel.get('topico_id')] = cel.get('topico_nome', 'Sem tópico')
+    for item in itens:
+        q = item.questao
+        if q.topico_id and q.topico_id not in topico_nomes:
+            topico_nomes[q.topico_id] = q.topico.nome if q.topico else 'Sem tópico'
+
+    dif_display_map = {'F': 'Fácil', 'M': 'Médio', 'D': 'Difícil'}
+
+    comparativo_celulas = []
+    for chave in sorted(todas_chaves, key=lambda c: (c[0] or 0, c[1] or '')):
+        topico_id, dif = chave
+        meta = metas_por_celula.get(chave, 0)
+        atual = atual_por_celula.get(chave, 0)
+        comparativo_celulas.append({
+            'topico_id': topico_id,
+            'topico_nome': topico_nomes.get(topico_id, 'Sem tópico'),
+            'dificuldade': dif,
+            'dificuldade_display': dif_display_map.get(dif, dif),
+            'meta': meta,
+            'atual': atual,
+            'status': 'ok' if atual == meta else 'divergente',
+        })
+
+    # --- Resumo por dificuldade ---
+    resumo_dificuldade = {}
+    for d_code in ['F', 'M', 'D']:
+        meta_d = sum(c['meta'] for c in comparativo_celulas if c['dificuldade'] == d_code)
+        atual_d = sum(c['atual'] for c in comparativo_celulas if c['dificuldade'] == d_code)
+        resumo_dificuldade[d_code] = {
+            'display': dif_display_map[d_code],
+            'meta': meta_d,
+            'atual': atual_d,
+            'status': 'ok' if atual_d == meta_d else 'divergente',
+        }
+
+    # --- Resumo por tópico ---
+    topicos_ordenados = []
+    topicos_vistos = set()
+    for c in comparativo_celulas:
+        tid = c['topico_id']
+        if tid not in topicos_vistos:
+            topicos_vistos.add(tid)
+            meta_t = sum(x['meta'] for x in comparativo_celulas if x['topico_id'] == tid)
+            atual_t = sum(x['atual'] for x in comparativo_celulas if x['topico_id'] == tid)
+            topicos_ordenados.append({
+                'topico_id': tid,
+                'topico_nome': c['topico_nome'],
+                'meta': meta_t,
+                'atual': atual_t,
+                'status': 'ok' if atual_t == meta_t else 'divergente',
+            })
+
+    total_meta = snap_matriz.get('total_questoes', 0)
+    total_atual = itens.count()
+
+    # Estruturar comparativo em formato de linhas para a tabela
+    linhas_comparativo = []
+    for top_info in topicos_ordenados:
+        tid = top_info['topico_id']
+        celulas_linha = {}
+        for d_code in ['F', 'M', 'D']:
+            match = [c for c in comparativo_celulas if c['topico_id'] == tid and c['dificuldade'] == d_code]
+            if match:
+                celulas_linha[d_code] = match[0]
+            else:
+                celulas_linha[d_code] = {'meta': 0, 'atual': 0, 'status': 'ok'}
+        linhas_comparativo.append({
+            'topico_nome': top_info['topico_nome'],
+            'celulas': celulas_linha,
+            'total_meta': top_info['meta'],
+            'total_atual': top_info['atual'],
+            'status': top_info['status'],
+        })
+
+    return render(
+        request,
+        'provas/prova_revisao.html',
+        {
+            'prova': prova,
+            'mascara': prova.mascara,
+            'itens': itens,
+            'comparativo_celulas': comparativo_celulas,
+            'linhas_comparativo': linhas_comparativo,
+            'resumo_dificuldade': resumo_dificuldade,
+            'resumo_topicos': topicos_ordenados,
+            'total_meta': total_meta,
+            'total_atual': total_atual,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

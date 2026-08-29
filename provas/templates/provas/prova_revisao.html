@@ -1,0 +1,268 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Revisão — {{ prova.titulo }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<!-- Hero Card -->
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-clipboard2-check-fill"></i> Revisão da Seleção • Prova #{{ prova.pk }}
+      </span>
+      <span class="badge-pill badge-pill-active small">Caderno {{ prova.numero_caderno }}</span>
+    </div>
+    <h1 class="mb-1">{{ prova.titulo }}</h1>
+    <p class="text-secondary" style="max-width: 650px;">
+      {{ mascara.disciplina.nome }} • {{ total_atual }} questões selecionadas • Gerada em {{ prova.criado_em|date:"d/m/Y H:i" }}
+      {% if prova.autor %} por {{ prova.autor.get_full_name|default:prova.autor.username }}{% endif %}
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'provas:mascara_detail' pk=mascara.pk %}" class="btn btn-outline flex items-center gap-2">
+      <i class="bi bi-arrow-left"></i> Voltar à Máscara
+    </a>
+    <button type="button" class="btn flex items-center gap-2" style="background: #E2E8F0; color: #64748B; cursor: not-allowed; opacity: 0.7;" disabled title="Em desenvolvimento">
+      <i class="bi bi-file-earmark-pdf"></i> Gerar PDF (em breve)
+    </button>
+  </div>
+</div>
+
+<!-- Cards de Resumo Rápido -->
+<div class="grid grid-cols-12 gap-4 mb-4">
+  <div class="col-span-3 card-surface p-4 text-center">
+    <div class="stat-label-unified">Total de Questões</div>
+    <div class="stat-num-unified font-mono" style="font-size: 2rem; color: {% if total_atual == total_meta %}var(--color-success){% else %}var(--color-danger){% endif %};">
+      {{ total_atual }}<span class="text-muted" style="font-size: 1rem;"> / {{ total_meta }}</span>
+    </div>
+    <div class="text-muted small mt-1">
+      {% if total_atual == total_meta %}
+      <i class="bi bi-check-circle-fill text-success"></i> Meta atingida
+      {% else %}
+      <i class="bi bi-exclamation-triangle-fill text-danger"></i> Divergente
+      {% endif %}
+    </div>
+  </div>
+
+  {% for d_code, info in resumo_dificuldade.items %}
+  <div class="col-span-3 card-surface p-4 text-center">
+    <div class="stat-label-unified">{{ info.display }}</div>
+    <div class="stat-num-unified font-mono" style="font-size: 2rem; color: {% if info.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
+      {{ info.atual }}<span class="text-muted" style="font-size: 1rem;"> / {{ info.meta }}</span>
+    </div>
+    <div class="text-muted small mt-1">
+      {% if info.status == 'ok' %}
+      <i class="bi bi-check-circle-fill text-success"></i> OK
+      {% else %}
+      <i class="bi bi-exclamation-triangle-fill" style="color: var(--color-warning);"></i> Divergente
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Painel Comparativo Meta vs. Atual -->
+<div class="card-surface p-4 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
+        <i class="bi bi-grid-3x3-gap-fill" style="color: var(--fae-blue-electric);"></i> Comparativo Meta vs. Atual (Tópico × Dificuldade)
+      </h3>
+      <p class="text-muted small mb-0">
+        Confronto entre as quantidades planejadas pela máscara e as efetivamente selecionadas pelo algoritmo RF07.
+      </p>
+    </div>
+    <span class="badge-pill {% if total_atual == total_meta %}badge-pill-active{% else %}badge-pill-inactive{% endif %} font-bold">
+      {% if total_atual == total_meta %}
+      ✅ Seleção 100% Conforme
+      {% else %}
+      ⚠️ Divergências Detectadas
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="saas-table" id="tabela-comparativo">
+      <thead>
+        <tr>
+          <th>Tópico Curricular</th>
+          <th style="width: 170px;" class="text-center">
+            <span class="badge-pill badge-pill-facil small">Fácil</span>
+          </th>
+          <th style="width: 170px;" class="text-center">
+            <span class="badge-pill badge-pill-medio small">Médio</span>
+          </th>
+          <th style="width: 170px;" class="text-center">
+            <span class="badge-pill badge-pill-dificil small">Difícil</span>
+          </th>
+          <th style="width: 140px;" class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in linhas_comparativo %}
+        <tr>
+          <td class="font-bold text-main">{{ linha.topico_nome }}</td>
+          <!-- Fácil -->
+          <td class="text-center">
+            {% with cel=linha.celulas.F %}
+            <div class="font-mono font-bold" style="font-size: 1.1rem; color: {% if cel.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
+              {{ cel.atual }} <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ cel.meta }}</span>
+            </div>
+            <div class="small" style="font-size: 0.7rem;">
+              {% if cel.status == 'ok' %}
+              <span class="text-success"><i class="bi bi-check-circle-fill"></i> OK</span>
+              {% else %}
+              <span style="color: var(--color-warning);"><i class="bi bi-exclamation-triangle-fill"></i></span>
+              {% endif %}
+            </div>
+            {% endwith %}
+          </td>
+          <!-- Médio -->
+          <td class="text-center">
+            {% with cel=linha.celulas.M %}
+            <div class="font-mono font-bold" style="font-size: 1.1rem; color: {% if cel.status == 'ok' %}var(--fae-blue-primary){% else %}var(--color-warning){% endif %};">
+              {{ cel.atual }} <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ cel.meta }}</span>
+            </div>
+            <div class="small" style="font-size: 0.7rem;">
+              {% if cel.status == 'ok' %}
+              <span style="color: var(--fae-blue-primary);"><i class="bi bi-check-circle-fill"></i> OK</span>
+              {% else %}
+              <span style="color: var(--color-warning);"><i class="bi bi-exclamation-triangle-fill"></i></span>
+              {% endif %}
+            </div>
+            {% endwith %}
+          </td>
+          <!-- Difícil -->
+          <td class="text-center">
+            {% with cel=linha.celulas.D %}
+            <div class="font-mono font-bold" style="font-size: 1.1rem; color: {% if cel.status == 'ok' %}var(--color-danger){% else %}var(--color-warning){% endif %};">
+              {{ cel.atual }} <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ cel.meta }}</span>
+            </div>
+            <div class="small" style="font-size: 0.7rem;">
+              {% if cel.status == 'ok' %}
+              <span class="text-danger"><i class="bi bi-check-circle-fill"></i> OK</span>
+              {% else %}
+              <span style="color: var(--color-warning);"><i class="bi bi-exclamation-triangle-fill"></i></span>
+              {% endif %}
+            </div>
+            {% endwith %}
+          </td>
+          <!-- Total -->
+          <td class="text-right font-mono font-bold text-main" style="font-size: 1.05rem;">
+            <span style="color: {% if linha.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
+              {{ linha.total_atual }}
+            </span>
+            <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ linha.total_meta }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background: #F8FAFC; border-top: 2px solid var(--border-color); font-weight: 800;">
+          <td>Total Geral</td>
+          <td class="text-center font-mono" style="font-size: 1.1rem;">
+            <span style="color: {% if resumo_dificuldade.F.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
+              {{ resumo_dificuldade.F.atual }}
+            </span>
+            <span class="text-muted" style="font-size: 0.85rem;">/ {{ resumo_dificuldade.F.meta }}</span>
+          </td>
+          <td class="text-center font-mono" style="font-size: 1.1rem;">
+            <span style="color: {% if resumo_dificuldade.M.status == 'ok' %}var(--fae-blue-primary){% else %}var(--color-warning){% endif %};">
+              {{ resumo_dificuldade.M.atual }}
+            </span>
+            <span class="text-muted" style="font-size: 0.85rem;">/ {{ resumo_dificuldade.M.meta }}</span>
+          </td>
+          <td class="text-center font-mono" style="font-size: 1.1rem;">
+            <span style="color: {% if resumo_dificuldade.D.status == 'ok' %}var(--color-danger){% else %}var(--color-warning){% endif %};">
+              {{ resumo_dificuldade.D.atual }}
+            </span>
+            <span class="text-muted" style="font-size: 0.85rem;">/ {{ resumo_dificuldade.D.meta }}</span>
+          </td>
+          <td class="text-right font-mono" style="font-size: 1.25rem;">
+            <span style="color: {% if total_atual == total_meta %}var(--color-success){% else %}var(--color-warning){% endif %};">
+              {{ total_atual }}
+            </span>
+            <span class="text-muted" style="font-size: 0.9rem;">/ {{ total_meta }}</span>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- Lista de Questões Selecionadas -->
+<div class="card-surface p-4 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
+        <i class="bi bi-list-ol" style="color: var(--fae-gold);"></i> Questões Selecionadas ({{ total_atual }} itens)
+      </h3>
+      <p class="text-muted small mb-0">
+        Lista completa das questões sorteadas pelo algoritmo RF07 com priorização por menor uso recente.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="saas-table" id="tabela-questoes">
+      <thead>
+        <tr>
+          <th style="width: 50px;">#</th>
+          <th>Enunciado</th>
+          <th style="width: 180px;">Tópico</th>
+          <th style="width: 100px;" class="text-center">Dificuldade</th>
+          <th style="width: 85px;" class="text-center">Tipo</th>
+          <th style="width: 130px;">Origem</th>
+          <th style="width: 85px;" class="text-right">Pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in itens %}
+        <tr>
+          <td class="font-mono font-bold text-muted">{{ item.numero }}</td>
+          <td>
+            <div class="text-main" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {{ item.questao.enunciado|truncatechars:100 }}
+            </div>
+            <div class="text-muted small mt-1" style="font-size: 0.7rem;">
+              ID: Q{{ item.questao.pk }}
+            </div>
+          </td>
+          <td class="text-secondary small">
+            {% if item.questao.topico %}
+            {{ item.questao.topico.nome }}
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if item.questao.dificuldade == 'F' %}
+            <span class="badge-pill badge-pill-facil small">Fácil</span>
+            {% elif item.questao.dificuldade == 'M' %}
+            <span class="badge-pill badge-pill-medio small">Médio</span>
+            {% elif item.questao.dificuldade == 'D' %}
+            <span class="badge-pill badge-pill-dificil small">Difícil</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if item.questao.tipo == 'OBJ' %}
+            <span class="text-muted small"><i class="bi bi-ui-radios"></i> OBJ</span>
+            {% else %}
+            <span class="text-muted small"><i class="bi bi-pencil-square"></i> DIS</span>
+            {% endif %}
+          </td>
+          <td class="text-secondary small">
+            {% if item.questao.origem %}
+            {{ item.questao.origem|truncatechars:20 }}
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-right font-mono font-bold">{{ item.pontuacao }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
