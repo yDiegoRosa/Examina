@@ -2,7 +2,7 @@ import csv
 import logging
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
@@ -13,7 +13,9 @@ from .forms import AlternativaFormSet, CSVUploadForm, QuestaoForm
 from .importer import CSVImportService
 from .models import Disciplina, Questao, Topico
 from .parser import CSVParseError
+from django.core.exceptions import PermissionDenied
 
+from .permissions import can_change_questao, is_docente_ou_coordenador, docente_ou_coordenador_required, pode_editar_questao_required
 logger = logging.getLogger(__name__)
 
 
@@ -67,6 +69,8 @@ def questao_list(request):
             'querystring': querystring,
             'metricas': metricas,
             'has_active_filters': has_active_filters,
+            'pode_criar': is_docente_ou_coordenador(request.user),
+            'pode_editar': can_change_questao(request.user),
         },
     )
 
@@ -75,7 +79,7 @@ def questao_list(request):
 # Criar questão (com formset inline e autor)
 # ---------------------------------------------------------------------------
 @login_required
-@permission_required('banco_questoes.add_questao', raise_exception=True)
+@docente_ou_coordenador_required
 def questao_create(request):
     """Cadastro de questão via formulário completo + formset inline de alternativas."""
     if request.method == 'POST':
@@ -136,7 +140,7 @@ def questao_create(request):
 # Editar questão (com formset inline)
 # ---------------------------------------------------------------------------
 @login_required
-@permission_required('banco_questoes.change_questao', raise_exception=True)
+@pode_editar_questao_required
 def questao_update(request, pk):
     """Edição de questão existente com histórico automático via simple-history."""
     questao = get_object_or_404(Questao, pk=pk)
@@ -201,7 +205,7 @@ def questao_update(request, pk):
 # Inativar / Reativar questão (soft delete — ativo=False)
 # ---------------------------------------------------------------------------
 @login_required
-@permission_required('banco_questoes.change_questao', raise_exception=True)
+@pode_editar_questao_required
 def questao_toggle_ativo(request, pk):
     """Inverte o flag `ativo` da questão (inativa ou reativa) sem excluí-la.
 
@@ -491,7 +495,7 @@ def download_modelo_xlsx(request):
 # Importação em Lote via Excel (.xlsx) e CSV & Commit (RF02)
 # ---------------------------------------------------------------------------
 @login_required
-@permission_required('banco_questoes.add_questao', raise_exception=True)
+@docente_ou_coordenador_required
 def questao_import(request):
     """View para upload de planilhas Excel (.xlsx) ou arquivos CSV, commit e relatório de inconsistências."""
     relatorio = None

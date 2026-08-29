@@ -24,7 +24,7 @@
     <a href="{% url 'banco_questoes:download_modelo_xlsx' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-outline" title="Exportar questões do acervo no formato Excel (.xlsx)">
       <i class="bi bi-file-earmark-excel-fill" style="color: #107C41;"></i> Exportar Excel
     </a>
-    {% if perms.banco_questoes.add_questao %}
+    {% if pode_criar %}
     <a href="{% url 'banco_questoes:questao_import' %}" class="btn btn-outline" title="Importar questões em lote a partir de arquivo CSV">
       <i class="bi bi-file-earmark-arrow-up-fill" style="color: var(--fae-blue-primary);"></i> Importar CSV
     </a>
@@ -236,7 +236,7 @@
           </td>
           <td class="text-right">
             <div class="flex gap-2 justify-end">
-              {% if perms.banco_questoes.change_questao %}
+              {% if pode_editar %}
               <a href="{% url 'banco_questoes:questao_history' pk=q.pk %}"
                  class="btn-table-action" title="Ver Histórico de Alterações">
                 <i class="bi bi-clock-history"></i>
