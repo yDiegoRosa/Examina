@@ -795,3 +795,112 @@ def prova_capa_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
+
+
+# ---------------------------------------------------------------------------
+# Geração do PDF do Caderno de Prova / Prova Completa (Formatação de Questões)
+# ---------------------------------------------------------------------------
+@login_required
+def prova_pdf(request, pk):
+    """
+    Gera o PDF formatado do Caderno de Prova com todas as questões.
+
+    Suporta parâmetros query opcionais:
+    - `incluir_capa`: '1' (padrão se não informado ou '0' para somente questões)
+    - `incluir_gabarito`: '1' para anexar a página de espelho de gabarito e critérios
+    - `data`: data de aplicação customizada
+    - `turma`: identificação de turma
+    - `turno`: turno da aplicação
+    - `instrucoes_extras`: orientações adicionais aos estudantes
+    """
+    prova = get_object_or_404(
+        Prova.objects.select_related(
+            'mascara',
+            'mascara__disciplina',
+            'disciplina',
+            'autor',
+        ),
+        pk=pk,
+    )
+
+    itens = (
+        prova.itens
+        .select_related('questao', 'questao__topico', 'questao__disciplina')
+        .prefetch_related('questao__alternativas')
+        .order_by('ordem')
+    )
+
+    disciplina = prova.disciplina_efetiva
+    mascara = prova.mascara
+    snap = prova.snapshot_mascara or {}
+
+    valor_total = None
+    tempo_minutos = None
+    modalidade = None
+
+    if mascara:
+        valor_total = mascara.valor_total
+        tempo_minutos = mascara.tempo_estimado_minutos
+        modalidade = mascara.get_modalidade_display()
+    elif snap:
+        valor_total = snap.get('valor_total')
+        tempo_minutos = snap.get('tempo_estimado_minutos')
+        modalidade_code = snap.get('modalidade', '')
+        _modalidade_map = {
+            'OBJ': 'Somente Objetivas',
+            'DIS': 'Somente Discursivas',
+            'MISTA': 'Mista (Objetivas e Discursivas)',
+        }
+        modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
+
+    docente_nome = None
+    if prova.autor:
+        docente_nome = prova.autor.get_full_name() or prova.autor.username
+
+    # Parâmetros de customização via GET
+    # Por padrão, gera a avaliação completa com capa
+    param_capa = request.GET.get('incluir_capa', '1')
+    incluir_capa = param_capa in ('1', 'true', 'True')
+
+    param_gabarito = request.GET.get('incluir_gabarito', '0')
+    incluir_gabarito = param_gabarito in ('1', 'true', 'True')
+
+    context = {
+        'prova': prova,
+        'itens': itens,
+        'disciplina_nome': disciplina.nome if disciplina else None,
+        'docente_nome': docente_nome,
+        'turma': snap.get('turma') or request.GET.get('turma') or '',
+        'turno': snap.get('turno') or request.GET.get('turno') or '',
+        'data_aplicacao': request.GET.get('data') or '',
+        'valor_total': valor_total,
+        'tempo_minutos': tempo_minutos,
+        'modalidade': modalidade,
+        'total_questoes': itens.count(),
+        'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
+        'incluir_capa': incluir_capa,
+        'incluir_gabarito': incluir_gabarito,
+    }
+
+    try:
+        pdf_bytes = PDFGeneratorService.render_pdf_from_template(
+            template_name='provas/pdf_prova_completa.html',
+            context=context,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Erro ao gerar PDF da prova pk=%s: %s', pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Erro ao gerar o PDF da avaliação: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    tipo_str = 'completa' if incluir_capa else 'questoes'
+    if incluir_gabarito:
+        tipo_str += '_com_gabarito'
+
+    filename = f'prova_{prova.pk}_caderno{prova.numero_caderno}_{tipo_str}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
+

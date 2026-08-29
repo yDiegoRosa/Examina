@@ -1,0 +1,368 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>{{ prova.titulo }} — Caderno {{ prova.numero_caderno }} — FAETERJ-Rio</title>
+  <link rel="stylesheet" href="{% static 'provas/css/print_prova.css' %}">
+</head>
+<body>
+
+  {% if incluir_capa %}
+  <!-- ═══════════════════════════════════════════════════════════
+       CAPA OFICIAL (PÁGINA 1)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="capa-pagina-wrapper">
+    <div class="capa-header">
+      <div class="capa-header-top">
+        <div class="capa-header-identidade">
+          <div class="capa-header-instituicao">FAETERJ-Rio</div>
+          <div class="capa-header-nome-completo">
+            Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+          </div>
+          <div class="capa-header-vinculo">
+            Secretaria de Estado de Ciência, Tecnologia e Inovação &nbsp;•&nbsp;
+            Fundação CECIERJ / FAETEC
+          </div>
+        </div>
+        <div class="capa-header-badge">
+          <div class="capa-badge-avaliacao">AVALIAÇÃO OFICIAL</div>
+          <div class="capa-badge-sistema">Sistema Examina</div>
+        </div>
+      </div>
+
+      <div class="capa-divider"></div>
+
+      <div class="capa-titulo-avaliacao">
+        {{ prova.titulo|upper }}
+        {% if prova.numero_caderno > 1 %}
+          <span class="capa-caderno-badge">&nbsp;— Caderno {{ prova.numero_caderno }}</span>
+        {% endif %}
+      </div>
+
+      <table class="capa-info-table">
+        <tbody>
+          <tr>
+            <td class="capa-info-label">Disciplina:</td>
+            <td class="capa-info-value" style="width: 55%;">
+              {{ disciplina_nome|default:"—" }}
+            </td>
+            <td class="capa-info-label">Data:</td>
+            <td class="capa-info-value">
+              {{ data_aplicacao|default:"____/____/________" }}
+            </td>
+          </tr>
+          <tr>
+            <td class="capa-info-label">Docente:</td>
+            <td class="capa-info-value">
+              {{ docente_nome|default:"—" }}
+            </td>
+            <td class="capa-info-label">Turno:</td>
+            <td class="capa-info-value">
+              {{ turno|default:"—" }}
+            </td>
+          </tr>
+          <tr>
+            <td class="capa-info-label">Turma / Semestre:</td>
+            <td class="capa-info-value">
+              {{ turma|default:"—" }}
+            </td>
+            <td class="capa-info-label">Valor:</td>
+            <td class="capa-info-value">
+              {% if valor_total %}{{ valor_total }} ponto(s){% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="capa-info-label">Modalidade:</td>
+            <td class="capa-info-value">
+              {% if modalidade %}{{ modalidade }}{% else %}—{% endif %}
+            </td>
+            <td class="capa-info-label">Tempo:</td>
+            <td class="capa-info-value">
+              {% if tempo_minutos %}{{ tempo_minutos }} minutos{% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="capa-info-label">Nº de Questões:</td>
+            <td class="capa-info-value">{{ total_questoes|default:itens|length }}</td>
+            <td class="capa-info-label">Caderno Nº:</td>
+            <td class="capa-info-value capa-caderno-destaque">
+              {{ prova.numero_caderno }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="capa-aluno-box">
+      <div class="capa-aluno-titulo">Identificação do(a) Estudante</div>
+      <table class="capa-aluno-table">
+        <tbody>
+          <tr>
+            <td class="capa-aluno-label">Nome completo:</td>
+            <td class="capa-aluno-field" style="width: 65%;"></td>
+            <td class="capa-aluno-label">Nota:</td>
+            <td class="capa-aluno-field capa-nota-field"></td>
+          </tr>
+          <tr>
+            <td class="capa-aluno-label">Matrícula:</td>
+            <td class="capa-aluno-field"></td>
+            <td class="capa-aluno-label">Assinatura:</td>
+            <td class="capa-aluno-field"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="capa-instrucoes-qr-wrapper">
+      <div class="capa-instrucoes-col">
+        <div class="capa-instrucoes-titulo">
+          <span class="capa-instrucoes-icone">&#9658;</span>
+          Instruções aos Estudantes
+        </div>
+        <ol class="capa-instrucoes-lista">
+          <li>Leia atentamente o enunciado de <strong>cada questão</strong> antes de responder.</li>
+          <li>Questões de múltipla escolha possuem apenas <strong>uma alternativa correta</strong>.</li>
+          <li>Respostas a lápis <strong>não dão direito</strong> a pedido de revisão de correção.</li>
+          <li>É proibido o uso de celular ou dispositivos eletrônicos durante a avaliação.</li>
+          <li>Proibido consultar materiais salvo indicação expressa do docente.</li>
+          <li>Ao terminar, entregue a prova ao docente. <strong>Não é permitido levar o caderno.</strong></li>
+          {% if instrucoes_extras %}<li>{{ instrucoes_extras }}</li>{% endif %}
+        </ol>
+      </div>
+
+      <div class="capa-qrcode-col">
+        <div class="capa-qrcode-box">
+          <div class="capa-qrcode-area">
+            <div class="capa-qrcode-placeholder">
+              <div class="capa-qrcode-icon">&#11036;</div>
+              <div class="capa-qrcode-corners">
+                <span class="qr-corner qr-corner-tl"></span>
+                <span class="qr-corner qr-corner-tr"></span>
+                <span class="qr-corner qr-corner-bl"></span>
+                <span class="qr-corner qr-corner-br"></span>
+              </div>
+            </div>
+          </div>
+          <div class="capa-qrcode-label">QR Code</div>
+          <div class="capa-qrcode-sublabel">Gabarito Oficial — Módulo 3</div>
+          <div class="capa-qrcode-id">
+            Prova #{{ prova.pk }} • Caderno {{ prova.numero_caderno }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="capa-rodape">
+      <div class="capa-rodape-esq">
+        Documento gerado automaticamente pelo <strong>Sistema Examina — FAETERJ-Rio</strong>.
+      </div>
+      <div class="capa-rodape-dir">
+        Caderno <strong>{{ prova.numero_caderno }}</strong>
+      </div>
+    </div>
+  </div>
+  <div class="page-break"></div>
+  {% else %}
+  <!-- ═══════════════════════════════════════════════════════════
+       CABEÇALHO COMPACTO DE CADERNO (SEM CAPA COMPLETA)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="caderno-header-compacto">
+    <div class="header-top">
+      <div>
+        <div class="header-instituicao">FAETERJ-Rio — Faculdade de Educação Tecnológica do RJ</div>
+        <div class="header-sub">Secretaria de Estado de Ciência, Tecnologia e Inovação • Fundação CECIERJ / FAETEC</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge-avaliacao-compacto">AVALIAÇÃO OFICIAL</span>
+        <div style="font-size: 7.5pt; color: #002B49; font-weight: bold; margin-top: 2pt;">Caderno {{ prova.numero_caderno }}</div>
+      </div>
+    </div>
+
+    <div class="header-grid">
+      <div class="header-row">
+        <div class="header-cell" style="width: 60%;">
+          <span class="header-cell-label">Disciplina:</span> {{ disciplina_nome|default:"—" }}
+        </div>
+        <div class="header-cell" style="width: 40%;">
+          <span class="header-cell-label">Data:</span> {{ data_aplicacao|default:"____/____/________" }}
+        </div>
+      </div>
+      <div class="header-row">
+        <div class="header-cell">
+          <span class="header-cell-label">Docente:</span> {{ docente_nome|default:"—" }}
+        </div>
+        <div class="header-cell">
+          <span class="header-cell-label">Turma:</span> {{ turma|default:"—" }} • {{ turno|default:"—" }}
+        </div>
+      </div>
+      <div class="header-row">
+        <div class="header-cell">
+          <span class="header-cell-label">Aluno(a):</span> <span class="header-field-line" style="width: 250pt;"></span>
+        </div>
+        <div class="header-cell">
+          <span class="header-cell-label">Matrícula:</span> <span class="header-field-line" style="width: 90pt;"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CADERNO DE QUESTÕES
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="questoes-wrapper">
+    {% for item in itens %}
+    {% with q=item.questao %}
+    <div class="questao-bloco">
+
+      <!-- Cabeçalho da Questão: Numeração, Pontuação, Tópico e Origem -->
+      <div class="questao-header">
+        <div class="questao-header-esq">
+          <span class="questao-numero-badge">Questão {{ item.numero|stringformat:"02d"|default:forloop.counter|stringformat:"02d" }}</span>
+          {% if item.pontuacao %}
+          <span class="questao-peso-badge">[{{ item.pontuacao }} pt{{ item.pontuacao|pluralize }}]</span>
+          {% endif %}
+          {% if q.topico %}
+          <span class="questao-topico-badge">{{ q.topico.nome }}</span>
+          {% endif %}
+        </div>
+        <div class="questao-header-dir">
+          {% if q.origem %}
+          <span class="questao-origem-badge">
+            {{ q.origem }}{% if q.numero_questao %} • Q{{ q.numero_questao }}{% endif %}
+          </span>
+          {% endif %}
+          <span class="questao-tipo-badge">{{ q.get_tipo_display }}</span>
+        </div>
+      </div>
+
+      <!-- Texto Auxiliar / Contextualização (se houver) -->
+      {% if q.texto_auxiliar %}
+      <div class="questao-texto-auxiliar">
+        <div class="texto-auxiliar-label">&#128196; Texto de Apoio / Contextualização:</div>
+        <div class="texto-auxiliar-conteudo">{{ q.texto_auxiliar|linebreaksbr }}</div>
+      </div>
+      {% endif %}
+
+      <!-- Imagem de Apoio (se houver) -->
+      {% if q.imagem %}
+      <div class="questao-imagem">
+        <img src="{{ q.imagem.url }}" alt="Figura de apoio da questão {{ item.numero }}">
+        <div class="questao-imagem-legenda">Figura de apoio da Questão {{ item.numero }}</div>
+      </div>
+      {% endif %}
+
+      <!-- Enunciado Principal -->
+      <div class="questao-enunciado">
+        {{ q.enunciado|linebreaksbr }}
+      </div>
+
+      <!-- Questão Objetiva: Alternativas A a E -->
+      {% if q.tipo == 'OBJ' %}
+      <div class="alternativas-lista">
+        {% for alt in q.alternativas.all %}
+        <div class="alternativa-item">
+          <div class="alt-letra-col">
+            <span class="alt-circulo">({{ alt.letra }})</span>
+          </div>
+          <div class="alt-texto-col">
+            {{ alt.texto }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Questão Discursiva: Linhas Pautadas para Resposta -->
+      {% else %}
+      <div class="resposta-discursiva-box">
+        <div class="resposta-discursiva-header">
+          <span>Espaço de Resposta Definitiva</span>
+          <span style="font-weight: normal; font-size: 7.5pt; color: #64748B;">(Escreva com letra legível)</span>
+        </div>
+        <div class="linhas-pautadas-wrapper">
+          <div class="linha-pautada-item"><span class="linha-pautada-num">01</span><span class="linha-pautada-traco"></span></div>
+          <div class="linha-pautada-item"><span class="linha-pautada-num">02</span><span class="linha-pautada-traco"></span></div>
+          <div class="linha-pautada-item"><span class="linha-pautada-num">03</span><span class="linha-pautada-traco"></span></div>
+          <div class="linha-pautada-item"><span class="linha-pautada-num">04</span><span class="linha-pautada-traco"></span></div>
+          <div class="linha-pautada-item"><span class="linha-pautada-num">05</span><span class="linha-pautada-traco"></span></div>
+          <div class="linha-pautada-item"><span class="linha-pautada-num">06</span><span class="linha-pautada-traco"></span></div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endwith %}
+    {% endfor %}
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       GABARITO E CRITÉRIOS DE CORREÇÃO (USO DO DOCENTE)
+       ═══════════════════════════════════════════════════════════ -->
+  {% if incluir_gabarito %}
+  <div class="pagina-gabarito">
+    <div class="gabarito-header">
+      <h2 class="gabarito-title">Gabarito e Critérios de Correção — Uso do Docente</h2>
+      <div class="gabarito-sub">
+        Avaliação: <strong>{{ prova.titulo }}</strong> &nbsp;•&nbsp;
+        Disciplina: <strong>{{ disciplina_nome }}</strong> &nbsp;•&nbsp;
+        Caderno: <strong>{{ prova.numero_caderno }}</strong>
+      </div>
+    </div>
+
+    <table class="gabarito-tabela">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">Item</th>
+          <th style="width: 12%;">Tipo</th>
+          <th style="width: 15%; text-align: center;">Gabarito</th>
+          <th style="width: 15%;">Tópico / Dificuldade</th>
+          <th style="width: 50%;">Critérios de Correção / Resposta Esperada</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in itens %}
+        {% with q=item.questao %}
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #002B49;">
+            Q{{ item.numero|stringformat:"02d"|default:forloop.counter|stringformat:"02d" }}
+          </td>
+          <td>{{ q.get_tipo_display }}</td>
+          <td style="text-align: center;">
+            {% if q.tipo == 'OBJ' %}
+              {% for alt in q.alternativas.all %}
+                {% if alt.correta %}
+                <span class="gabarito-letra-correta">Opção ({{ alt.letra }})</span>
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <span class="gabarito-badge-discursiva">Discursiva</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="font-size: 8pt; font-weight: bold;">{{ q.topico.nome|default:"—" }}</div>
+            <div style="font-size: 7.5pt; color: #64748B;">Dificuldade: {{ q.get_dificuldade_display }}</div>
+          </td>
+          <td>
+            {% if q.tipo == 'DIS' and q.criterios_correcao %}
+              <div class="gabarito-criterios-texto">{{ q.criterios_correcao|linebreaksbr }}</div>
+            {% elif q.tipo == 'OBJ' %}
+              {% for alt in q.alternativas.all %}
+                {% if alt.correta %}
+                <div style="font-size: 8pt; color: #334155;"><strong>Texto correto:</strong> {{ alt.texto }}</div>
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <span style="color: #94A3B8;">— Sem observações adicionais —</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</body>
+</html>
