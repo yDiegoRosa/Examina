@@ -299,6 +299,40 @@
 
   </div>
 
+  <!-- PRÉVIA DA MATRIZ TÓPICO × DIFICULDADE -->
+  <div class="card-surface mb-4" id="card-matriz-previa" style="display:none;">
+    <div class="card-header header-primary">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-grid-3x3-gap-fill" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
+        <span class="font-bold">Prévia da Matriz de Metas (Tópico × Dificuldade)</span>
+      </div>
+      <span class="badge-pill badge-pill-inactive small">Estimativa em tempo real</span>
+    </div>
+    <div class="card-body">
+      <div class="small text-muted mb-3" style="background: #F8FAFC; border-left: 3px solid var(--fae-blue-primary); padding: 8px 12px; border-radius: 4px;">
+        <i class="bi bi-info-circle"></i>
+        Distribuição <strong>estimada</strong> de questões por célula. O sistema aplicará o
+        <strong>Método do Maior Resto (Hamilton-Hare)</strong> na geração final para garantir que
+        a soma bata exatamente com o total configurado.
+      </div>
+      <div style="overflow-x: auto;">
+        <table style="width:100%; border-collapse: collapse; font-size: 0.875rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--color-border);">
+              <th style="text-align:left; padding: 8px 12px; color: var(--color-text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Tópico</th>
+              <th style="text-align:center; padding: 8px 12px; color: var(--color-success); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">🟢 Fácil</th>
+              <th style="text-align:center; padding: 8px 12px; color: var(--fae-blue-primary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">🟡 Médio</th>
+              <th style="text-align:center; padding: 8px 12px; color: var(--color-danger); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">🔴 Difícil</th>
+              <th style="text-align:center; padding: 8px 12px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Total</th>
+            </tr>
+          </thead>
+          <tbody id="matriz-tbody"></tbody>
+          <tfoot id="matriz-tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- 4. DIAGNÓSTICO DO ACERVO & PARÂMETROS DE SORTEIO -->
   <div class="card-surface mb-4">
     <div class="card-header header-primary">
@@ -479,6 +513,7 @@
         badgeStatusDif.textContent = `Soma: ${soma}% (${soma < 100 ? 'Faltam ' + (100 - soma) + '%' : 'Excede em ' + (soma - 100) + '%'})`;
       }
     }
+    renderMatrizPrevia();
   }
 
   [sliderFacil, sliderMedio, sliderDificil].forEach(function(slider) {
@@ -577,6 +612,76 @@
         badgeTopicos.className = 'badge-pill badge-pill-warning';
         badgeTopicos.textContent = `Soma: ${soma}% (${soma < 100 ? 'Faltam ' + (100 - soma) + '%' : 'Excede ' + (soma - 100) + '%'})`;
       }
+    }
+    renderMatrizPrevia();
+  }
+
+  // ── Prévia da Matriz Tópico × Dificuldade ─────────────────────────────
+  function renderMatrizPrevia() {
+    const cardMatriz = document.getElementById('card-matriz-previa');
+    if (!cardMatriz) return;
+
+    const total = parseInt(totalInput ? totalInput.value : 10, 10) || 10;
+    const f = parseInt(inputFacil ? inputFacil.value : 0, 10) || 0;
+    const m = parseInt(inputMedio ? inputMedio.value : 0, 10) || 0;
+    const d = parseInt(inputDificil ? inputDificil.value : 0, 10) || 0;
+
+    const activeRows = [];
+    document.querySelectorAll('.topico-form-row').forEach(function(row) {
+      if (row.style.display === 'none') return;
+      const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      if (deleteCheckbox && deleteCheckbox.checked) return;
+      const select = row.querySelector('.topico-select');
+      const percInput = row.querySelector('.topico-percentual-input');
+      const topicVal = select ? select.value : '';
+      const topicName = (select && select.selectedIndex >= 0) ? select.options[select.selectedIndex].text : '';
+      const pct = parseInt(percInput ? percInput.value : 0, 10) || 0;
+      if (topicVal && pct > 0) {
+        activeRows.push({ nome: topicName, pct: pct });
+      }
+    });
+
+    if (activeRows.length === 0) {
+      cardMatriz.style.display = 'none';
+      return;
+    }
+
+    cardMatriz.style.display = 'block';
+
+    const tbody = document.getElementById('matriz-tbody');
+    const tfoot = document.getElementById('matriz-tfoot');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    let totF = 0, totM = 0, totD = 0, totTotal = 0;
+
+    activeRows.forEach(function(t) {
+      const qtdT = Math.round((t.pct / 100) * total);
+      const qF = Math.round((f / 100) * qtdT);
+      const qM = Math.round((m / 100) * qtdT);
+      const qD = qtdT - qF - qM;
+      totF += qF; totM += qM; totD += qD; totTotal += qtdT;
+
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--color-border)';
+      tr.innerHTML =
+        '<td style="padding:8px 12px;">' + t.nome + ' <span class="small text-muted">(' + t.pct + '%)</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;"><span class="badge-pill badge-pill-facil">' + qF + '</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;"><span class="badge-pill badge-pill-medio">' + qM + '</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;"><span class="badge-pill badge-pill-dificil">' + qD + '</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;" class="font-bold">' + qtdT + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    if (tfoot) {
+      tfoot.innerHTML =
+        '<tr style="border-top: 2px solid var(--color-border);">' +
+        '<td style="padding:8px 12px;" class="font-bold text-main">Total</td>' +
+        '<td style="padding:8px 12px; text-align:center;"><span class="badge-pill badge-pill-facil font-bold">' + totF + '</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;"><span class="badge-pill badge-pill-medio font-bold">' + totM + '</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;"><span class="badge-pill badge-pill-dificil font-bold">' + totD + '</span></td>' +
+        '<td style="padding:8px 12px; text-align:center;" class="font-bold">' + totTotal + '</td>' +
+        '</tr>';
     }
   }
 
