@@ -1,0 +1,197 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Capa — {{ prova.titulo }} — FAETERJ-Rio</title>
+  <link rel="stylesheet" href="{% static 'provas/css/print_prova.css' %}">
+</head>
+<body class="capa-body">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CABEÇALHO INSTITUCIONAL
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="capa-header">
+
+    <!-- Linha superior: identidade + badge "AVALIAÇÃO OFICIAL" -->
+    <div class="capa-header-top">
+      <div class="capa-header-identidade">
+        <div class="capa-header-instituicao">FAETERJ-Rio</div>
+        <div class="capa-header-nome-completo">
+          Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+        </div>
+        <div class="capa-header-vinculo">
+          Secretaria de Estado de Ciência, Tecnologia e Inovação &nbsp;•&nbsp;
+          Fundação CECIERJ / FAETEC
+        </div>
+      </div>
+      <div class="capa-header-badge">
+        <div class="capa-badge-avaliacao">AVALIAÇÃO OFICIAL</div>
+        <div class="capa-badge-sistema">Sistema Examina</div>
+      </div>
+    </div>
+
+    <!-- Divisória -->
+    <div class="capa-divider"></div>
+
+    <!-- Título da avaliação -->
+    <div class="capa-titulo-avaliacao">
+      {{ prova.titulo|upper }}
+      {% if prova.numero_caderno > 1 %}
+        <span class="capa-caderno-badge">&nbsp;— Caderno {{ prova.numero_caderno }}</span>
+      {% endif %}
+    </div>
+
+    <!-- Grid de dados da avaliação -->
+    <table class="capa-info-table">
+      <tbody>
+        <tr>
+          <td class="capa-info-label">Disciplina:</td>
+          <td class="capa-info-value" style="width: 55%;">
+            {{ disciplina_nome|default:"—" }}
+          </td>
+          <td class="capa-info-label">Data:</td>
+          <td class="capa-info-value">
+            {{ data_aplicacao|default:"____/____/________" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Docente:</td>
+          <td class="capa-info-value">
+            {{ docente_nome|default:"—" }}
+          </td>
+          <td class="capa-info-label">Turno:</td>
+          <td class="capa-info-value">
+            {{ turno|default:"—" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Turma / Semestre:</td>
+          <td class="capa-info-value">
+            {{ turma|default:"—" }}
+          </td>
+          <td class="capa-info-label">Valor:</td>
+          <td class="capa-info-value">
+            {% if valor_total %}
+              {{ valor_total }} ponto(s)
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Modalidade:</td>
+          <td class="capa-info-value">
+            {% if modalidade %}{{ modalidade }}{% else %}—{% endif %}
+          </td>
+          <td class="capa-info-label">Tempo:</td>
+          <td class="capa-info-value">
+            {% if tempo_minutos %}
+              {{ tempo_minutos }} minutos
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Nº de Questões:</td>
+          <td class="capa-info-value">{{ total_questoes|default:"—" }}</td>
+          <td class="capa-info-label">Caderno Nº:</td>
+          <td class="capa-info-value capa-caderno-destaque">
+            {{ prova.numero_caderno }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       IDENTIFICAÇÃO DO ALUNO
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="capa-aluno-box">
+    <div class="capa-aluno-titulo">Identificação do(a) Estudante</div>
+    <table class="capa-aluno-table">
+      <tbody>
+        <tr>
+          <td class="capa-aluno-label">Nome completo:</td>
+          <td class="capa-aluno-field" style="width: 65%;"></td>
+          <td class="capa-aluno-label">Nota:</td>
+          <td class="capa-aluno-field capa-nota-field"></td>
+        </tr>
+        <tr>
+          <td class="capa-aluno-label">Matrícula:</td>
+          <td class="capa-aluno-field"></td>
+          <td class="capa-aluno-label">Assinatura:</td>
+          <td class="capa-aluno-field"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       INSTRUÇÕES + QR CODE (LADO A LADO)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="capa-instrucoes-qr-wrapper">
+
+    <!-- Instruções -->
+    <div class="capa-instrucoes-col">
+      <div class="capa-instrucoes-titulo">
+        <span class="capa-instrucoes-icone">&#9658;</span>
+        Instruções aos Estudantes
+      </div>
+      <ol class="capa-instrucoes-lista">
+        <li>Leia atentamente o enunciado de <strong>cada questão</strong> antes de responder.</li>
+        <li>Questões de múltipla escolha possuem apenas <strong>uma alternativa correta</strong>.</li>
+        <li>Respostas a lápis <strong>não dão direito</strong> a pedido de revisão de correção.</li>
+        <li>É proibido o uso de celular, fone de ouvido ou qualquer dispositivo eletrônico durante a avaliação.</li>
+        <li>Proibido consultar materiais (livros, cadernos, anotações) salvo indicação expressa do docente.</li>
+        <li>Ao terminar, entregue a prova ao docente. <strong>Não é permitido levar o caderno.</strong></li>
+        {% if instrucoes_extras %}
+        <li>{{ instrucoes_extras }}</li>
+        {% endif %}
+      </ol>
+    </div>
+
+    <!-- Placeholder QR Code — Módulo 3 -->
+    <div class="capa-qrcode-col">
+      <div class="capa-qrcode-box">
+        <div class="capa-qrcode-area">
+          <!-- Módulo 3 substituirá este bloco pelo QR Code real -->
+          <div class="capa-qrcode-placeholder">
+            <div class="capa-qrcode-icon">&#11036;</div>
+            <div class="capa-qrcode-corners">
+              <span class="qr-corner qr-corner-tl"></span>
+              <span class="qr-corner qr-corner-tr"></span>
+              <span class="qr-corner qr-corner-bl"></span>
+              <span class="qr-corner qr-corner-br"></span>
+            </div>
+          </div>
+        </div>
+        <div class="capa-qrcode-label">QR Code</div>
+        <div class="capa-qrcode-sublabel">Gabarito Oficial — Módulo 3</div>
+        <div class="capa-qrcode-id">
+          Prova #{{ prova.pk }}
+          {% if prova.numero_caderno %} • Caderno {{ prova.numero_caderno }}{% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       RODAPÉ DA CAPA
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="capa-rodape">
+    <div class="capa-rodape-esq">
+      Documento gerado automaticamente pelo <strong>Sistema Examina — FAETERJ-Rio</strong>.
+      Uso restrito à instituição. Proibida a reprodução e divulgação não autorizada.
+    </div>
+    <div class="capa-rodape-dir">
+      Caderno <strong>{{ prova.numero_caderno }}</strong>
+      &nbsp;|&nbsp;
+      Gerado em {{ prova.criado_em|date:"d/m/Y \à\s H:i" }}
+    </div>
+  </div>
+
+</body>
+</html>

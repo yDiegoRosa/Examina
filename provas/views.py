@@ -227,8 +227,7 @@ def mascara_detail(request, pk):
 
     # Últimas provas geradas a partir desta máscara
     provas_recentes = (
-        mascara.provas_geradas
-        .select_related('autor')
+        mascara.provas_geradas.select_related('autor')
         .annotate(total_questoes=Count('itens'))
         .order_by('-criado_em')[:5]
     )
@@ -399,8 +398,7 @@ def prova_revisao(request, pk):
         pk=pk,
     )
     itens = (
-        prova.itens
-        .select_related('questao', 'questao__topico', 'questao__disciplina')
+        prova.itens.select_related('questao', 'questao__topico', 'questao__disciplina')
         .prefetch_related('questao__alternativas')
         .order_by('ordem')
     )
@@ -443,15 +441,17 @@ def prova_revisao(request, pk):
         topico_id, dif = chave
         meta = metas_por_celula.get(chave, 0)
         atual = atual_por_celula.get(chave, 0)
-        comparativo_celulas.append({
-            'topico_id': topico_id,
-            'topico_nome': topico_nomes.get(topico_id, 'Sem tópico'),
-            'dificuldade': dif,
-            'dificuldade_display': dif_display_map.get(dif, dif),
-            'meta': meta,
-            'atual': atual,
-            'status': 'ok' if atual == meta else 'divergente',
-        })
+        comparativo_celulas.append(
+            {
+                'topico_id': topico_id,
+                'topico_nome': topico_nomes.get(topico_id, 'Sem tópico'),
+                'dificuldade': dif,
+                'dificuldade_display': dif_display_map.get(dif, dif),
+                'meta': meta,
+                'atual': atual,
+                'status': 'ok' if atual == meta else 'divergente',
+            }
+        )
 
     # --- Resumo por dificuldade ---
     resumo_dificuldade = {}
@@ -474,13 +474,15 @@ def prova_revisao(request, pk):
             topicos_vistos.add(tid)
             meta_t = sum(x['meta'] for x in comparativo_celulas if x['topico_id'] == tid)
             atual_t = sum(x['atual'] for x in comparativo_celulas if x['topico_id'] == tid)
-            topicos_ordenados.append({
-                'topico_id': tid,
-                'topico_nome': c['topico_nome'],
-                'meta': meta_t,
-                'atual': atual_t,
-                'status': 'ok' if atual_t == meta_t else 'divergente',
-            })
+            topicos_ordenados.append(
+                {
+                    'topico_id': tid,
+                    'topico_nome': c['topico_nome'],
+                    'meta': meta_t,
+                    'atual': atual_t,
+                    'status': 'ok' if atual_t == meta_t else 'divergente',
+                }
+            )
 
     total_meta = snap_matriz.get('total_questoes', 0)
     total_atual = itens.count()
@@ -496,13 +498,15 @@ def prova_revisao(request, pk):
                 celulas_linha[d_code] = match[0]
             else:
                 celulas_linha[d_code] = {'meta': 0, 'atual': 0, 'status': 'ok'}
-        linhas_comparativo.append({
-            'topico_nome': top_info['topico_nome'],
-            'celulas': celulas_linha,
-            'total_meta': top_info['meta'],
-            'total_atual': top_info['atual'],
-            'status': top_info['status'],
-        })
+        linhas_comparativo.append(
+            {
+                'topico_nome': top_info['topico_nome'],
+                'celulas': celulas_linha,
+                'total_meta': top_info['meta'],
+                'total_atual': top_info['atual'],
+                'status': top_info['status'],
+            }
+        )
 
     return render(
         request,
@@ -531,7 +535,9 @@ def item_candidatas_substituicao(request, item_pk):
     Filtra estritamente pelo mesmo tópico e dificuldade, ordenando por prioridade RF07.
     """
     item = get_object_or_404(
-        ProvaQuestao.objects.select_related('prova', 'prova__mascara', 'questao', 'questao__topico', 'questao__disciplina'),
+        ProvaQuestao.objects.select_related(
+            'prova', 'prova__mascara', 'questao', 'questao__topico', 'questao__disciplina'
+        ),
         pk=item_pk,
     )
     candidatas_qs = obter_candidatas_substituicao(item)
@@ -539,40 +545,43 @@ def item_candidatas_substituicao(request, item_pk):
     candidatas_data = []
     for q in candidatas_qs:
         alternativas = [
-            {'letra': alt.letra, 'texto': alt.texto, 'correta': alt.correta}
-            for alt in q.alternativas.all()
+            {'letra': alt.letra, 'texto': alt.texto, 'correta': alt.correta} for alt in q.alternativas.all()
         ]
-        candidatas_data.append({
-            'id': q.pk,
-            'enunciado': q.enunciado,
-            'dificuldade': q.dificuldade,
-            'dificuldade_display': q.get_dificuldade_display(),
-            'tipo': q.tipo,
-            'tipo_display': q.get_tipo_display(),
-            'topico_id': q.topico_id,
-            'topico_nome': q.topico.nome if q.topico else 'Sem tópico',
-            'origem': q.origem or '',
-            'numero_questao': q.numero_questao or '',
-            'vezes_usada_recentemente': getattr(q, 'vezes_usada_recentemente', 0),
-            'is_enade': bool(getattr(q, 'is_enade', 0)),
-            'alternativas': alternativas,
-        })
+        candidatas_data.append(
+            {
+                'id': q.pk,
+                'enunciado': q.enunciado,
+                'dificuldade': q.dificuldade,
+                'dificuldade_display': q.get_dificuldade_display(),
+                'tipo': q.tipo,
+                'tipo_display': q.get_tipo_display(),
+                'topico_id': q.topico_id,
+                'topico_nome': q.topico.nome if q.topico else 'Sem tópico',
+                'origem': q.origem or '',
+                'numero_questao': q.numero_questao or '',
+                'vezes_usada_recentemente': getattr(q, 'vezes_usada_recentemente', 0),
+                'is_enade': bool(getattr(q, 'is_enade', 0)),
+                'alternativas': alternativas,
+            }
+        )
 
     questao_atual = item.questao
-    return JsonResponse({
-        'item_id': item.pk,
-        'item_numero': item.numero,
-        'questao_atual': {
-            'id': questao_atual.pk,
-            'enunciado': questao_atual.enunciado,
-            'dificuldade': questao_atual.dificuldade,
-            'dificuldade_display': questao_atual.get_dificuldade_display(),
-            'topico_nome': questao_atual.topico.nome if questao_atual.topico else 'Sem tópico',
-            'origem': questao_atual.origem or '',
-        },
-        'total_candidatas': len(candidatas_data),
-        'candidatas': candidatas_data,
-    })
+    return JsonResponse(
+        {
+            'item_id': item.pk,
+            'item_numero': item.numero,
+            'questao_atual': {
+                'id': questao_atual.pk,
+                'enunciado': questao_atual.enunciado,
+                'dificuldade': questao_atual.dificuldade,
+                'dificuldade_display': questao_atual.get_dificuldade_display(),
+                'topico_nome': questao_atual.topico.nome if questao_atual.topico else 'Sem tópico',
+                'origem': questao_atual.origem or '',
+            },
+            'total_candidatas': len(candidatas_data),
+            'candidatas': candidatas_data,
+        }
+    )
 
 
 @require_POST
@@ -596,7 +605,9 @@ def item_substituir_questao(request, item_pk):
         substituir_questao_prova(item=item, nova_questao=nova_questao, autor=request.user)
         msg = f'Questão #{item.numero} substituída com sucesso pela questão Q{nova_questao.pk}!'
 
-        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+        is_ajax = request.headers.get(
+            'x-requested-with'
+        ) == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
         if is_ajax:
             return JsonResponse({'success': True, 'message': msg})
 
@@ -604,7 +615,9 @@ def item_substituir_questao(request, item_pk):
         return redirect('provas:prova_revisao', pk=item.prova_id)
     except SubstituicaoQuestaoError as err:
         error_msg = str(err)
-        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+        is_ajax = request.headers.get(
+            'x-requested-with'
+        ) == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
         if is_ajax:
             return JsonResponse({'success': False, 'error': error_msg}, status=400)
 
@@ -691,4 +704,94 @@ def pdf_teste_view(request):
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="avaliacao_teste_faeterj.pdf"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Geração do PDF da Capa Padronizada da Prova (Módulo 3)
+# ---------------------------------------------------------------------------
+@login_required
+def prova_capa_pdf(request, pk):
+    """
+    Gera o PDF da capa padronizada de uma prova gerada.
+
+    Renderiza o template `pdf_capa_prova.html` via WeasyPrint com todos os
+    metadados institucionais da avaliação. O placeholder do QR Code fica
+    reservado para integração futura pelo Módulo 3.
+    """
+    prova = get_object_or_404(
+        Prova.objects.select_related(
+            'mascara',
+            'mascara__disciplina',
+            'disciplina',
+            'autor',
+        ),
+        pk=pk,
+    )
+
+    # Disciplina efetiva (direta na prova ou via máscara)
+    disciplina = prova.disciplina_efetiva
+
+    # Parâmetros da máscara (se existir snapshot ou objeto vivo)
+    mascara = prova.mascara
+    snap = prova.snapshot_mascara or {}
+
+    valor_total = None
+    tempo_minutos = None
+    modalidade = None
+
+    if mascara:
+        valor_total = mascara.valor_total
+        tempo_minutos = mascara.tempo_estimado_minutos
+        modalidade = mascara.get_modalidade_display()
+    elif snap:
+        valor_total = snap.get('valor_total')
+        tempo_minutos = snap.get('tempo_estimado_minutos')
+        modalidade_code = snap.get('modalidade', '')
+        # Mapa legível
+        _modalidade_map = {
+            'OBJ': 'Somente Objetivas',
+            'DIS': 'Somente Discursivas',
+            'MISTA': 'Mista (Objetivas e Discursivas)',
+        }
+        modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
+
+    # Nome do docente
+    docente_nome = None
+    if prova.autor:
+        docente_nome = prova.autor.get_full_name() or prova.autor.username
+
+    # Total de questões da prova
+    total_questoes = prova.itens.count()
+
+    context = {
+        'prova': prova,
+        'disciplina_nome': disciplina.nome if disciplina else None,
+        'docente_nome': docente_nome,
+        'turma': snap.get('turma') or request.GET.get('turma') or '',
+        'turno': snap.get('turno') or request.GET.get('turno') or '',
+        'data_aplicacao': request.GET.get('data') or '',
+        'valor_total': valor_total,
+        'tempo_minutos': tempo_minutos,
+        'modalidade': modalidade,
+        'total_questoes': total_questoes,
+        'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
+    }
+
+    try:
+        pdf_bytes = PDFGeneratorService.render_pdf_from_template(
+            template_name='provas/pdf_capa_prova.html',
+            context=context,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Erro ao gerar capa PDF da prova pk=%s: %s', pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Erro ao gerar o PDF da capa: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    filename = f'capa_prova_{prova.pk}_caderno{prova.numero_caderno}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response

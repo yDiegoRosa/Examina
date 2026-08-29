@@ -32,6 +32,14 @@
     <button type="button" class="btn flex items-center gap-2" style="background: #E2E8F0; color: #64748B; cursor: not-allowed; opacity: 0.7;" disabled title="Em desenvolvimento">
       <i class="bi bi-file-earmark-pdf"></i> Gerar PDF (em breve)
     </button>
+    <a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}"
+       target="_blank"
+       rel="noopener"
+       class="btn flex items-center gap-2"
+       style="background: #002B49; color: #FFFFFF;"
+       title="Abre a capa padronizada em PDF numa nova aba">
+      <i class="bi bi-file-earmark-pdf-fill"></i> Gerar Capa PDF
+    </a>
   </div>
 </div>
 
