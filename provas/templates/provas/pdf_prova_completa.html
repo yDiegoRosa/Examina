@@ -84,10 +84,10 @@
           </tr>
           <tr>
             <td class="capa-info-label">Nº de Questões:</td>
-            <td class="capa-info-value">{{ total_questoes|default:itens|length }}</td>
+            <td class="capa-info-value">{{ total_questoes }}</td>
             <td class="capa-info-label">Caderno Nº:</td>
             <td class="capa-info-value capa-caderno-destaque">
-              {{ prova.numero_caderno }}
+              {{ identificador_display|default:prova.numero_caderno }}
             </td>
           </tr>
         </tbody>
@@ -212,7 +212,7 @@
        CADERNO DE QUESTÕES
        ═══════════════════════════════════════════════════════════ -->
   <div class="questoes-wrapper">
-    {% for item in itens %}
+    {% for item in itens_render %}
     {% with q=item.questao %}
     <div class="questao-bloco">
 
@@ -261,16 +261,29 @@
       <!-- Questão Objetiva: Alternativas A a E -->
       {% if q.tipo == 'OBJ' %}
       <div class="alternativas-lista">
-        {% for alt in q.alternativas.all %}
-        <div class="alternativa-item">
-          <div class="alt-letra-col">
-            <span class="alt-circulo">({{ alt.letra }})</span>
+        {% if item.alternativas_versao %}
+          {% for alt in item.alternativas_versao %}
+          <div class="alternativa-item">
+            <div class="alt-letra-col">
+              <span class="alt-circulo">({{ alt.letra }})</span>
+            </div>
+            <div class="alt-texto-col">
+              {{ alt.texto }}
+            </div>
           </div>
-          <div class="alt-texto-col">
-            {{ alt.texto }}
+          {% endfor %}
+        {% else %}
+          {% for alt in q.alternativas.all %}
+          <div class="alternativa-item">
+            <div class="alt-letra-col">
+              <span class="alt-circulo">({{ alt.letra }})</span>
+            </div>
+            <div class="alt-texto-col">
+              {{ alt.texto }}
+            </div>
           </div>
-        </div>
-        {% endfor %}
+          {% endfor %}
+        {% endif %}
       </div>
 
       <!-- Questão Discursiva: Linhas Pautadas para Resposta -->
@@ -295,6 +308,7 @@
     {% endwith %}
     {% endfor %}
   </div>
+
 
   <!-- ═══════════════════════════════════════════════════════════
        GABARITO E CRITÉRIOS DE CORREÇÃO (USO DO DOCENTE)
@@ -321,7 +335,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for item in itens %}
+        {% for item in itens_render %}
         {% with q=item.questao %}
         <tr>
           <td style="text-align: center; font-weight: bold; color: #002B49;">
@@ -330,7 +344,7 @@
           <td>{{ q.get_tipo_display }}</td>
           <td style="text-align: center;">
             {% if q.tipo == 'OBJ' %}
-              {% for alt in q.alternativas.all %}
+              {% for alt in item.alternativas_versao|default:q.alternativas.all %}
                 {% if alt.correta %}
                 <span class="gabarito-letra-correta">Opção ({{ alt.letra }})</span>
                 {% endif %}
@@ -347,7 +361,7 @@
             {% if q.tipo == 'DIS' and q.criterios_correcao %}
               <div class="gabarito-criterios-texto">{{ q.criterios_correcao|linebreaksbr }}</div>
             {% elif q.tipo == 'OBJ' %}
-              {% for alt in q.alternativas.all %}
+              {% for alt in item.alternativas_versao|default:q.alternativas.all %}
                 {% if alt.correta %}
                 <div style="font-size: 8pt; color: #334155;"><strong>Texto correto:</strong> {{ alt.texto }}</div>
                 {% endif %}

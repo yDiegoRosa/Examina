@@ -1977,5 +1977,105 @@ class MontagemManualProvaTest(TestCase):
         self.assertContains(response, 'A avaliação não pode ficar vazia')
 
 
+class ProvaVersaoModelAndGenerationTest(TestCase):
+    """Testes para o sistema de Versões de Prova (Prova A/B/C) e embaralhamento."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='prof_versoes', password='secret_password')  # noqa: S106
+        self.client.login(username='prof_versoes', password='secret_password')  # noqa: S106
+
+        self.disc = Disciplina.objects.create(nome='Algoritmos e Estruturas de Dados')
+        self.topico = Topico.objects.create(disciplina=self.disc, nome='Recursão e Grafos')
+
+        # Cria 3 questões objetivas com alternativas A-E
+        self.questoes = []
+        for i in range(1, 4):
+            q = Questao.objects.create(
+                tipo=Questao.Tipo.OBJETIVA,
+                dificuldade=Questao.Dificuldade.MEDIO,
+                disciplina=self.disc,
+                topico=self.topico,
+                enunciado=f'Enunciado de teste da questão #{i}',
+                autor=self.user,
+            )
+            Alternativa.objects.create(questao=q, letra='A', texto=f'Opção A da Q{i}', correta=(i == 1))
+            Alternativa.objects.create(questao=q, letra='B', texto=f'Opção B da Q{i}', correta=(i == 2))
+            Alternativa.objects.create(questao=q, letra='C', texto=f'Opção C da Q{i}', correta=(i == 3))
+            Alternativa.objects.create(questao=q, letra='D', texto=f'Opção D da Q{i}', correta=False)
+            Alternativa.objects.create(questao=q, letra='E', texto=f'Opção E da Q{i}', correta=False)
+            self.questoes.append(q)
+
+        # Máscara configurada com embaralhamento
+        self.mascara = Mascara.objects.create(
+            titulo='AV Oficial Algoritmos 2026.2',
+            disciplina=self.disc,
+            quantidade_questoes=3,
+            modalidade=Mascara.Modalidade.OBJETIVA,
+            percentual_facil=0,
+            percentual_medio=100,
+            percentual_dificil=0,
+            embaralhar_questoes=True,
+            embaralhar_alternativas=True,
+            autor=self.user,
+        )
+
+        # Gera prova base
+        self.prova = self.mascara.gerar_prova(autor=self.user)
+
+    def test_geracao_automatica_cria_versoes_a_b_c(self):
+        """Verifica que a geração da prova cria automaticamente as versões A, B e C."""
+        versoes = self.prova.versoes.all().order_by('numero_versao')
+        self.assertEqual(versoes.count(), 3)
+        self.assertEqual([v.identificador for v in versoes], ['A', 'B', 'C'])
+
+    def test_cada_versao_possui_todas_as_questoes(self):
+        """Verifica que cada versão A, B e C possui exatamente o número total de questões."""
+        for versao in self.prova.versoes.all():
+            self.assertEqual(versao.itens.count(), 3)
+            # Cada item da versão deve possuir 5 alternativas embaralhadas
+            for item in versao.itens.all():
+                alts = item.alternativas_embaralhadas
+                self.assertEqual(len(alts), 5)
+                # Verifica que exatamente uma alternativa é correta
+                corretas = [a for a in alts if a.get('correta')]
+                self.assertEqual(len(corretas), 1)
+                # Verifica que as letras visuais são A, B, C, D, E
+                letras = [a.get('letra') for a in alts]
+                self.assertEqual(letras, ['A', 'B', 'C', 'D', 'E'])
+
+    def test_servico_gerar_versoes_personalizadas(self):
+        """Verifica que o serviço aceita quantidade customizada de versões (ex.: A, B, C, D)."""
+        from provas.services.version_generator import gerar_versoes_prova
+
+        versoes = gerar_versoes_prova(prova=self.prova, quantidade_versoes=4)
+        self.assertEqual(len(versoes), 4)
+        self.assertEqual([v.identificador for v in versoes], ['A', 'B', 'C', 'D'])
+
+    def test_view_prova_gerar_versoes_post(self):
+        """Verifica endpoint POST de regeneração de versões."""
+        url = reverse('provas:prova_gerar_versoes', kwargs={'pk': self.prova.pk})
+        response = self.client.post(url, {'quantidade_versoes': '3'}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Versão A, Versão B, Versão C')
+
+    def test_view_prova_pdf_versao_especifica_retorna_200(self):
+        """Verifica que o endpoint prova_pdf com ?versao=B renderiza PDF normalmente."""
+        url = reverse('provas:prova_pdf', kwargs={'pk': self.prova.pk})
+        response = self.client.get(f'{url}?versao=B')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(len(response.content) > 1000)
+
+    def test_view_prova_gabarito_pdf_versao_especifica_retorna_200(self):
+        """Verifica que o endpoint prova_gabarito_pdf com ?versao=C renderiza PDF com sucesso."""
+        url = reverse('provas:prova_gabarito_pdf', kwargs={'pk': self.prova.pk})
+        response = self.client.get(f'{url}?versao=C')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(len(response.content) > 1000)
+
+
+
 
 

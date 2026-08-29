@@ -540,7 +540,103 @@ class ProvaQuestao(models.Model):
         return f'{self.prova} • Questão {self.numero} (Q{self.questao_id})'
 
 
+# ---------------------------------------------------------------------------
+# ProvaVersao e ProvaVersaoItem (Cadernos A / B / C com Ordem Embaralhada)
+# ---------------------------------------------------------------------------
+class ProvaVersao(models.Model):
+    """
+    Versão/Caderno específico de uma avaliação gerada (ex: Versão A, Versão B, Versão C).
+
+    Permite a aplicação da mesma prova com permutações de ordem de questões
+    e alternativas entre os estudantes, prevenindo cópias e fraudes.
+    """
+
+    prova = models.ForeignKey(
+        Prova,
+        on_delete=models.CASCADE,
+        related_name='versoes',
+        verbose_name='avaliação base',
+    )
+    identificador = models.CharField(
+        'identificador da versão',
+        max_length=10,
+        help_text='Letra ou código identificador da versão (ex.: A, B, C).',
+    )
+    numero_versao = models.PositiveIntegerField(
+        'número ordinal da versão',
+        default=1,
+        help_text='Índice sequencial da versão (1 para A, 2 para B, etc.).',
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('prova', 'identificador'), ('prova', 'numero_versao')]
+        ordering = ['numero_versao', 'identificador']
+        verbose_name = 'versão de prova'
+        verbose_name_plural = 'versões de prova'
+
+    def __str__(self):
+        return f'{self.prova.titulo} — Versão {self.identificador}'
+
+    @property
+    def total_questoes(self):
+        return self.itens.count()
+
+
+class ProvaVersaoItem(models.Model):
+    """
+    Item associado a uma versão específica da prova com sua ordem de exibição
+    e alternativas embaralhadas persistidas.
+    """
+
+    versao = models.ForeignKey(
+        ProvaVersao,
+        on_delete=models.CASCADE,
+        related_name='itens',
+        verbose_name='versão de prova',
+    )
+    prova_questao = models.ForeignKey(
+        ProvaQuestao,
+        on_delete=models.CASCADE,
+        related_name='itens_versao',
+        verbose_name='questão da prova base',
+    )
+    numero = models.PositiveIntegerField(
+        'número da questão nesta versão',
+        default=1,
+    )
+    ordem = models.PositiveIntegerField(
+        'ordem de exibição na versão',
+        default=1,
+    )
+    alternativas_embaralhadas = models.JSONField(
+        'alternativas embaralhadas',
+        default=list,
+        blank=True,
+        help_text='Lista de alternativas com a ordem e letras sorteadas para esta versão específica.',
+    )
+
+    class Meta:
+        unique_together = [('versao', 'prova_questao'), ('versao', 'ordem')]
+        ordering = ['ordem']
+        verbose_name = 'item da versão de prova'
+        verbose_name_plural = 'itens da versão de prova'
+
+    def __str__(self):
+        return f'Versão {self.versao.identificador} • Questão {self.numero} (PQ{self.prova_questao_id})'
+
+    @property
+    def questao(self):
+        return self.prova_questao.questao
+
+    @property
+    def pontuacao(self):
+        return self.prova_questao.pontuacao
+
+
 # Aliases para retrocompatibilidade contínua
 MascaraProva = Mascara
 MascaraTopico = MascaraCriterioTopico
+
 

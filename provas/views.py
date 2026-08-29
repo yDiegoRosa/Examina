@@ -708,16 +708,40 @@ def pdf_teste_view(request):
 
 
 # ---------------------------------------------------------------------------
+# Geração / Regeneração de Versões da Prova (A, B, C...)
+# ---------------------------------------------------------------------------
+@require_POST
+@login_required
+def prova_gerar_versoes_view(request, pk):
+    """
+    (Re)Gera múltiplos cadernos de prova (Versões A, B, C) com permutações
+    de questões e alternativas para a avaliação.
+    """
+    prova = get_object_or_404(Prova, pk=pk)
+    qtd_str = request.POST.get('quantidade_versoes', '3')
+    try:
+        qtd = max(1, min(8, int(qtd_str)))
+    except ValueError:
+        qtd = 3
+
+    from provas.services.version_generator import gerar_versoes_prova
+
+    versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=qtd, substituir_existentes=True)
+    nomes_versoes = ', '.join(f'Versão {v.identificador}' for v in versoes)
+    messages.success(
+        request,
+        f'Cadernos de avaliação gerados com sucesso: {nomes_versoes} ({len(versoes)} versões com questões e alternativas embaralhadas)!',
+    )
+    return redirect('provas:prova_revisao', pk=prova.pk)
+
+
+# ---------------------------------------------------------------------------
 # Geração do PDF da Capa Padronizada da Prova (Módulo 3)
 # ---------------------------------------------------------------------------
 @login_required
 def prova_capa_pdf(request, pk):
     """
-    Gera o PDF da capa padronizada de uma prova gerada.
-
-    Renderiza o template `pdf_capa_prova.html` via WeasyPrint com todos os
-    metadados institucionais da avaliação. O placeholder do QR Code fica
-    reservado para integração futura pelo Módulo 3.
+    Gera o PDF da capa padronizada de uma prova gerada ou de uma versão específica.
     """
     prova = get_object_or_404(
         Prova.objects.select_related(
@@ -729,10 +753,12 @@ def prova_capa_pdf(request, pk):
         pk=pk,
     )
 
-    # Disciplina efetiva (direta na prova ou via máscara)
-    disciplina = prova.disciplina_efetiva
+    versao_ident = request.GET.get('versao')
+    versao = None
+    if versao_ident:
+        versao = prova.versoes.filter(identificador__iexact=versao_ident).first()
 
-    # Parâmetros da máscara (se existir snapshot ou objeto vivo)
+    disciplina = prova.disciplina_efetiva
     mascara = prova.mascara
     snap = prova.snapshot_mascara or {}
 
@@ -748,7 +774,6 @@ def prova_capa_pdf(request, pk):
         valor_total = snap.get('valor_total')
         tempo_minutos = snap.get('tempo_estimado_minutos')
         modalidade_code = snap.get('modalidade', '')
-        # Mapa legível
         _modalidade_map = {
             'OBJ': 'Somente Objetivas',
             'DIS': 'Somente Discursivas',
@@ -756,16 +781,18 @@ def prova_capa_pdf(request, pk):
         }
         modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
 
-    # Nome do docente
     docente_nome = None
     if prova.autor:
         docente_nome = prova.autor.get_full_name() or prova.autor.username
 
-    # Total de questões da prova
     total_questoes = prova.itens.count()
+
+    identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
 
     context = {
         'prova': prova,
+        'versao': versao,
+        'identificador_display': identificador_display,
         'disciplina_nome': disciplina.nome if disciplina else None,
         'docente_nome': docente_nome,
         'turma': snap.get('turma') or request.GET.get('turma') or '',
@@ -791,27 +818,21 @@ def prova_capa_pdf(request, pk):
             content_type='text/plain; charset=utf-8',
         )
 
-    filename = f'capa_prova_{prova.pk}_caderno{prova.numero_caderno}.pdf'
+    versao_slug = f'_versao_{versao.identificador}' if versao else f'_caderno{prova.numero_caderno}'
+    filename = f'capa_prova_{prova.pk}{versao_slug}.pdf'
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
 
 
 # ---------------------------------------------------------------------------
-# Geração do PDF do Caderno de Prova / Prova Completa
+# Geração do PDF do Caderno de Prova / Prova Completa (Suporte a Versões A/B/C)
 # ---------------------------------------------------------------------------
 @login_required
 def prova_pdf(request, pk):
     """
     Gera o PDF formatado do Caderno de Prova com todas as questões.
-
-    Suporta parâmetros query opcionais:
-    - `incluir_capa`: '1' (padrão se não informado ou '0' para somente questões)
-    - `incluir_gabarito`: '1' para anexar a página de espelho de gabarito e critérios
-    - `data`: data de aplicação customizada
-    - `turma`: identificação de turma
-    - `turno`: turno da aplicação
-    - `instrucoes_extras`: orientações adicionais aos estudantes
+    Suporta versões específicas (ex.: ?versao=A, ?versao=B, ?versao=C).
     """
     prova = get_object_or_404(
         Prova.objects.select_related(
@@ -823,12 +844,58 @@ def prova_pdf(request, pk):
         pk=pk,
     )
 
-    itens = (
-        prova.itens
-        .select_related('questao', 'questao__topico', 'questao__disciplina')
-        .prefetch_related('questao__alternativas')
-        .order_by('ordem')
-    )
+    versao_ident = request.GET.get('versao')
+    versao = None
+    if versao_ident:
+        versao = prova.versoes.filter(identificador__iexact=versao_ident).first()
+    elif prova.versoes.exists():
+        versao = prova.versoes.order_by('numero_versao').first()
+
+    # Prepara itens da versão ou itens base da prova
+    if versao:
+        itens_versao_qs = (
+            versao.itens
+            .select_related(
+                'prova_questao__questao',
+                'prova_questao__questao__topico',
+                'prova_questao__questao__disciplina',
+            )
+            .order_by('ordem')
+        )
+        itens_render = []
+        for iv in itens_versao_qs:
+            q = iv.prova_questao.questao
+            snap_q = iv.prova_questao.snapshot_questao or {}
+            # Usa alternativas embaralhadas persistidas na versão
+            alts_versao = iv.alternativas_embaralhadas
+            itens_render.append({
+                'numero': iv.numero,
+                'ordem': iv.ordem,
+                'pontuacao': iv.pontuacao,
+                'questao': q,
+                'snapshot_questao': snap_q,
+                'alternativas_versao': alts_versao,
+            })
+    else:
+        itens_qs = (
+            prova.itens
+            .select_related('questao', 'questao__topico', 'questao__disciplina')
+            .prefetch_related('questao__alternativas')
+            .order_by('ordem')
+        )
+        itens_render = []
+        for it in itens_qs:
+            itens_render.append({
+                'numero': it.numero,
+                'ordem': it.ordem,
+                'pontuacao': it.pontuacao,
+                'questao': it.questao,
+                'snapshot_questao': it.snapshot_questao,
+                'alternativas_versao': [
+                    {'letra': a.letra, 'texto': a.texto, 'correta': a.correta}
+                    for a in it.questao.alternativas.all()
+                ],
+            })
 
     disciplina = prova.disciplina_efetiva
     mascara = prova.mascara
@@ -863,9 +930,14 @@ def prova_pdf(request, pk):
     param_gabarito = request.GET.get('incluir_gabarito', '0')
     incluir_gabarito = param_gabarito in ('1', 'true', 'True')
 
+    identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
+
     context = {
         'prova': prova,
-        'itens': itens,
+        'versao': versao,
+        'identificador_display': identificador_display,
+        'itens': itens_render,
+        'itens_render': itens_render,
         'disciplina_nome': disciplina.nome if disciplina else None,
         'docente_nome': docente_nome,
         'turma': snap.get('turma') or request.GET.get('turma') or '',
@@ -874,7 +946,7 @@ def prova_pdf(request, pk):
         'valor_total': valor_total,
         'tempo_minutos': tempo_minutos,
         'modalidade': modalidade,
-        'total_questoes': itens.count(),
+        'total_questoes': len(itens_render),
         'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
         'incluir_capa': incluir_capa,
         'incluir_gabarito': incluir_gabarito,
@@ -897,7 +969,8 @@ def prova_pdf(request, pk):
     if incluir_gabarito:
         tipo_str += '_com_gabarito'
 
-    filename = f'prova_{prova.pk}_caderno{prova.numero_caderno}_{tipo_str}.pdf'
+    versao_slug = f'_versao_{versao.identificador}' if versao else f'_caderno{prova.numero_caderno}'
+    filename = f'prova_{prova.pk}{versao_slug}_{tipo_str}.pdf'
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
@@ -910,10 +983,7 @@ def prova_pdf(request, pk):
 def prova_gabarito_pdf(request, pk):
     """
     Gera o PDF do Gabarito Oficial específico para a versão/caderno da prova.
-
-    Respeita com exatidão a ordem de embaralhamento das questões e das
-    alternativas específicas desta versão, exibindo o quadro de respostas rápidas
-    e o espelho pedagógico de correção questão a questão.
+    Respeita rigorosamente a permutação de questões e alternativas da versão solicitada.
     """
     prova = get_object_or_404(
         Prova.objects.select_related(
@@ -925,12 +995,12 @@ def prova_gabarito_pdf(request, pk):
         pk=pk,
     )
 
-    itens_qs = (
-        prova.itens
-        .select_related('questao', 'questao__topico', 'questao__disciplina')
-        .prefetch_related('questao__alternativas')
-        .order_by('ordem')
-    )
+    versao_ident = request.GET.get('versao')
+    versao = None
+    if versao_ident:
+        versao = prova.versoes.filter(identificador__iexact=versao_ident).first()
+    elif prova.versoes.exists():
+        versao = prova.versoes.order_by('numero_versao').first()
 
     disciplina = prova.disciplina_efetiva
     mascara = prova.mascara
@@ -956,77 +1026,138 @@ def prova_gabarito_pdf(request, pk):
     if prova.autor:
         docente_nome = prova.autor.get_full_name() or prova.autor.username
 
-    # Monta lista de resumo rápido e itens detalhados
     resumo_itens = []
     itens_detalhados = []
 
-    for idx, item in enumerate(itens_qs, start=1):
-        num_exibicao = item.numero or idx
-        q = item.questao
-        snap_q = item.snapshot_questao or {}
+    if versao:
+        itens_versao_qs = (
+            versao.itens
+            .select_related(
+                'prova_questao__questao',
+                'prova_questao__questao__topico',
+                'prova_questao__questao__disciplina',
+            )
+            .order_by('ordem')
+        )
+        for iv in itens_versao_qs:
+            q = iv.prova_questao.questao
+            snap_q = iv.prova_questao.snapshot_questao or {}
+            tipo = snap_q.get('tipo') or q.tipo
+            tipo_display = snap_q.get('tipo_display') or q.get_tipo_display()
+            topico_nome = snap_q.get('topico_nome') or (q.topico.nome if q.topico else '')
+            origem = snap_q.get('origem') or q.origem
+            origem_numero = snap_q.get('numero_questao') or q.numero_questao
+            dificuldade_display = snap_q.get('dificuldade_display') or q.get_dificuldade_display()
+            enunciado = snap_q.get('enunciado') or q.enunciado
+            criterios_correcao = snap_q.get('criterios_correcao') or q.criterios_correcao
 
-        tipo = snap_q.get('tipo') or q.tipo
-        tipo_display = snap_q.get('tipo_display') or q.get_tipo_display()
-        topico_nome = snap_q.get('topico_nome') or (q.topico.nome if q.topico else '')
-        origem = snap_q.get('origem') or q.origem
-        origem_numero = snap_q.get('numero_questao') or q.numero_questao
-        dificuldade_display = snap_q.get('dificuldade_display') or q.get_dificuldade_display()
-        enunciado = snap_q.get('enunciado') or q.enunciado
-        criterios_correcao = snap_q.get('criterios_correcao') or q.criterios_correcao
-
-        letra_correta = ''
-        alternativas_lista = []
-
-        if tipo == 'OBJ':
-            # Se houver snapshot com alternativas, usa-o
-            snap_alts = snap_q.get('alternativas')
-            if snap_alts:
-                for a in snap_alts:
-                    alt_dict = {
-                        'letra': a.get('letra', ''),
-                        'texto': a.get('texto', ''),
-                        'correta': a.get('correta', False),
-                    }
-                    alternativas_lista.append(alt_dict)
-                    if alt_dict['correta']:
-                        letra_correta = alt_dict['letra']
+            letra_correta = ''
+            alternativas_lista = list(iv.alternativas_embaralhadas)
+            if tipo == 'OBJ':
+                for alt in alternativas_lista:
+                    if alt.get('correta'):
+                        letra_correta = alt.get('letra', '')
+                        break
             else:
-                for a in q.alternativas.all():
-                    alt_dict = {
-                        'letra': a.letra,
-                        'texto': a.texto,
-                        'correta': a.correta,
-                    }
-                    alternativas_lista.append(alt_dict)
-                    if alt_dict['correta']:
-                        letra_correta = alt_dict['letra']
-        else:
-            letra_correta = 'DIS'
+                letra_correta = 'DIS'
 
-        resumo_itens.append({
-            'numero': num_exibicao,
-            'tipo': tipo,
-            'letra_correta': letra_correta,
-            'pontuacao': item.pontuacao,
-        })
+            resumo_itens.append({
+                'numero': iv.numero,
+                'tipo': tipo,
+                'letra_correta': letra_correta,
+                'pontuacao': iv.pontuacao,
+            })
 
-        itens_detalhados.append({
-            'numero': num_exibicao,
-            'tipo': tipo,
-            'tipo_display': tipo_display,
-            'pontuacao': item.pontuacao,
-            'topico_nome': topico_nome,
-            'origem': origem,
-            'origem_numero': origem_numero,
-            'dificuldade_display': dificuldade_display,
-            'enunciado': enunciado,
-            'letra_correta': letra_correta,
-            'alternativas': alternativas_lista,
-            'criterios_correcao': criterios_correcao,
-        })
+            itens_detalhados.append({
+                'numero': iv.numero,
+                'tipo': tipo,
+                'tipo_display': tipo_display,
+                'pontuacao': iv.pontuacao,
+                'topico_nome': topico_nome,
+                'origem': origem,
+                'origem_numero': origem_numero,
+                'dificuldade_display': dificuldade_display,
+                'enunciado': enunciado,
+                'letra_correta': letra_correta,
+                'alternativas': alternativas_lista,
+                'criterios_correcao': criterios_correcao,
+            })
+    else:
+        # Fallback para prova sem versões
+        itens_qs = (
+            prova.itens
+            .select_related('questao', 'questao__topico', 'questao__disciplina')
+            .prefetch_related('questao__alternativas')
+            .order_by('ordem')
+        )
+        for idx, item in enumerate(itens_qs, start=1):
+            num_exibicao = item.numero or idx
+            q = item.questao
+            snap_q = item.snapshot_questao or {}
+            tipo = snap_q.get('tipo') or q.tipo
+            tipo_display = snap_q.get('tipo_display') or q.get_tipo_display()
+            topico_nome = snap_q.get('topico_nome') or (q.topico.nome if q.topico else '')
+            origem = snap_q.get('origem') or q.origem
+            origem_numero = snap_q.get('numero_questao') or q.numero_questao
+            dificuldade_display = snap_q.get('dificuldade_display') or q.get_dificuldade_display()
+            enunciado = snap_q.get('enunciado') or q.enunciado
+            criterios_correcao = snap_q.get('criterios_correcao') or q.criterios_correcao
+
+            letra_correta = ''
+            alternativas_lista = []
+            if tipo == 'OBJ':
+                snap_alts = snap_q.get('alternativas')
+                if snap_alts:
+                    for a in snap_alts:
+                        alt_dict = {
+                            'letra': a.get('letra', ''),
+                            'texto': a.get('texto', ''),
+                            'correta': a.get('correta', False),
+                        }
+                        alternativas_lista.append(alt_dict)
+                        if alt_dict['correta']:
+                            letra_correta = alt_dict['letra']
+                else:
+                    for a in q.alternativas.all():
+                        alt_dict = {
+                            'letra': a.letra,
+                            'texto': a.texto,
+                            'correta': a.correta,
+                        }
+                        alternativas_lista.append(alt_dict)
+                        if alt_dict['correta']:
+                            letra_correta = alt_dict['letra']
+            else:
+                letra_correta = 'DIS'
+
+            resumo_itens.append({
+                'numero': num_exibicao,
+                'tipo': tipo,
+                'letra_correta': letra_correta,
+                'pontuacao': item.pontuacao,
+            })
+
+            itens_detalhados.append({
+                'numero': num_exibicao,
+                'tipo': tipo,
+                'tipo_display': tipo_display,
+                'pontuacao': item.pontuacao,
+                'topico_nome': topico_nome,
+                'origem': origem,
+                'origem_numero': origem_numero,
+                'dificuldade_display': dificuldade_display,
+                'enunciado': enunciado,
+                'letra_correta': letra_correta,
+                'alternativas': alternativas_lista,
+                'criterios_correcao': criterios_correcao,
+            })
+
+    identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
 
     context = {
         'prova': prova,
+        'versao': versao,
+        'identificador_display': identificador_display,
         'disciplina_nome': disciplina.nome if disciplina else None,
         'docente_nome': docente_nome,
         'turma': snap.get('turma') or request.GET.get('turma') or '',
@@ -1052,8 +1183,8 @@ def prova_gabarito_pdf(request, pk):
             content_type='text/plain; charset=utf-8',
         )
 
-    filename = f'gabarito_prova_{prova.pk}_caderno{prova.numero_caderno}.pdf'
+    versao_slug = f'_versao_{versao.identificador}' if versao else f'_caderno{prova.numero_caderno}'
+    filename = f'gabarito_prova_{prova.pk}{versao_slug}.pdf'
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
-

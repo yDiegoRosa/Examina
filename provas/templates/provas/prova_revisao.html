@@ -88,12 +88,78 @@
       {% if info.status == 'ok' %}
       <i class="bi bi-check-circle-fill text-success"></i> OK
       {% else %}
-      <i class="bi bi-exclamation-triangle-fill" style="color: var(--color-warning);"></i> Divergente
+      <i class="bi bi-exclamation-triangle-fill text-warning"></i> Divergente
       {% endif %}
     </div>
   </div>
   {% endfor %}
 </div>
+
+<!-- Seção de Versões e Cadernos (Versões A / B / C) -->
+<div class="card-surface p-4 mb-4 border" style="border-color: #002B49; border-left-width: 4px;">
+  <div class="flex flex-wrap justify-between items-center mb-3">
+    <div>
+      <h3 class="font-bold text-base flex items-center gap-2" style="color: #002B49;">
+        <i class="bi bi-shuffle text-primary"></i> Cadernos e Versões da Prova (Prova A / B / C)
+      </h3>
+      <p class="text-xs text-muted mt-0.5">
+        Cadernos com permutações de ordem de questões e alternativas para distribuição aos estudantes com gabaritos individuais.
+      </p>
+    </div>
+    <form method="post" action="{% url 'provas:prova_gerar_versoes' pk=prova.pk %}" class="inline-flex items-center gap-2">
+      {% csrf_token %}
+      <input type="hidden" name="quantidade_versoes" value="3">
+      <button type="submit" class="btn btn-sm btn-outline flex items-center gap-1.5" title="Reembaralha e regenera as versões A, B e C mantendo as questões selecionadas">
+        <i class="bi bi-arrow-clockwise"></i> Reembaralhar Versões A/B/C
+      </button>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-12 gap-3">
+    {% for v in versoes %}
+    <div class="col-span-4 p-3 rounded-lg border bg-white shadow-sm flex flex-col justify-between" style="border-color: #CBD5E1;">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-bold text-sm px-2.5 py-1 rounded text-white" style="background-color: #002B49;">
+          Versão {{ v.identificador }}
+        </span>
+        <span class="text-xs text-muted">
+          {{ v.total_questoes }} questões
+        </span>
+      </div>
+      <div class="text-xs text-muted mb-3">
+        {% if forloop.first %}
+        Ordem padrão da avaliação base.
+        {% else %}
+        Questões e alternativas permutadas.
+        {% endif %}
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador }}"
+           target="_blank"
+           rel="noopener"
+           class="btn btn-sm text-white flex items-center justify-center gap-1.5"
+           style="background-color: #002B49;"
+           title="Gera o caderno de prova completo da Versão {{ v.identificador }}">
+          <i class="bi bi-printer-fill"></i> Caderno Versão {{ v.identificador }} (PDF)
+        </a>
+        <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao={{ v.identificador }}"
+           target="_blank"
+           rel="noopener"
+           class="btn btn-sm text-white flex items-center justify-center gap-1.5"
+           style="background-color: #065F46;"
+           title="Gera o gabarito oficial com a ordem exata da Versão {{ v.identificador }}">
+          <i class="bi bi-file-earmark-check-fill"></i> Gabarito Versão {{ v.identificador }} (PDF)
+        </a>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-span-12 text-center text-muted py-3 text-sm">
+      Nenhuma versão gerada ainda. Clique em "Reembaralhar Versões A/B/C" para gerar os cadernos.
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
 
 <!-- Painel Comparativo Meta vs. Atual -->
 <div class="card-surface p-4 mb-4">
