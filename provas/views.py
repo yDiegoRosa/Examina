@@ -282,44 +282,57 @@ def prova_manual_create(request):
     """
     Interface para montagem 100% manual de avaliações (seleção livre no acervo).
     Permite escolher disciplina, filtrar questões e selecionar exatamente quais questões
-    comporão o exame, sem depender de máscara ou do algoritmo automático RF07.
+    comporão o exame, com suporte a máscara guia para validação de meta quantitativa.
     """
-    disciplina_id = request.GET.get('disciplina') or request.POST.get('disciplina')
-    disciplina_selecionada = None
+    mascara_id = request.GET.get('mascara') or request.POST.get('mascara')
+    mascara_guia = None
+
+    if mascara_id:
+        try:
+            mascara_guia = MascaraProva.objects.select_related('disciplina').get(pk=mascara_id, ativo=True)
+            disciplina_selecionada = mascara_guia.disciplina
+        except (MascaraProva.DoesNotExist, ValueError):
+            mascara_guia = None
+            disciplina_selecionada = None
+    else:
+        disciplina_id = request.GET.get('disciplina') or request.POST.get('disciplina')
+        disciplina_selecionada = None
+        if disciplina_id:
+            try:
+                disciplina_selecionada = Disciplina.objects.get(pk=disciplina_id, ativo=True)
+            except (Disciplina.DoesNotExist, ValueError):
+                disciplina_selecionada = None
+
     questoes_disponiveis = []
     topicos_disciplina = []
 
-    if disciplina_id:
-        try:
-            disciplina_selecionada = Disciplina.objects.get(pk=disciplina_id, ativo=True)
-            topicos_disciplina = list(Topico.objects.filter(disciplina=disciplina_selecionada, ativo=True).order_by('nome'))
-            qs = (
-                Questao.objects.filter(disciplina=disciplina_selecionada, ativo=True)
-                .select_related('topico', 'disciplina')
-                .prefetch_related('alternativas')
-                .order_by('topico__nome', 'dificuldade', 'pk')
-            )
+    if disciplina_selecionada:
+        topicos_disciplina = list(Topico.objects.filter(disciplina=disciplina_selecionada, ativo=True).order_by('nome'))
+        qs = (
+            Questao.objects.filter(disciplina=disciplina_selecionada, ativo=True)
+            .select_related('topico', 'disciplina')
+            .prefetch_related('alternativas')
+            .order_by('topico__nome', 'dificuldade', 'pk')
+        )
 
-            # Filtros adicionais via GET
-            topico_filtro = request.GET.get('topico')
-            if topico_filtro:
-                qs = qs.filter(topico_id=topico_filtro)
+        # Filtros adicionais via GET
+        topico_filtro = request.GET.get('topico')
+        if topico_filtro:
+            qs = qs.filter(topico_id=topico_filtro)
 
-            dificuldade_filtro = request.GET.get('dificuldade')
-            if dificuldade_filtro:
-                qs = qs.filter(dificuldade=dificuldade_filtro)
+        dificuldade_filtro = request.GET.get('dificuldade')
+        if dificuldade_filtro:
+            qs = qs.filter(dificuldade=dificuldade_filtro)
 
-            tipo_filtro = request.GET.get('tipo')
-            if tipo_filtro:
-                qs = qs.filter(tipo=tipo_filtro)
+        tipo_filtro = request.GET.get('tipo')
+        if tipo_filtro:
+            qs = qs.filter(tipo=tipo_filtro)
 
-            busca = request.GET.get('busca')
-            if busca:
-                qs = qs.filter(Q(enunciado__icontains=busca) | Q(origem__icontains=busca))
+        busca = request.GET.get('busca')
+        if busca:
+            qs = qs.filter(Q(enunciado__icontains=busca) | Q(origem__icontains=busca))
 
-            questoes_disponiveis = list(qs)
-        except (Disciplina.DoesNotExist, ValueError):
-            disciplina_selecionada = None
+        questoes_disponiveis = list(qs)
 
     if request.method == 'POST':
         form = ProvaManualForm(request.POST)
@@ -327,13 +340,14 @@ def prova_manual_create(request):
 
         if form.is_valid():
             if not questoes_selecionadas_ids:
-                messages.error(request, 'Selecione ao menos uma questão no acervo para compor a avaliação.')
+                messages.error(request, 'A avaliação não pode ficar vazia. Selecione ao menos uma questão no acervo.')
             else:
                 try:
                     ids_int = [int(qid) for qid in questoes_selecionadas_ids if qid.isdigit()]
                     disciplina = form.cleaned_data['disciplina']
                     titulo = form.cleaned_data['titulo']
                     numero_caderno = form.cleaned_data['numero_caderno']
+                    mascara_selecionada = form.cleaned_data.get('mascara') or mascara_guia
 
                     prova = criar_prova_manual(
                         titulo=titulo,
@@ -341,6 +355,7 @@ def prova_manual_create(request):
                         questoes_ids=ids_int,
                         autor=request.user,
                         numero_caderno=numero_caderno,
+                        mascara=mascara_selecionada,
                     )
                     messages.success(
                         request,
@@ -348,11 +363,15 @@ def prova_manual_create(request):
                     )
                     return redirect('provas:prova_revisao', pk=prova.pk)
                 except ProvaManualError as err:
-                    messages.error(request, f'Erro na criação da avaliação: {err}')
+                    err_msg = err.messages[0] if hasattr(err, 'messages') and err.messages else str(err)
+                    messages.error(request, f'Erro na validação da avaliação: {err_msg}')
     else:
         initial_data = {}
         if disciplina_selecionada:
             initial_data['disciplina'] = disciplina_selecionada
+        if mascara_guia:
+            initial_data['mascara'] = mascara_guia
+            initial_data['titulo'] = f'{mascara_guia.titulo} (Manual)'
         form = ProvaManualForm(initial=initial_data)
 
     return render(
@@ -360,6 +379,7 @@ def prova_manual_create(request):
         'provas/prova_manual_form.html',
         {
             'form': form,
+            'mascara_guia': mascara_guia,
             'disciplina_selecionada': disciplina_selecionada,
             'topicos_disciplina': topicos_disciplina,
             'questoes_disponiveis': questoes_disponiveis,

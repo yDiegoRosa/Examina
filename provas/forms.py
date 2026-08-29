@@ -263,6 +263,18 @@ class ProvaManualForm(forms.Form):
             },
         ),
     )
+    mascara = forms.ModelChoiceField(
+        label='Máscara Guia de Referência (Opcional)',
+        queryset=Mascara.objects.filter(ativo=True),
+        required=False,
+        empty_label='Sem máscara (Seleção 100% Livre)...',
+        widget=forms.Select(
+            attrs={
+                'class': 'form-select',
+                'id': 'id_mascara_manual',
+            },
+        ),
+    )
     numero_caderno = forms.IntegerField(
         label='Número do Caderno',
         initial=1,

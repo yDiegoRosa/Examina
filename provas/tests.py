@@ -1874,5 +1874,108 @@ class MontagemManualProvaTest(TestCase):
         self.assertEqual(item_trocado.questao, q_reserva)
         self.assertEqual(item_trocado.snapshot_questao['questao_id'], q_reserva.pk)
 
+    def test_criar_prova_manual_com_mascara_quantidade_exata_sucesso(self):
+        """Verifica criação manual vinculada a uma máscara guia com quantidade exata de questões."""
+        from provas.models import Mascara
+        from provas.services.manual_generator import criar_prova_manual
+
+        mascara = Mascara.objects.create(
+            titulo='Máscara Guia SD',
+            disciplina=self.disc,
+            quantidade_questoes=2,
+            percentual_facil=50,
+            percentual_medio=50,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        prova = criar_prova_manual(
+            titulo='AV Guia Manual',
+            mascara=mascara,
+            questoes_ids=[self.q1.pk, self.q2.pk],
+            autor=self.user,
+        )
+
+        self.assertEqual(prova.mascara, mascara)
+        self.assertEqual(prova.disciplina, self.disc)
+        self.assertEqual(prova.itens.count(), 2)
+        self.assertEqual(prova.snapshot_mascara['mascara_id'], mascara.pk)
+
+    def test_criar_prova_manual_com_mascara_quantidade_divergente_rejeitada(self):
+        """Garante que selecionar quantidade diferente da meta da máscara levanta erro de validação."""
+        from provas.models import Mascara
+        from provas.services.manual_generator import ProvaManualError, criar_prova_manual
+
+        mascara = Mascara.objects.create(
+            titulo='Máscara Guia 3 Itens',
+            disciplina=self.disc,
+            quantidade_questoes=3,
+            percentual_facil=34,
+            percentual_medio=33,
+            percentual_dificil=33,
+            autor=self.user,
+        )
+
+        # Faltando questões (2 em vez de 3)
+        with self.assertRaises(ProvaManualError) as ctx:
+            criar_prova_manual(
+                titulo='AV Incompleta',
+                mascara=mascara,
+                questoes_ids=[self.q1.pk, self.q2.pk],
+                autor=self.user,
+            )
+        self.assertIn('exige exatamente 3 questão(ões)', str(ctx.exception))
+
+        # Excesso de questões (1 em vez de 3)
+        with self.assertRaises(ProvaManualError):
+            criar_prova_manual(
+                titulo='AV 1 Item',
+                mascara=mascara,
+                questoes_ids=[self.q1.pk],
+                autor=self.user,
+            )
+
+    def test_view_prova_manual_create_com_mascara_post_divergente_exibe_erro(self):
+        """Verifica que submeter formulário com quantidade divergente da máscara exibe erro amigável."""
+        from provas.models import Mascara
+
+        mascara = Mascara.objects.create(
+            titulo='Máscara 3 Questões',
+            disciplina=self.disc,
+            quantidade_questoes=3,
+            percentual_facil=34,
+            percentual_medio=33,
+            percentual_dificil=33,
+            autor=self.user,
+        )
+
+        url = reverse('provas:prova_manual_create')
+        post_data = {
+            'titulo': 'Exame Divergente',
+            'disciplina': str(self.disc.pk),
+            'mascara': str(mascara.pk),
+            'numero_caderno': '1',
+            'questoes_selecionadas': [str(self.q1.pk), str(self.q2.pk)],  # Apenas 2 de 3
+        }
+        response = self.client.post(url, post_data, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'exige exatamente 3 questão(ões)')
+
+    def test_view_prova_manual_create_vazio_post_exibe_erro(self):
+        """Verifica que tentar salvar uma prova sem questões exibe mensagem de erro."""
+        url = reverse('provas:prova_manual_create')
+        post_data = {
+            'titulo': 'Exame Sem Questões',
+            'disciplina': str(self.disc.pk),
+            'numero_caderno': '1',
+            'questoes_selecionadas': [],
+        }
+        response = self.client.post(url, post_data, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'A avaliação não pode ficar vazia')
+
+
 
 

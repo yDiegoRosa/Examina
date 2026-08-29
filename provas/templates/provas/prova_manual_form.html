@@ -7,12 +7,12 @@
   <div>
     <div class="flex items-center gap-2 mb-2">
       <span class="hero-tag">
-        <i class="bi bi-hand-index-thumb-fill"></i> Módulo 2 • Montagem 100% Manual
+        <i class="bi bi-hand-index-thumb-fill"></i> Módulo 2 • Montagem Manual
       </span>
     </div>
     <h1 class="mb-1">Montagem Manual de Avaliação</h1>
     <p class="text-secondary" style="max-width: 620px;">
-      Componha sua prova selecionando livremente cada item diretamente do acervo de questões, sem depender de regras de máscara ou sorteio automatizado.
+      Componha sua prova selecionando livremente cada item diretamente do acervo de questões, com validações de integridade e suporte a meta da máscara guia.
     </p>
   </div>
 </div>
@@ -35,6 +35,25 @@
   {% endfor %}
   {% endif %}
 
+  {% if mascara_guia %}
+  <!-- Banner de Máscara Guia Vinculada -->
+  <div class="p-3 mb-4 flex items-center justify-between flex-wrap gap-2" style="background: #FFFBEB; border: 1px solid var(--fae-gold); border-radius: var(--radius-sm); color: #78350F;">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-card-checklist" style="font-size: 1.4rem; color: var(--fae-gold);"></i>
+      <div>
+        <div class="font-bold">Máscara Guia de Referência: {{ mascara_guia.titulo }}</div>
+        <div class="small" style="opacity: 0.85;">
+          A avaliação deve conter <strong>exatamente {{ mascara_guia.quantidade_questoes }} questões</strong> para estar em conformidade com a máscara.
+        </div>
+      </div>
+    </div>
+    <span class="badge-pill badge-pill-gold font-bold" id="badge-meta-mascara" data-meta="{{ mascara_guia.quantidade_questoes }}">
+      Meta: {{ mascara_guia.quantidade_questoes }} Questões
+    </span>
+    <input type="hidden" name="mascara" value="{{ mascara_guia.pk }}" id="id_mascara_hidden">
+  </div>
+  {% endif %}
+
   <!-- 1. PARÂMETROS GERAIS DA PROVA MANUAL -->
   <div class="card-surface mb-4">
     <div class="card-header header-primary">
@@ -42,11 +61,11 @@
         <i class="bi bi-info-circle-fill text-primary" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
         <span class="font-bold">1. Parâmetros Gerais da Avaliação</span>
       </div>
-      <span class="badge-pill badge-pill-inactive small">Seleção Direta</span>
+      <span class="badge-pill badge-pill-inactive small">{% if mascara_guia %}Com Máscara Guia{% else %}Seleção Livre{% endif %}</span>
     </div>
     <div class="card-body">
       <div class="grid grid-cols-12 gap-3">
-        <div class="col-span-6">
+        <div class="col-span-5">
           <label for="{{ form.titulo.id_for_label }}" class="form-label font-bold">
             {{ form.titulo.label }} <span class="text-danger">*</span>
           </label>
@@ -66,7 +85,7 @@
           {% endif %}
         </div>
 
-        <div class="col-span-2">
+        <div class="col-span-3">
           <label for="{{ form.numero_caderno.id_for_label }}" class="form-label font-bold">
             {{ form.numero_caderno.label }}
           </label>
@@ -217,9 +236,15 @@
     <button type="submit" class="btn btn-primary" id="btn-submeter-prova" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
       <i class="bi bi-clipboard2-check-fill"></i> Criar e Revisar Avaliação
     </button>
+    {% if mascara_guia %}
+    <a href="{% url 'provas:mascara_detail' pk=mascara_guia.pk %}" class="btn btn-outline" style="padding: 0.75rem 1.75rem;">
+      Cancelar
+    </a>
+    {% else %}
     <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline" style="padding: 0.75rem 1.75rem;">
       Cancelar
     </a>
+    {% endif %}
   </div>
 
   {% else %}
@@ -246,6 +271,11 @@
   const resumoComposicao = document.getElementById('resumo-composicao');
   const btnMarcarTodas = document.getElementById('btn-marcar-todas');
   const btnDesmarcarTodas = document.getElementById('btn-desmarcar-todas');
+  const formElement = document.getElementById('form-prova-manual');
+
+  // Meta quantitativa da máscara (se houver)
+  const badgeMetaMascara = document.getElementById('badge-meta-mascara');
+  const metaMascara = badgeMetaMascara ? parseInt(badgeMetaMascara.dataset.meta, 10) : null;
 
   // Filtros locais da tabela
   const filtroBusca = document.getElementById('filtro-busca');
@@ -264,7 +294,7 @@
     });
   }
 
-  // Recalcular contador e resumo de composição
+  // Recalcular contador e resumo de composição com validação de meta
   function atualizarResumoSelecao() {
     let total = 0;
     let facil = 0;
@@ -282,12 +312,25 @@
     });
 
     if (badgeContador) {
-      if (total > 0) {
-        badgeContador.className = 'badge-pill badge-pill-active';
-        badgeContador.textContent = `${total} questão(ões) selecionada(s) ✅`;
+      if (metaMascara !== null && metaMascara > 0) {
+        if (total === metaMascara) {
+          badgeContador.className = 'badge-pill badge-pill-active';
+          badgeContador.textContent = `${total}/${metaMascara} selecionadas (Meta Atingida ✅)`;
+        } else if (total < metaMascara) {
+          badgeContador.className = 'badge-pill badge-pill-warning';
+          badgeContador.textContent = `${total}/${metaMascara} selecionadas (Faltam ${metaMascara - total})`;
+        } else {
+          badgeContador.className = 'badge-pill badge-pill-danger';
+          badgeContador.textContent = `${total}/${metaMascara} selecionadas (Excedem ${total - metaMascara})`;
+        }
       } else {
-        badgeContador.className = 'badge-pill badge-pill-inactive';
-        badgeContador.textContent = '0 selecionadas';
+        if (total > 0) {
+          badgeContador.className = 'badge-pill badge-pill-active';
+          badgeContador.textContent = `${total} questão(ões) selecionada(s) ✅`;
+        } else {
+          badgeContador.className = 'badge-pill badge-pill-inactive';
+          badgeContador.textContent = '0 selecionadas';
+        }
       }
     }
 
@@ -308,6 +351,32 @@
   checkboxes.forEach(function(cb) {
     cb.addEventListener('change', atualizarResumoSelecao);
   });
+
+  // Validação no submit do cliente
+  if (formElement) {
+    formElement.addEventListener('submit', function(e) {
+      let total = 0;
+      checkboxes.forEach(function(cb) {
+        if (cb.checked) total++;
+      });
+
+      if (total === 0) {
+        e.preventDefault();
+        alert('A avaliação não pode ficar vazia. Selecione ao menos uma questão no acervo.');
+        return false;
+      }
+
+      if (metaMascara !== null && metaMascara > 0 && total !== metaMascara) {
+        e.preventDefault();
+        if (total < metaMascara) {
+          alert(`A máscara vinculada exige exatamente ${metaMascara} questões. Você selecionou apenas ${total} (faltam ${metaMascara - total}).`);
+        } else {
+          alert(`A máscara vinculada exige exatamente ${metaMascara} questões. Você selecionou ${total} (excedem ${total - metaMascara}).`);
+        }
+        return false;
+      }
+    });
+  }
 
   // Filtragem dinâmica no cliente
   function aplicarFiltros() {
