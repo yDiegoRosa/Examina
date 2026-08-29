@@ -213,12 +213,13 @@
           <th style="width: 100px;" class="text-center">Dificuldade</th>
           <th style="width: 85px;" class="text-center">Tipo</th>
           <th style="width: 130px;">Origem</th>
-          <th style="width: 85px;" class="text-right">Pts</th>
+          <th style="width: 75px;" class="text-right">Pts</th>
+          <th style="width: 100px;" class="text-center">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for item in itens %}
-        <tr>
+        <tr id="item-row-{{ item.pk }}">
           <td class="font-mono font-bold text-muted">{{ item.numero }}</td>
           <td>
             <div class="text-main" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -259,10 +260,334 @@
             {% endif %}
           </td>
           <td class="text-right font-mono font-bold">{{ item.pontuacao }}</td>
+          <td class="text-center">
+            <button type="button" class="btn btn-outline small btn-trocar-questao" data-item-id="{{ item.pk }}" data-item-numero="{{ item.numero }}" data-questao-id="{{ item.questao.pk }}" title="Substituir por outra questão do mesmo tópico e dificuldade" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;">
+              <i class="bi bi-arrow-left-right"></i> Trocar
+            </button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<!-- Modal de Troca Individual de Questão -->
+<div id="modal-troca-questao" class="modal-backdrop-custom d-none">
+  <div class="modal-content-custom">
+    <div class="modal-header-custom">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-arrow-left-right text-primary" style="font-size: 1.25rem; color: var(--fae-blue-electric);"></i>
+        <div>
+          <h3 class="font-bold text-main mb-0" id="modal-troca-titulo">Trocar Questão #1</h3>
+          <span class="text-muted small" id="modal-troca-subtitulo">Buscando candidatas do mesmo tópico e dificuldade...</span>
+        </div>
+      </div>
+      <button type="button" class="btn-close-modal" id="btn-fechar-modal-troca" aria-label="Fechar">&times;</button>
+    </div>
+
+    <div class="modal-body-custom p-4">
+      <!-- Card da Questão Atual -->
+      <div class="p-3 mb-3" style="background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-bold text-muted small"><i class="bi bi-pin-angle-fill"></i> Questão Atual na Avaliação:</span>
+          <span id="modal-atual-badges" class="flex gap-1"></span>
+        </div>
+        <div class="text-main small" id="modal-atual-enunciado" style="line-height: 1.5;">...</div>
+      </div>
+
+      <!-- Área de Loading -->
+      <div id="modal-troca-loading" class="text-center py-5">
+        <div class="text-primary mb-2" style="font-size: 1.5rem;"><i class="bi bi-arrow-repeat spin"></i></div>
+        <div class="text-muted small">Consultando questões candidatas no acervo...</div>
+      </div>
+
+      <!-- Lista de Candidatas -->
+      <div id="modal-troca-lista" class="d-none">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-bold text-main small">
+            Sugestões Disponíveis (<span id="modal-troca-contagem">0</span>)
+          </span>
+          <span class="text-muted small" style="font-size: 0.725rem;">
+            Priorizadas por menor uso nas últimas 5 gerações
+          </span>
+        </div>
+        <div id="modal-troca-cards" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; padding-right: 4px;">
+          <!-- Inserido dinamicamente via JS -->
+        </div>
+      </div>
+
+      <!-- Estado Vazio -->
+      <div id="modal-troca-vazio" class="p-4 text-center text-muted d-none" style="background: #F8FAFC; border: 1px dashed var(--border-color); border-radius: var(--radius-sm);">
+        <i class="bi bi-inbox-fill mb-2" style="font-size: 2rem; display: block; opacity: 0.4;"></i>
+        <div class="font-bold mb-1">Nenhuma outra questão disponível no acervo</div>
+        <div class="small text-muted">
+          Não há outras questões ativas no banco para esta mesma combinação de tópico e dificuldade que não estejam já incluídas nesta prova.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.modal-backdrop-custom {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 13, 24, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal-backdrop-custom.d-none {
+  display: none !important;
+}
+.modal-content-custom {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-hover);
+  border: 1px solid var(--border-color);
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-header-custom {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F8FAFC;
+}
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+.btn-close-modal:hover {
+  color: var(--text-main);
+  background: #E2E8F0;
+}
+.candidata-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  transition: var(--transition);
+}
+.candidata-card:hover {
+  border-color: var(--fae-blue-electric);
+  box-shadow: var(--shadow-sm);
+}
+.spin {
+  display: inline-block;
+  animation: spinAnim 1s linear infinite;
+}
+@keyframes spinAnim {
+  100% { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+
+  const modal = document.getElementById('modal-troca-questao');
+  const btnFechar = document.getElementById('btn-fechar-modal-troca');
+  const tituloModal = document.getElementById('modal-troca-titulo');
+  const subtituloModal = document.getElementById('modal-troca-subtitulo');
+  const atualEnunciado = document.getElementById('modal-atual-enunciado');
+  const atualBadges = document.getElementById('modal-atual-badges');
+  const loadingArea = document.getElementById('modal-troca-loading');
+  const listaArea = document.getElementById('modal-troca-lista');
+  const vazioArea = document.getElementById('modal-troca-vazio');
+  const cardsContainer = document.getElementById('modal-troca-cards');
+  const contagemSpan = document.getElementById('modal-troca-contagem');
+
+  let currentItemPk = null;
+
+  function fecharModal() {
+    if (modal) modal.classList.add('d-none');
+    currentItemPk = null;
+  }
+
+  if (btnFechar) {
+    btnFechar.addEventListener('click', fecharModal);
+  }
+
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) fecharModal();
+    });
+  }
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function executarSubstituicao(itemPk, novaQuestaoId, btnElement) {
+    if (btnElement) {
+      btnElement.disabled = true;
+      btnElement.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Substituindo...';
+    }
+
+    const csrftoken = getCookie('csrftoken');
+    const formData = new FormData();
+    formData.append('nova_questao_id', novaQuestaoId);
+
+    fetch(`/provas/itens/${itemPk}/substituir/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: formData,
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert('Erro ao substituir: ' + (data.error || 'Ocorreu um erro inesperado.'));
+          if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerHTML = '<i class="bi bi-check-lg"></i> Escolher esta';
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Erro na requisição:', err);
+        alert('Erro de comunicação com o servidor.');
+        if (btnElement) {
+          btnElement.disabled = false;
+          btnElement.innerHTML = '<i class="bi bi-check-lg"></i> Escolher esta';
+        }
+      });
+  }
+
+  function abrirModalTroca(itemPk, itemNumero) {
+    currentItemPk = itemPk;
+    if (modal) modal.classList.remove('d-none');
+    if (loadingArea) loadingArea.classList.remove('d-none');
+    if (listaArea) listaArea.classList.add('d-none');
+    if (vazioArea) vazioArea.classList.add('d-none');
+    if (cardsContainer) cardsContainer.innerHTML = '';
+    if (tituloModal) tituloModal.textContent = `Trocar Questão #${itemNumero}`;
+    if (subtituloModal) subtituloModal.textContent = 'Carregando opções da mesma célula...';
+
+    fetch(`/provas/itens/${itemPk}/candidatas/`)
+      .then(res => res.json())
+      .then(data => {
+        if (loadingArea) loadingArea.classList.add('d-none');
+
+        // Atualiza card da questão atual
+        if (atualEnunciado && data.questao_atual) {
+          atualEnunciado.textContent = data.questao_atual.enunciado;
+        }
+        if (atualBadges && data.questao_atual) {
+          const q = data.questao_atual;
+          const difClass = q.dificuldade === 'F' ? 'badge-pill-facil' : (q.dificuldade === 'M' ? 'badge-pill-medio' : 'badge-pill-dificil');
+          atualBadges.innerHTML = `
+            <span class="badge-pill ${difClass} small">${q.dificuldade_display}</span>
+            <span class="badge-pill badge-pill-inactive small">${q.topico_nome}</span>
+          `;
+        }
+
+        if (subtituloModal && data.questao_atual) {
+          subtituloModal.textContent = `${data.questao_atual.topico_nome} • ${data.questao_atual.dificuldade_display}`;
+        }
+
+        if (!data.candidatas || data.candidatas.length === 0) {
+          if (vazioArea) vazioArea.classList.remove('d-none');
+          return;
+        }
+
+        if (listaArea) listaArea.classList.remove('d-none');
+        if (contagemSpan) contagemSpan.textContent = data.candidatas.length;
+
+        data.candidatas.forEach(c => {
+          const card = document.createElement('div');
+          card.className = 'candidata-card';
+
+          const difClass = c.dificuldade === 'F' ? 'badge-pill-facil' : (c.dificuldade === 'M' ? 'badge-pill-medio' : 'badge-pill-dificil');
+          const usoText = c.vezes_usada_recentemente === 0
+            ? '<span class="badge-pill badge-pill-active small"><i class="bi bi-stars"></i> Nunca usada (5 provas)</span>'
+            : `<span class="badge-pill badge-pill-inactive small">Usada ${c.vezes_usada_recentemente}x recentemente</span>`;
+          const enadeBadge = c.is_enade
+            ? '<span class="badge-pill badge-pill-gold small"><i class="bi bi-award-fill"></i> ENADE/Oficial</span>'
+            : '';
+
+          card.innerHTML = `
+            <div class="flex justify-between items-start gap-2 mb-2">
+              <div class="flex items-center gap-1 flex-wrap">
+                <span class="font-mono font-bold text-muted small">Q${c.id}</span>
+                <span class="badge-pill ${difClass} small">${c.dificuldade_display}</span>
+                ${usoText}
+                ${enadeBadge}
+              </div>
+              <button type="button" class="btn btn-primary small btn-confirmar-substituicao" style="padding: 0.3rem 0.75rem; font-size: 0.78rem;" data-questao-id="${c.id}">
+                <i class="bi bi-check-lg"></i> Escolher esta
+              </button>
+            </div>
+            <div class="text-secondary small mb-2" style="max-height: 80px; overflow-y: auto; line-height: 1.45;">
+              ${c.enunciado}
+            </div>
+            ${c.origem ? `<div class="text-muted small" style="font-size: 0.7rem;"><i class="bi bi-journal-bookmark"></i> ${c.origem}</div>` : ''}
+          `;
+
+          const btnEscolher = card.querySelector('.btn-confirmar-substituicao');
+          if (btnEscolher) {
+            btnEscolher.addEventListener('click', function() {
+              executarSubstituicao(itemPk, c.id, btnEscolher);
+            });
+          }
+
+          cardsContainer.appendChild(card);
+        });
+      })
+      .catch(err => {
+        console.error('Erro ao buscar candidatas:', err);
+        if (loadingArea) loadingArea.classList.add('d-none');
+        alert('Erro ao carregar opções de substituição.');
+        fecharModal();
+      });
+  }
+
+  document.querySelectorAll('.btn-trocar-questao').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const itemPk = btn.dataset.itemId;
+      const itemNumero = btn.dataset.itemNumero;
+      abrirModalTroca(itemPk, itemNumero);
+    });
+  });
+})();
+</script>
 {% endblock %}

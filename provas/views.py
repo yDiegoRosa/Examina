@@ -12,8 +12,13 @@ from django.views.decorators.http import require_POST
 from banco_questoes.models import Disciplina, Questao, Topico
 
 from .forms import MascaraProvaForm, MascaraTopicoFormSet
-from .models import MascaraProva, Prova
+from .models import MascaraProva, Prova, ProvaQuestao
 from .services.pdf_generator import PDFGeneratorService
+from .services.question_replacer import (
+    SubstituicaoQuestaoError,
+    obter_candidatas_substituicao,
+    substituir_questao_prova,
+)
 from .services.stock_validator import EstoqueInsuficienteError
 
 logger = logging.getLogger(__name__)
@@ -399,6 +404,97 @@ def prova_revisao(request, pk):
             'total_atual': total_atual,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Troca Individual de Questão (Ajuste Fino na Tela de Revisão)
+# ---------------------------------------------------------------------------
+@login_required
+def item_candidatas_substituicao(request, item_pk):
+    """
+    Retorna JSON com a lista de questões candidatas para substituir a questão de um item da prova.
+    Filtra estritamente pelo mesmo tópico e dificuldade, ordenando por prioridade RF07.
+    """
+    item = get_object_or_404(
+        ProvaQuestao.objects.select_related('prova', 'prova__mascara', 'questao', 'questao__topico', 'questao__disciplina'),
+        pk=item_pk,
+    )
+    candidatas_qs = obter_candidatas_substituicao(item)
+
+    candidatas_data = []
+    for q in candidatas_qs:
+        alternativas = [
+            {'letra': alt.letra, 'texto': alt.texto, 'correta': alt.correta}
+            for alt in q.alternativas.all()
+        ]
+        candidatas_data.append({
+            'id': q.pk,
+            'enunciado': q.enunciado,
+            'dificuldade': q.dificuldade,
+            'dificuldade_display': q.get_dificuldade_display(),
+            'tipo': q.tipo,
+            'tipo_display': q.get_tipo_display(),
+            'topico_id': q.topico_id,
+            'topico_nome': q.topico.nome if q.topico else 'Sem tópico',
+            'origem': q.origem or '',
+            'numero_questao': q.numero_questao or '',
+            'vezes_usada_recentemente': getattr(q, 'vezes_usada_recentemente', 0),
+            'is_enade': bool(getattr(q, 'is_enade', 0)),
+            'alternativas': alternativas,
+        })
+
+    questao_atual = item.questao
+    return JsonResponse({
+        'item_id': item.pk,
+        'item_numero': item.numero,
+        'questao_atual': {
+            'id': questao_atual.pk,
+            'enunciado': questao_atual.enunciado,
+            'dificuldade': questao_atual.dificuldade,
+            'dificuldade_display': questao_atual.get_dificuldade_display(),
+            'topico_nome': questao_atual.topico.nome if questao_atual.topico else 'Sem tópico',
+            'origem': questao_atual.origem or '',
+        },
+        'total_candidatas': len(candidatas_data),
+        'candidatas': candidatas_data,
+    })
+
+
+@require_POST
+@login_required
+def item_substituir_questao(request, item_pk):
+    """
+    Substitui a questão de um item da prova por uma nova questão selecionada,
+    validando integridade da célula e atualizando os snapshots JSON.
+    """
+    item = get_object_or_404(
+        ProvaQuestao.objects.select_related('prova', 'prova__mascara', 'questao'),
+        pk=item_pk,
+    )
+    nova_questao_id = request.POST.get('nova_questao_id')
+    if not nova_questao_id:
+        return JsonResponse({'success': False, 'error': 'ID da nova questão é obrigatório.'}, status=400)
+
+    nova_questao = get_object_or_404(Questao, pk=nova_questao_id)
+
+    try:
+        substituir_questao_prova(item=item, nova_questao=nova_questao, autor=request.user)
+        msg = f'Questão #{item.numero} substituída com sucesso pela questão Q{nova_questao.pk}!'
+
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+        if is_ajax:
+            return JsonResponse({'success': True, 'message': msg})
+
+        messages.success(request, msg)
+        return redirect('provas:prova_revisao', pk=item.prova_id)
+    except SubstituicaoQuestaoError as err:
+        error_msg = str(err)
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': error_msg}, status=400)
+
+        messages.error(request, f'Erro na substituição: {error_msg}')
+        return redirect('provas:prova_revisao', pk=item.prova_id)
 
 
 # ---------------------------------------------------------------------------

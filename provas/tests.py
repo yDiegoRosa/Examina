@@ -1485,3 +1485,190 @@ class ProvaRevisaoViewTest(TestCase):
         expected_url = reverse('provas:prova_revisao', kwargs={'pk': nova_prova.pk})
         self.assertEqual(response.url, expected_url)
 
+
+class TrocaIndividualQuestaoTest(TestCase):
+    """
+    Testes unitários e de integração para a funcionalidade de troca individual de questões
+    em avaliações geradas (ajuste fino preservando a matriz pedagógica).
+    """
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='prof_troca', password='secret_password')  # noqa: S106
+        self.client.login(username='prof_troca', password='secret_password')  # noqa: S106
+
+        self.disc = Disciplina.objects.create(nome='Banco de Dados II')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Indexação B-Tree')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Transações ACID')
+
+        self.mascara = Mascara.objects.create(
+            titulo='AV Troca Test',
+            disciplina=self.disc,
+            quantidade_questoes=2,
+            modalidade=Mascara.Modalidade.OBJETIVA,
+            percentual_facil=100,
+            percentual_medio=0,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        from provas.models import MascaraCriterioTopico
+
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top1, percentual=50)
+        MascaraCriterioTopico.objects.create(mascara=self.mascara, topico=self.top2, percentual=50)
+
+        # Questões da prova original (1 Fácil do top1, 1 Fácil do top2)
+        self.q1_original = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão 1 Original B-Tree Fácil',
+            autor=self.user,
+            ativo=True,
+        )
+        Alternativa.objects.create(questao=self.q1_original, letra='A', texto='Alt 1', correta=True)
+
+        self.q2_original = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top2,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão 2 Original ACID Fácil',
+            autor=self.user,
+            ativo=True,
+        )
+        Alternativa.objects.create(questao=self.q2_original, letra='A', texto='Alt 2', correta=True)
+
+        # Gera a prova apenas com q1_original e q2_original disponíveis
+        self.prova = self.mascara.gerar_prova(autor=self.user)
+        self.item1 = self.prova.itens.get(questao=self.q1_original)
+        self.item2 = self.prova.itens.get(questao=self.q2_original)
+
+        # Candidata elegível para substituir Q1 (mesmo top1 e mesma dificuldade Fácil) criada após a prova
+        self.q1_candidata = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão Candidata B-Tree Fácil Reserva',
+            origem='ENADE 2023',
+            autor=self.user,
+            ativo=True,
+        )
+        Alternativa.objects.create(questao=self.q1_candidata, letra='A', texto='Alt Res', correta=True)
+
+        # Questão inelegível para Q1 (outro tópico ou outra dificuldade)
+        self.q_outro_topico = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top2,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão Outro Tópico',
+            autor=self.user,
+            ativo=True,
+        )
+
+        self.q_outra_dificuldade = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.DIFICIL,
+            enunciado='Questão B-Tree Difícil',
+            autor=self.user,
+            ativo=True,
+        )
+
+    def test_obter_candidatas_mesmo_topico_e_dificuldade(self):
+        """Verifica que obter_candidatas_substituicao retorna estritamente questões da mesma célula."""
+        from provas.services.question_replacer import obter_candidatas_substituicao
+
+        candidatas = list(obter_candidatas_substituicao(self.item1))
+
+        self.assertIn(self.q1_candidata, candidatas)
+        self.assertNotIn(self.q1_original, candidatas, 'Questão atual não deve ser sugerida como substituta de si mesma')
+        self.assertNotIn(self.q_outro_topico, candidatas, 'Questão de outro tópico não deve ser sugerida')
+        self.assertNotIn(self.q_outra_dificuldade, candidatas, 'Questão de outra dificuldade não deve ser sugerida')
+
+    def test_obter_candidatas_exclui_questoes_ja_presentes_na_prova(self):
+        """Garante que questões já presentes na prova atual nunca aparecem como candidatas."""
+        from provas.services.question_replacer import obter_candidatas_substituicao
+
+        candidatas_item1 = list(obter_candidatas_substituicao(self.item1))
+        candidatas_item2 = list(obter_candidatas_substituicao(self.item2))
+
+        # Questões já na prova não devem constar
+        self.assertNotIn(self.q1_original, candidatas_item1)
+        self.assertNotIn(self.q2_original, candidatas_item1)
+        self.assertNotIn(self.q1_original, candidatas_item2)
+        self.assertNotIn(self.q2_original, candidatas_item2)
+
+    def test_substituir_questao_atualiza_model_e_snapshot(self):
+        """Verifica que a substituição atualiza a FK e regenera o snapshot_questao."""
+        from provas.services.question_replacer import substituir_questao_prova
+
+        item_atualizado = substituir_questao_prova(
+            item=self.item1,
+            nova_questao=self.q1_candidata,
+            autor=self.user,
+        )
+
+        self.assertEqual(item_atualizado.questao, self.q1_candidata)
+        self.assertEqual(item_atualizado.snapshot_questao['questao_id'], self.q1_candidata.pk)
+        self.assertEqual(item_atualizado.snapshot_questao['enunciado'], 'Questão Candidata B-Tree Fácil Reserva')
+
+        # Recarrega do banco
+        self.item1.refresh_from_db()
+        self.assertEqual(self.item1.questao_id, self.q1_candidata.pk)
+        self.assertEqual(self.item1.snapshot_questao['questao_id'], self.q1_candidata.pk)
+
+    def test_substituir_questao_violando_celula_levanta_erro(self):
+        """Garante que tentar substituir por questão de tópico ou dificuldade diferente é rejeitado."""
+        from provas.services.question_replacer import SubstituicaoQuestaoError, substituir_questao_prova
+
+        # Tenta substituir com outro tópico
+        with self.assertRaises(SubstituicaoQuestaoError):
+            substituir_questao_prova(item=self.item1, nova_questao=self.q_outro_topico)
+
+        # Tenta substituir com outra dificuldade
+        with self.assertRaises(SubstituicaoQuestaoError):
+            substituir_questao_prova(item=self.item1, nova_questao=self.q_outra_dificuldade)
+
+    def test_substituir_por_questao_ja_na_prova_rejeitada(self):
+        """Garante que não é permitido duplicar uma questão já existente na prova."""
+        from provas.services.question_replacer import SubstituicaoQuestaoError, substituir_questao_prova
+
+        with self.assertRaises(SubstituicaoQuestaoError):
+            substituir_questao_prova(item=self.item1, nova_questao=self.q2_original)
+
+    def test_view_candidatas_json_endpoint(self):
+        """Verifica o endpoint AJAX de consulta de candidatas."""
+        url = reverse('provas:item_candidatas_substituicao', kwargs={'item_pk': self.item1.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['item_id'], self.item1.pk)
+        self.assertEqual(data['questao_atual']['id'], self.q1_original.pk)
+        self.assertGreaterEqual(data['total_candidatas'], 1)
+
+        ids_candidatas = [c['id'] for c in data['candidatas']]
+        self.assertIn(self.q1_candidata.pk, ids_candidatas)
+
+    def test_view_substituir_post_sucesso(self):
+        """Verifica o endpoint POST de substituição de questão."""
+        url = reverse('provas:item_substituir_questao', kwargs={'item_pk': self.item1.pk})
+        response = self.client.post(
+            url,
+            {'nova_questao_id': str(self.q1_candidata.pk)},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+
+        self.item1.refresh_from_db()
+        self.assertEqual(self.item1.questao_id, self.q1_candidata.pk)
+
+
