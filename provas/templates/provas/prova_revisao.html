@@ -29,34 +29,16 @@
       <i class="bi bi-arrow-left"></i> Voltar ao Painel
     </a>
     {% endif %}
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}"
+    <button type="button" class="btn flex items-center gap-2" style="background: #E2E8F0; color: #64748B; cursor: not-allowed; opacity: 0.7;" disabled title="Em desenvolvimento">
+      <i class="bi bi-file-earmark-pdf"></i> Gerar PDF (em breve)
+    </button>
+    <a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}"
        target="_blank"
        rel="noopener"
        class="btn flex items-center gap-2"
        style="background: #002B49; color: #FFFFFF;"
-       title="Gera o PDF completo da avaliação com capa e questões">
-      <i class="bi bi-printer-fill"></i> Imprimir Prova Completa
-    </a>
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?incluir_gabarito=1"
-       target="_blank"
-       rel="noopener"
-       class="btn btn-outline flex items-center gap-2"
-       title="Gera a prova completa com anexo de gabarito e critérios do docente">
-      <i class="bi bi-file-earmark-check"></i> Prova com Gabarito
-    </a>
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?incluir_capa=0"
-       target="_blank"
-       rel="noopener"
-       class="btn btn-outline flex items-center gap-2"
-       title="Gera apenas as folhas de questões com cabeçalho compacto">
-      <i class="bi bi-file-earmark-text"></i> Caderno de Questões
-    </a>
-    <a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}"
-       target="_blank"
-       rel="noopener"
-       class="btn btn-outline flex items-center gap-2"
-       title="Abre somente a folha de rosto / capa padronizada">
-      <i class="bi bi-file-earmark-image"></i> Apenas Capa
+       title="Abre a capa padronizada em PDF numa nova aba">
+      <i class="bi bi-file-earmark-pdf-fill"></i> Gerar Capa PDF
     </a>
   </div>
 </div>
