@@ -1,0 +1,370 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Montagem Manual de Prova — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag">
+        <i class="bi bi-hand-index-thumb-fill"></i> Módulo 2 • Montagem 100% Manual
+      </span>
+    </div>
+    <h1 class="mb-1">Montagem Manual de Avaliação</h1>
+    <p class="text-secondary" style="max-width: 620px;">
+      Componha sua prova selecionando livremente cada item diretamente do acervo de questões, sem depender de regras de máscara ou sorteio automatizado.
+    </p>
+  </div>
+</div>
+
+<form method="post" id="form-prova-manual">
+  {% csrf_token %}
+
+  {% if messages %}
+  {% for message in messages %}
+  <div class="alert-toast alert-toast-{{ message.tags }} mb-3">
+    <div class="flex items-center gap-2">
+      {% if message.tags == 'success' %}
+      <i class="bi bi-check-circle-fill"></i>
+      {% else %}
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      {% endif %}
+      <div>{{ message }}</div>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- 1. PARÂMETROS GERAIS DA PROVA MANUAL -->
+  <div class="card-surface mb-4">
+    <div class="card-header header-primary">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-info-circle-fill text-primary" style="font-size: 1.15rem; color: var(--fae-blue-electric);"></i>
+        <span class="font-bold">1. Parâmetros Gerais da Avaliação</span>
+      </div>
+      <span class="badge-pill badge-pill-inactive small">Seleção Direta</span>
+    </div>
+    <div class="card-body">
+      <div class="grid grid-cols-12 gap-3">
+        <div class="col-span-6">
+          <label for="{{ form.titulo.id_for_label }}" class="form-label font-bold">
+            {{ form.titulo.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.titulo }}
+          {% if form.titulo.errors %}
+          <div class="invalid-feedback">{{ form.titulo.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-4">
+          <label for="{{ form.disciplina.id_for_label }}" class="form-label font-bold">
+            {{ form.disciplina.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.disciplina }}
+          {% if form.disciplina.errors %}
+          <div class="invalid-feedback">{{ form.disciplina.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-span-2">
+          <label for="{{ form.numero_caderno.id_for_label }}" class="form-label font-bold">
+            {{ form.numero_caderno.label }}
+          </label>
+          {{ form.numero_caderno }}
+          {% if form.numero_caderno.errors %}
+          <div class="invalid-feedback">{{ form.numero_caderno.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. PAINEL DE SELEÇÃO E FILTROS DO ACERVO -->
+  {% if disciplina_selecionada %}
+  <div class="card-surface mb-4">
+    <div class="card-header header-success">
+      <div class="flex items-center gap-2">
+        <i class="bi bi-collection-fill text-success" style="font-size: 1.15rem; color: var(--color-success);"></i>
+        <span class="font-bold">2. Seleção de Questões no Acervo ({{ disciplina_selecionada.nome }})</span>
+      </div>
+      <span id="badge-contador-selecionadas" class="badge-pill badge-pill-inactive">0 selecionadas</span>
+    </div>
+
+    <div class="card-body">
+      <!-- Painel Resumo em Tempo Real -->
+      <div class="p-3 mb-3" style="background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+        <div class="flex justify-between items-center flex-wrap gap-2">
+          <div>
+            <span class="font-bold text-main">Composição da Avaliação:</span>
+            <span id="resumo-composicao" class="text-muted small ms-2">Nenhuma questão marcada ainda</span>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-outline small" id="btn-marcar-todas" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+              <i class="bi bi-check-all"></i> Marcar Filtradas
+            </button>
+            <button type="button" class="btn btn-outline small" id="btn-desmarcar-todas" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+              <i class="bi bi-x-lg"></i> Limpar Seleção
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Filtros Rápidos no Acervo -->
+      <div class="grid grid-cols-12 gap-2 mb-3 p-2" style="background: #FFFFFF; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+        <div class="col-span-4">
+          <input type="text" id="filtro-busca" class="form-input small" placeholder="Buscar por enunciado ou origem..." style="padding: 0.4rem 0.75rem;">
+        </div>
+        <div class="col-span-3">
+          <select id="filtro-topico" class="form-select small" style="padding: 0.4rem 0.75rem;">
+            <option value="">Todos os Tópicos</option>
+            {% for top in topicos_disciplina %}
+            <option value="{{ top.pk }}">{{ top.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-span-3">
+          <select id="filtro-dificuldade" class="form-select small" style="padding: 0.4rem 0.75rem;">
+            <option value="">Todas as Dificuldades</option>
+            <option value="F">Fácil</option>
+            <option value="M">Médio</option>
+            <option value="D">Difícil</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <select id="filtro-tipo" class="form-select small" style="padding: 0.4rem 0.75rem;">
+            <option value="">Todos os Tipos</option>
+            <option value="OBJ">Objetiva</option>
+            <option value="DIS">Discursiva</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tabela de Questões do Acervo -->
+      {% if questoes_disponiveis %}
+      <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+        <table class="saas-table" id="tabela-acervo-manual">
+          <thead>
+            <tr>
+              <th style="width: 45px;" class="text-center">Sel.</th>
+              <th style="width: 60px;">#ID</th>
+              <th>Enunciado da Questão</th>
+              <th style="width: 170px;">Tópico Curricular</th>
+              <th style="width: 100px;" class="text-center">Dificuldade</th>
+              <th style="width: 85px;" class="text-center">Tipo</th>
+              <th style="width: 120px;">Origem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for q in questoes_disponiveis %}
+            <tr class="questao-row" data-topico-id="{{ q.topico_id|default:'' }}" data-dificuldade="{{ q.dificuldade }}" data-tipo="{{ q.tipo }}" data-texto="{{ q.enunciado|lower }} {{ q.origem|default:''|lower }}">
+              <td class="text-center">
+                <input type="checkbox" name="questoes_selecionadas" value="{{ q.pk }}" class="form-checkbox checkbox-questao" data-dificuldade="{{ q.dificuldade }}" data-topico="{{ q.topico.nome|default:'Sem tópico' }}">
+              </td>
+              <td class="font-mono font-bold text-muted small">Q{{ q.pk }}</td>
+              <td>
+                <div class="text-main" style="max-width: 460px; line-height: 1.4;">
+                  {{ q.enunciado|truncatechars:140 }}
+                </div>
+                {% if q.tipo == 'OBJ' and q.alternativas.all %}
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">
+                  <i class="bi bi-list-check"></i> {{ q.alternativas.count }} alternativas cadastradas
+                </div>
+                {% endif %}
+              </td>
+              <td class="text-secondary small">
+                {{ q.topico.nome|default:"—" }}
+              </td>
+              <td class="text-center">
+                {% if q.dificuldade == 'F' %}
+                <span class="badge-pill badge-pill-facil small">Fácil</span>
+                {% elif q.dificuldade == 'M' %}
+                <span class="badge-pill badge-pill-medio small">Médio</span>
+                {% elif q.dificuldade == 'D' %}
+                <span class="badge-pill badge-pill-dificil small">Difícil</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if q.tipo == 'OBJ' %}
+                <span class="text-muted small"><i class="bi bi-ui-radios"></i> OBJ</span>
+                {% else %}
+                <span class="text-muted small"><i class="bi bi-pencil-square"></i> DIS</span>
+                {% endif %}
+              </td>
+              <td class="text-secondary small">
+                {% if q.origem %}
+                {{ q.origem|truncatechars:18 }}
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-4 text-center text-muted" style="background: #F8FAFC; border: 1px dashed var(--border-color); border-radius: var(--radius-sm);">
+        <i class="bi bi-journal-x mb-2" style="font-size: 2rem; display: block; opacity: 0.4;"></i>
+        Nenhuma questão ativa encontrada para esta disciplina. Cadastre questões no acervo antes de realizar a montagem.
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- Botões de Ação -->
+  <div class="flex gap-3 mb-6">
+    <button type="submit" class="btn btn-primary" id="btn-submeter-prova" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
+      <i class="bi bi-clipboard2-check-fill"></i> Criar e Revisar Avaliação
+    </button>
+    <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline" style="padding: 0.75rem 1.75rem;">
+      Cancelar
+    </a>
+  </div>
+
+  {% else %}
+  <div class="card-surface p-5 text-center text-muted mb-4" style="border: 2px dashed var(--border-color);">
+    <i class="bi bi-arrow-up-circle-fill text-primary mb-2" style="font-size: 2.25rem; display: block;"></i>
+    <h3 class="font-bold text-main mb-1">Selecione uma Disciplina no Passo 1</h3>
+    <p class="text-muted small mb-0">
+      Escolha a disciplina desejada acima para carregar o acervo de questões correspondente para a seleção livre.
+    </p>
+  </div>
+  {% endif %}
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+
+  const selectDisciplina = document.getElementById('id_disciplina_manual');
+  const checkboxes = document.querySelectorAll('.checkbox-questao');
+  const badgeContador = document.getElementById('badge-contador-selecionadas');
+  const resumoComposicao = document.getElementById('resumo-composicao');
+  const btnMarcarTodas = document.getElementById('btn-marcar-todas');
+  const btnDesmarcarTodas = document.getElementById('btn-desmarcar-todas');
+
+  // Filtros locais da tabela
+  const filtroBusca = document.getElementById('filtro-busca');
+  const filtroTopico = document.getElementById('filtro-topico');
+  const filtroDificuldade = document.getElementById('filtro-dificuldade');
+  const filtroTipo = document.getElementById('filtro-tipo');
+  const rows = document.querySelectorAll('.questao-row');
+
+  // Mudança de disciplina recarrega a página passando a disciplina no GET
+  if (selectDisciplina) {
+    selectDisciplina.addEventListener('change', function() {
+      const discId = selectDisciplina.value;
+      if (discId) {
+        window.location.href = `{% url 'provas:prova_manual_create' %}?disciplina=${discId}`;
+      }
+    });
+  }
+
+  // Recalcular contador e resumo de composição
+  function atualizarResumoSelecao() {
+    let total = 0;
+    let facil = 0;
+    let medio = 0;
+    let dificil = 0;
+
+    checkboxes.forEach(function(cb) {
+      if (cb.checked) {
+        total++;
+        const dif = cb.dataset.dificuldade;
+        if (dif === 'F') facil++;
+        else if (dif === 'M') medio++;
+        else if (dif === 'D') dificil++;
+      }
+    });
+
+    if (badgeContador) {
+      if (total > 0) {
+        badgeContador.className = 'badge-pill badge-pill-active';
+        badgeContador.textContent = `${total} questão(ões) selecionada(s) ✅`;
+      } else {
+        badgeContador.className = 'badge-pill badge-pill-inactive';
+        badgeContador.textContent = '0 selecionadas';
+      }
+    }
+
+    if (resumoComposicao) {
+      if (total === 0) {
+        resumoComposicao.textContent = 'Nenhuma questão selecionada ainda';
+      } else {
+        resumoComposicao.innerHTML = `
+          <strong>${total} no total</strong> —
+          <span class="badge-pill badge-pill-facil small">${facil} Fáceis</span>
+          <span class="badge-pill badge-pill-medio small">${medio} Médias</span>
+          <span class="badge-pill badge-pill-dificil small">${dificil} Difíceis</span>
+        `;
+      }
+    }
+  }
+
+  checkboxes.forEach(function(cb) {
+    cb.addEventListener('change', atualizarResumoSelecao);
+  });
+
+  // Filtragem dinâmica no cliente
+  function aplicarFiltros() {
+    const texto = (filtroBusca ? filtroBusca.value : '').toLowerCase().trim();
+    const topico = filtroTopico ? filtroTopico.value : '';
+    const dif = filtroDificuldade ? filtroDificuldade.value : '';
+    const tipo = filtroTipo ? filtroTipo.value : '';
+
+    rows.forEach(function(row) {
+      const rowTexto = row.dataset.texto || '';
+      const rowTopico = row.dataset.topicoId || '';
+      const rowDif = row.dataset.dificuldade || '';
+      const rowTipo = row.dataset.tipo || '';
+
+      const matchTexto = !texto || rowTexto.includes(texto);
+      const matchTopico = !topico || rowTopico === topico;
+      const matchDif = !dif || rowDif === dif;
+      const matchTipo = !tipo || rowTipo === tipo;
+
+      if (matchTexto && matchTopico && matchDif && matchTipo) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  [filtroBusca, filtroTopico, filtroDificuldade, filtroTipo].forEach(function(el) {
+    if (el) {
+      el.addEventListener('input', aplicarFiltros);
+      el.addEventListener('change', aplicarFiltros);
+    }
+  });
+
+  // Marcar / Desmarcar filtradas
+  if (btnMarcarTodas) {
+    btnMarcarTodas.addEventListener('click', function() {
+      rows.forEach(function(row) {
+        if (row.style.display !== 'none') {
+          const cb = row.querySelector('.checkbox-questao');
+          if (cb) cb.checked = true;
+        }
+      });
+      atualizarResumoSelecao();
+    });
+  }
+
+  if (btnDesmarcarTodas) {
+    btnDesmarcarTodas.addEventListener('click', function() {
+      checkboxes.forEach(function(cb) {
+        cb.checked = false;
+      });
+      atualizarResumoSelecao();
+    });
+  }
+
+  atualizarResumoSelecao();
+})();
+</script>
+{% endblock %}

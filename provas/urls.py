@@ -14,6 +14,7 @@ urlpatterns = [
     path('mascaras/<int:pk>/gerar/', views.mascara_gerar_prova, name='mascara_gerar_prova'),
     path('mascaras/<int:pk>/toggle-ativo/', views.mascara_toggle_ativo, name='mascara_toggle_ativo'),
     # Revisão da Prova Gerada & Troca Individual de Questões
+    path('provas/nova-manual/', views.prova_manual_create, name='prova_manual_create'),
     path('provas/<int:pk>/revisao/', views.prova_revisao, name='prova_revisao'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),
     path('itens/<int:item_pk>/substituir/', views.item_substituir_questao, name='item_substituir_questao'),

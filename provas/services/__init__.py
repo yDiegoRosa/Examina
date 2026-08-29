@@ -1,3 +1,4 @@
+from .manual_generator import ProvaManualError, criar_prova_manual
 from .matrix_calculator import (
     CelulaMeta,
     LinhaMatrizTopico,
@@ -39,6 +40,7 @@ __all__ = [
     'MatrizMetasResultado',
     'PDFGenerationError',
     'PDFGeneratorService',
+    'ProvaManualError',
     'RelatorioDiagnosticoEstoque',
     'SubstituicaoQuestaoError',
     'calcular_metas_celulas',
@@ -48,6 +50,7 @@ __all__ = [
     'construir_snapshot_matriz_metas',
     'construir_snapshot_questao',
     'consultar_questoes_candidatas_priorizadas',
+    'criar_prova_manual',
     'gerar_prova_automatizada',
     'obter_candidatas_substituicao',
     'selecionar_questoes_por_matriz',

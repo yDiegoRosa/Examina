@@ -234,3 +234,45 @@ MascaraProvaForm = MascaraForm
 MascaraTopicoForm = MascaraCriterioTopicoForm
 MascaraTopicoFormSet = MascaraCriterioTopicoFormSet
 BaseMascaraTopicoFormSet = BaseMascaraCriterioTopicoFormSet
+
+
+class ProvaManualForm(forms.Form):
+    """
+    Formulário para parametrização inicial da Montagem 100% Manual de Prova.
+    """
+
+    titulo = forms.CharField(
+        label='Título da Avaliação',
+        max_length=250,
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-input',
+                'placeholder': 'Ex.: AV2 Suplementar — Banco de Dados II 2026.2',
+                'id': 'id_titulo_manual',
+            },
+        ),
+    )
+    disciplina = forms.ModelChoiceField(
+        label='Disciplina Curricular',
+        queryset=Disciplina.objects.filter(ativo=True),
+        empty_label='Selecione a disciplina...',
+        widget=forms.Select(
+            attrs={
+                'class': 'form-select',
+                'id': 'id_disciplina_manual',
+            },
+        ),
+    )
+    numero_caderno = forms.IntegerField(
+        label='Número do Caderno',
+        initial=1,
+        min_value=1,
+        widget=forms.NumberInput(
+            attrs={
+                'class': 'form-input',
+                'min': 1,
+                'id': 'id_numero_caderno_manual',
+            },
+        ),
+    )
+

@@ -41,6 +41,7 @@ def obter_candidatas_substituicao(
     """
     prova = item.prova
     mascara = prova.mascara
+    disciplina = prova.disciplina_efetiva
     questao_atual = item.questao
 
     # IDs de todas as questões que já fazem parte da avaliação atual
@@ -48,6 +49,7 @@ def obter_candidatas_substituicao(
 
     candidatas = consultar_questoes_candidatas_priorizadas(
         mascara=mascara,
+        disciplina=disciplina,
         topico_id=questao_atual.topico_id,
         dificuldade=questao_atual.dificuldade,
         tipo=questao_atual.tipo,
@@ -79,7 +81,7 @@ def substituir_questao_prova(
         SubstituicaoQuestaoError: Caso a nova questão viole regras de célula ou integridade.
     """
     prova = item.prova
-    mascara = prova.mascara
+    disciplina = prova.disciplina_efetiva
     questao_antiga = item.questao
 
     # 1. Validação de status ativo
@@ -87,10 +89,10 @@ def substituir_questao_prova(
         raise SubstituicaoQuestaoError('A questão selecionada está inativa no banco de dados.')
 
     # 2. Validação de disciplina
-    if nova_questao.disciplina_id != mascara.disciplina_id:
+    if disciplina and nova_questao.disciplina_id != disciplina.pk:
         raise SubstituicaoQuestaoError(
             f'A questão Q{nova_questao.pk} pertence à disciplina "{nova_questao.disciplina}", '
-            f'mas a avaliação exige "{mascara.disciplina}".',
+            f'mas a avaliação exige "{disciplina}".',
         )
 
     # 3. Validação de tópico curricular

@@ -6,7 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-from banco_questoes.models import Questao
+from banco_questoes.models import Disciplina, Questao
 
 logger = logging.getLogger(__name__)
 
@@ -395,19 +395,39 @@ class MascaraCriterioTopico(models.Model):
 
 class Prova(models.Model):
     """
-    Avaliação acadêmica gerada a partir de uma Máscara de Prova.
-    Rastreia cadernos de prova, data de aplicação e histórico de utilização de questões (RF07).
+    Avaliação acadêmica gerada a partir de uma Máscara de Prova (RF07) ou por Montagem 100% Manual.
+    Rastreia cadernos de prova, data de aplicação e histórico de utilização de questões.
 
-    Os campos ``snapshot_*`` congelam o estado exato dos parâmetros da máscara
+    Os campos ``snapshot_*`` congelam o estado exato dos parâmetros da avaliação
     e da matriz de metas no instante da geração, garantindo rastreabilidade
     e auditabilidade mesmo que os registros originais sejam alterados.
     """
 
+    class TipoGeracao(models.TextChoices):
+        AUTOMATICA = 'AUTOMATICA', 'Automatizada (Máscara / RF07)'
+        MANUAL = 'MANUAL', 'Manual (Seleção Livre)'
+
     mascara = models.ForeignKey(
         Mascara,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='provas_geradas',
         verbose_name='máscara de prova',
+    )
+    disciplina = models.ForeignKey(
+        Disciplina,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='provas',
+        verbose_name='disciplina',
+    )
+    tipo_geracao = models.CharField(
+        'tipo de montagem',
+        max_length=20,
+        choices=TipoGeracao.choices,
+        default=TipoGeracao.AUTOMATICA,
     )
     titulo = models.CharField('título da prova', max_length=250)
     numero_caderno = models.PositiveIntegerField('número do caderno', default=1)
@@ -464,6 +484,11 @@ class Prova(models.Model):
 
     def __str__(self):
         return f'{self.titulo} (Caderno {self.numero_caderno})'
+
+    @property
+    def disciplina_efetiva(self):
+        """Retorna a disciplina associada diretamente ou através da máscara."""
+        return self.disciplina or (self.mascara.disciplina if self.mascara else None)
 
 
 class ProvaQuestao(models.Model):

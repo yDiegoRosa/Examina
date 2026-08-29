@@ -11,8 +11,9 @@ from django.views.decorators.http import require_POST
 
 from banco_questoes.models import Disciplina, Questao, Topico
 
-from .forms import MascaraProvaForm, MascaraTopicoFormSet
+from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm
 from .models import MascaraProva, Prova, ProvaQuestao
+from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
 from .services.question_replacer import (
     SubstituicaoQuestaoError,
@@ -274,13 +275,107 @@ def mascara_gerar_prova(request, pk):
 
 
 # ---------------------------------------------------------------------------
+# Montagem 100% Manual de Prova (Seleção Livre no Acervo)
+# ---------------------------------------------------------------------------
+@login_required
+def prova_manual_create(request):
+    """
+    Interface para montagem 100% manual de avaliações (seleção livre no acervo).
+    Permite escolher disciplina, filtrar questões e selecionar exatamente quais questões
+    comporão o exame, sem depender de máscara ou do algoritmo automático RF07.
+    """
+    disciplina_id = request.GET.get('disciplina') or request.POST.get('disciplina')
+    disciplina_selecionada = None
+    questoes_disponiveis = []
+    topicos_disciplina = []
+
+    if disciplina_id:
+        try:
+            disciplina_selecionada = Disciplina.objects.get(pk=disciplina_id, ativo=True)
+            topicos_disciplina = list(Topico.objects.filter(disciplina=disciplina_selecionada, ativo=True).order_by('nome'))
+            qs = (
+                Questao.objects.filter(disciplina=disciplina_selecionada, ativo=True)
+                .select_related('topico', 'disciplina')
+                .prefetch_related('alternativas')
+                .order_by('topico__nome', 'dificuldade', 'pk')
+            )
+
+            # Filtros adicionais via GET
+            topico_filtro = request.GET.get('topico')
+            if topico_filtro:
+                qs = qs.filter(topico_id=topico_filtro)
+
+            dificuldade_filtro = request.GET.get('dificuldade')
+            if dificuldade_filtro:
+                qs = qs.filter(dificuldade=dificuldade_filtro)
+
+            tipo_filtro = request.GET.get('tipo')
+            if tipo_filtro:
+                qs = qs.filter(tipo=tipo_filtro)
+
+            busca = request.GET.get('busca')
+            if busca:
+                qs = qs.filter(Q(enunciado__icontains=busca) | Q(origem__icontains=busca))
+
+            questoes_disponiveis = list(qs)
+        except (Disciplina.DoesNotExist, ValueError):
+            disciplina_selecionada = None
+
+    if request.method == 'POST':
+        form = ProvaManualForm(request.POST)
+        questoes_selecionadas_ids = request.POST.getlist('questoes_selecionadas')
+
+        if form.is_valid():
+            if not questoes_selecionadas_ids:
+                messages.error(request, 'Selecione ao menos uma questão no acervo para compor a avaliação.')
+            else:
+                try:
+                    ids_int = [int(qid) for qid in questoes_selecionadas_ids if qid.isdigit()]
+                    disciplina = form.cleaned_data['disciplina']
+                    titulo = form.cleaned_data['titulo']
+                    numero_caderno = form.cleaned_data['numero_caderno']
+
+                    prova = criar_prova_manual(
+                        titulo=titulo,
+                        disciplina=disciplina,
+                        questoes_ids=ids_int,
+                        autor=request.user,
+                        numero_caderno=numero_caderno,
+                    )
+                    messages.success(
+                        request,
+                        f'Avaliação manual "{prova.titulo}" criada com sucesso contendo {prova.itens.count()} questões!',
+                    )
+                    return redirect('provas:prova_revisao', pk=prova.pk)
+                except ProvaManualError as err:
+                    messages.error(request, f'Erro na criação da avaliação: {err}')
+    else:
+        initial_data = {}
+        if disciplina_selecionada:
+            initial_data['disciplina'] = disciplina_selecionada
+        form = ProvaManualForm(initial=initial_data)
+
+    return render(
+        request,
+        'provas/prova_manual_form.html',
+        {
+            'form': form,
+            'disciplina_selecionada': disciplina_selecionada,
+            'topicos_disciplina': topicos_disciplina,
+            'questoes_disponiveis': questoes_disponiveis,
+            'total_disponiveis': len(questoes_disponiveis),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Revisão da Seleção — Meta vs. Atual (Tópico × Dificuldade)
 # ---------------------------------------------------------------------------
 @login_required
 def prova_revisao(request, pk):
     """Exibe a tela de revisão da seleção com indicadores meta vs. atual por célula."""
     prova = get_object_or_404(
-        Prova.objects.select_related('mascara', 'mascara__disciplina', 'autor'),
+        Prova.objects.select_related('mascara', 'mascara__disciplina', 'disciplina', 'autor'),
         pk=pk,
     )
     itens = (

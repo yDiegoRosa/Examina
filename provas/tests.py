@@ -1672,3 +1672,207 @@ class TrocaIndividualQuestaoTest(TestCase):
         self.assertEqual(self.item1.questao_id, self.q1_candidata.pk)
 
 
+class MontagemManualProvaTest(TestCase):
+    """
+    Testes da funcionalidade de montagem 100% manual de provas (seleção livre no acervo).
+    """
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='prof_manual', password='secret_password')  # noqa: S106
+        self.client.login(username='prof_manual', password='secret_password')  # noqa: S106
+
+        self.disc = Disciplina.objects.create(nome='Sistemas Distribuídos')
+        self.top1 = Topico.objects.create(disciplina=self.disc, nome='Consenso Raft e Paxos')
+        self.top2 = Topico.objects.create(disciplina=self.disc, nome='Comunicação RPC')
+
+        self.outra_disc = Disciplina.objects.create(nome='Inteligência Artificial')
+        self.top_outra = Topico.objects.create(disciplina=self.outra_disc, nome='Redes Neurais')
+
+        # Questões da disciplina
+        self.q1 = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão 1 Consenso Fácil',
+            autor=self.user,
+            ativo=True,
+        )
+        Alternativa.objects.create(questao=self.q1, letra='A', texto='Alt 1', correta=True)
+
+        self.q2 = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.MEDIO,
+            enunciado='Questão 2 Consenso Médio',
+            autor=self.user,
+            ativo=True,
+        )
+        Alternativa.objects.create(questao=self.q2, letra='A', texto='Alt 2', correta=True)
+
+        self.q3 = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top2,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.DIFICIL,
+            enunciado='Questão 3 RPC Difícil',
+            autor=self.user,
+            ativo=True,
+        )
+        Alternativa.objects.create(questao=self.q3, letra='A', texto='Alt 3', correta=True)
+
+        # Questão de outra disciplina
+        self.q_outra_disc = Questao.objects.create(
+            disciplina=self.outra_disc,
+            topico=self.top_outra,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão de IA',
+            autor=self.user,
+            ativo=True,
+        )
+
+    def test_criar_prova_manual_sucesso_com_snapshots(self):
+        """Verifica criação de prova manual com persistência de itens e snapshots consolidados."""
+        from provas.models import Prova
+        from provas.services.manual_generator import criar_prova_manual
+
+        prova = criar_prova_manual(
+            titulo='AV1 Manual — SD 2026.2',
+            disciplina=self.disc,
+            questoes_ids=[self.q1.pk, self.q2.pk, self.q3.pk],
+            autor=self.user,
+            numero_caderno=1,
+        )
+
+        self.assertEqual(prova.titulo, 'AV1 Manual — SD 2026.2')
+        self.assertEqual(prova.tipo_geracao, Prova.TipoGeracao.MANUAL)
+        self.assertIsNone(prova.mascara)
+        self.assertEqual(prova.disciplina, self.disc)
+        self.assertEqual(prova.disciplina_efetiva, self.disc)
+        self.assertEqual(prova.itens.count(), 3)
+
+        # Snapshots consolidados
+        self.assertEqual(prova.snapshot_mascara['tipo_geracao'], 'MANUAL')
+        self.assertEqual(prova.snapshot_mascara['quantidade_questoes'], 3)
+        self.assertEqual(prova.snapshot_matriz_metas['total_questoes'], 3)
+        self.assertEqual(prova.snapshot_matriz_metas['totais_por_dificuldade'], {'F': 1, 'M': 1, 'D': 1})
+
+        # Snapshots individuais por item
+        for item in prova.itens.all():
+            self.assertIn('enunciado', item.snapshot_questao)
+            self.assertIn('dificuldade', item.snapshot_questao)
+            self.assertIn('alternativas', item.snapshot_questao)
+
+    def test_criar_prova_manual_sem_questoes_rejeitada(self):
+        """Garante que tentar criar uma prova manual sem questões levanta erro."""
+        from provas.services.manual_generator import ProvaManualError, criar_prova_manual
+
+        with self.assertRaises(ProvaManualError):
+            criar_prova_manual(
+                titulo='Prova Vazia',
+                disciplina=self.disc,
+                questoes_ids=[],
+                autor=self.user,
+            )
+
+    def test_criar_prova_manual_questao_outra_disciplina_rejeitada(self):
+        """Garante que selecionar questão de outra disciplina levanta erro de integridade."""
+        from provas.services.manual_generator import ProvaManualError, criar_prova_manual
+
+        with self.assertRaises(ProvaManualError):
+            criar_prova_manual(
+                titulo='Prova Incompatível',
+                disciplina=self.disc,
+                questoes_ids=[self.q1.pk, self.q_outra_disc.pk],
+                autor=self.user,
+            )
+
+    def test_view_prova_manual_create_get(self):
+        """Verifica renderização da tela de montagem manual."""
+        url = reverse('provas:prova_manual_create')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Montagem Manual de Avaliação')
+
+        # GET filtrando por disciplina carrega o acervo
+        response_disc = self.client.get(f'{url}?disciplina={self.disc.pk}')
+        self.assertEqual(response_disc.status_code, 200)
+        self.assertContains(response_disc, 'Questão 1 Consenso Fácil')
+        self.assertContains(response_disc, 'Questão 2 Consenso Médio')
+        self.assertNotContains(response_disc, 'Questão de IA')
+
+    def test_view_prova_manual_create_post_sucesso(self):
+        """Verifica submissão do formulário criando a prova e redirecionando para revisão."""
+        from provas.models import Prova
+
+        url = reverse('provas:prova_manual_create')
+        post_data = {
+            'titulo': 'Exame Final Manual',
+            'disciplina': str(self.disc.pk),
+            'numero_caderno': '1',
+            'questoes_selecionadas': [str(self.q1.pk), str(self.q2.pk)],
+        }
+        response = self.client.post(url, post_data)
+
+        self.assertEqual(response.status_code, 302)
+        prova_criada = Prova.objects.get(titulo='Exame Final Manual')
+        self.assertRedirects(response, reverse('provas:prova_revisao', kwargs={'pk': prova_criada.pk}))
+        self.assertEqual(prova_criada.itens.count(), 2)
+
+    def test_prova_revisao_renderiza_prova_manual(self):
+        """Verifica que a tela de revisão exibe perfeitamente avaliações manuais (sem máscara)."""
+        from provas.services.manual_generator import criar_prova_manual
+
+        prova = criar_prova_manual(
+            titulo='AV Revisão Manual Test',
+            disciplina=self.disc,
+            questoes_ids=[self.q1.pk, self.q3.pk],
+            autor=self.user,
+        )
+
+        url = reverse('provas:prova_revisao', kwargs={'pk': prova.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'AV Revisão Manual Test')
+        self.assertContains(response, 'Montagem Manual')
+        self.assertContains(response, 'Sistemas Distribuídos')
+        self.assertEqual(response.context['total_meta'], 2)
+        self.assertEqual(response.context['total_atual'], 2)
+
+    def test_troca_questao_em_prova_manual(self):
+        """Garante que a troca individual de questão funciona em avaliações manuais."""
+        from provas.services.manual_generator import criar_prova_manual
+        from provas.services.question_replacer import obter_candidatas_substituicao, substituir_questao_prova
+
+        # Candidata reserva Fácil do top1
+        q_reserva = Questao.objects.create(
+            disciplina=self.disc,
+            topico=self.top1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão Reserva Consenso Fácil',
+            autor=self.user,
+            ativo=True,
+        )
+
+        prova = criar_prova_manual(
+            titulo='Prova Troca Manual',
+            disciplina=self.disc,
+            questoes_ids=[self.q1.pk, self.q2.pk],
+            autor=self.user,
+        )
+        item1 = prova.itens.get(questao=self.q1)
+
+        candidatas = list(obter_candidatas_substituicao(item1))
+        self.assertIn(q_reserva, candidatas)
+
+        item_trocado = substituir_questao_prova(item=item1, nova_questao=q_reserva, autor=self.user)
+        self.assertEqual(item_trocado.questao, q_reserva)
+        self.assertEqual(item_trocado.snapshot_questao['questao_id'], q_reserva.pk)
+
+
+

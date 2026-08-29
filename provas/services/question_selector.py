@@ -6,7 +6,8 @@ from banco_questoes.models import Questao
 
 
 def consultar_questoes_candidatas_priorizadas(
-    mascara,
+    mascara=None,
+    disciplina=None,
     topico_id: int | None = None,
     dificuldade: str | None = None,
     tipo: str | None = None,
@@ -23,7 +24,8 @@ def consultar_questoes_candidatas_priorizadas(
     3. Aleatorização controlada (`?`) para desempate entre questões com mesmo histórico de uso.
 
     Args:
-        mascara: Instância de Mascara de Avaliação.
+        mascara: Instância de Mascara de Avaliação (opcional).
+        disciplina: Instância de Disciplina (opcional se mascara for informada).
         topico_id: ID do tópico curricular (opcional).
         dificuldade: Nível de dificuldade ('F', 'M', 'D', opcional).
         tipo: Tipo de questão ('OBJ', 'DIS', opcional).
@@ -35,18 +37,26 @@ def consultar_questoes_candidatas_priorizadas(
     """
     from provas.models import Prova
 
-    # 1. Identifica os IDs das últimas N provas geradas desta mesma máscara
-    ultimas_provas_ids = list(
-        Prova.objects.filter(mascara=mascara)
-        .order_by('-criado_em')
-        .values_list('id', flat=True)[:limite_provas_recentes]
-    )
+    disc = disciplina or (mascara.disciplina if mascara else None)
 
-    # 2. Base de questões ativas da disciplina da máscara
-    qs = Questao.objects.filter(
-        disciplina=mascara.disciplina,
-        ativo=True,
-    )
+    # 1. Identifica os IDs das últimas N provas geradas desta mesma máscara
+    if mascara:
+        ultimas_provas_ids = list(
+            Prova.objects.filter(mascara=mascara)
+            .order_by('-criado_em')
+            .values_list('id', flat=True)[:limite_provas_recentes]
+        )
+        priorizar_enade = getattr(mascara, 'priorizar_enade', False)
+        modalidade = getattr(mascara, 'modalidade', None)
+    else:
+        ultimas_provas_ids = []
+        priorizar_enade = False
+        modalidade = None
+
+    # 2. Base de questões ativas da disciplina
+    qs = Questao.objects.filter(ativo=True)
+    if disc:
+        qs = qs.filter(disciplina=disc)
 
     # 3. Filtros estruturais e pedagógicos
     if topico_id is not None:
@@ -57,9 +67,9 @@ def consultar_questoes_candidatas_priorizadas(
 
     if tipo:
         qs = qs.filter(tipo=tipo)
-    elif mascara.modalidade == mascara.Modalidade.OBJETIVA:
+    elif modalidade == 'OBJ':
         qs = qs.filter(tipo=Questao.Tipo.OBJETIVA)
-    elif mascara.modalidade == mascara.Modalidade.DISCURSIVA:
+    elif modalidade == 'DIS':
         qs = qs.filter(tipo=Questao.Tipo.DISCURSIVA)
 
     if excluir_ids:
@@ -72,7 +82,7 @@ def consultar_questoes_candidatas_priorizadas(
         # Se não há provas anteriores, a contagem é 0 para todas as questões
         filtro_provas_recentes = Q(pk__in=[])
 
-    if mascara.priorizar_enade:
+    if priorizar_enade:
         enade_expr = Case(
             When(origem__icontains='enade', then=Value(1)),
             When(origem__icontains='poscomp', then=Value(1)),
@@ -91,7 +101,7 @@ def consultar_questoes_candidatas_priorizadas(
     )
 
     # 5. Ordenação priorizada
-    if mascara.priorizar_enade:
+    if priorizar_enade:
         return qs.order_by('-is_enade', 'vezes_usada_recentemente', '?')
 
     return qs.order_by('vezes_usada_recentemente', '?')
