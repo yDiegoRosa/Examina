@@ -795,3 +795,265 @@ def prova_capa_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
+
+
+# ---------------------------------------------------------------------------
+# Geração do PDF do Caderno de Prova / Prova Completa
+# ---------------------------------------------------------------------------
+@login_required
+def prova_pdf(request, pk):
+    """
+    Gera o PDF formatado do Caderno de Prova com todas as questões.
+
+    Suporta parâmetros query opcionais:
+    - `incluir_capa`: '1' (padrão se não informado ou '0' para somente questões)
+    - `incluir_gabarito`: '1' para anexar a página de espelho de gabarito e critérios
+    - `data`: data de aplicação customizada
+    - `turma`: identificação de turma
+    - `turno`: turno da aplicação
+    - `instrucoes_extras`: orientações adicionais aos estudantes
+    """
+    prova = get_object_or_404(
+        Prova.objects.select_related(
+            'mascara',
+            'mascara__disciplina',
+            'disciplina',
+            'autor',
+        ),
+        pk=pk,
+    )
+
+    itens = (
+        prova.itens
+        .select_related('questao', 'questao__topico', 'questao__disciplina')
+        .prefetch_related('questao__alternativas')
+        .order_by('ordem')
+    )
+
+    disciplina = prova.disciplina_efetiva
+    mascara = prova.mascara
+    snap = prova.snapshot_mascara or {}
+
+    valor_total = None
+    tempo_minutos = None
+    modalidade = None
+
+    if mascara:
+        valor_total = mascara.valor_total
+        tempo_minutos = mascara.tempo_estimado_minutos
+        modalidade = mascara.get_modalidade_display()
+    elif snap:
+        valor_total = snap.get('valor_total')
+        tempo_minutos = snap.get('tempo_estimado_minutos')
+        modalidade_code = snap.get('modalidade', '')
+        _modalidade_map = {
+            'OBJ': 'Somente Objetivas',
+            'DIS': 'Somente Discursivas',
+            'MISTA': 'Mista (Objetivas e Discursivas)',
+        }
+        modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
+
+    docente_nome = None
+    if prova.autor:
+        docente_nome = prova.autor.get_full_name() or prova.autor.username
+
+    param_capa = request.GET.get('incluir_capa', '1')
+    incluir_capa = param_capa in ('1', 'true', 'True')
+
+    param_gabarito = request.GET.get('incluir_gabarito', '0')
+    incluir_gabarito = param_gabarito in ('1', 'true', 'True')
+
+    context = {
+        'prova': prova,
+        'itens': itens,
+        'disciplina_nome': disciplina.nome if disciplina else None,
+        'docente_nome': docente_nome,
+        'turma': snap.get('turma') or request.GET.get('turma') or '',
+        'turno': snap.get('turno') or request.GET.get('turno') or '',
+        'data_aplicacao': request.GET.get('data') or '',
+        'valor_total': valor_total,
+        'tempo_minutos': tempo_minutos,
+        'modalidade': modalidade,
+        'total_questoes': itens.count(),
+        'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
+        'incluir_capa': incluir_capa,
+        'incluir_gabarito': incluir_gabarito,
+    }
+
+    try:
+        pdf_bytes = PDFGeneratorService.render_pdf_from_template(
+            template_name='provas/pdf_prova_completa.html',
+            context=context,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Erro ao gerar PDF da prova pk=%s: %s', pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Erro ao gerar o PDF da avaliação: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    tipo_str = 'completa' if incluir_capa else 'questoes'
+    if incluir_gabarito:
+        tipo_str += '_com_gabarito'
+
+    filename = f'prova_{prova.pk}_caderno{prova.numero_caderno}_{tipo_str}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Geração do PDF do Gabarito Oficial por Versão / Caderno da Prova
+# ---------------------------------------------------------------------------
+@login_required
+def prova_gabarito_pdf(request, pk):
+    """
+    Gera o PDF do Gabarito Oficial específico para a versão/caderno da prova.
+
+    Respeita com exatidão a ordem de embaralhamento das questões e das
+    alternativas específicas desta versão, exibindo o quadro de respostas rápidas
+    e o espelho pedagógico de correção questão a questão.
+    """
+    prova = get_object_or_404(
+        Prova.objects.select_related(
+            'mascara',
+            'mascara__disciplina',
+            'disciplina',
+            'autor',
+        ),
+        pk=pk,
+    )
+
+    itens_qs = (
+        prova.itens
+        .select_related('questao', 'questao__topico', 'questao__disciplina')
+        .prefetch_related('questao__alternativas')
+        .order_by('ordem')
+    )
+
+    disciplina = prova.disciplina_efetiva
+    mascara = prova.mascara
+    snap = prova.snapshot_mascara or {}
+
+    valor_total = None
+    modalidade = None
+
+    if mascara:
+        valor_total = mascara.valor_total
+        modalidade = mascara.get_modalidade_display()
+    elif snap:
+        valor_total = snap.get('valor_total')
+        modalidade_code = snap.get('modalidade', '')
+        _modalidade_map = {
+            'OBJ': 'Somente Objetivas',
+            'DIS': 'Somente Discursivas',
+            'MISTA': 'Mista (Objetivas e Discursivas)',
+        }
+        modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
+
+    docente_nome = None
+    if prova.autor:
+        docente_nome = prova.autor.get_full_name() or prova.autor.username
+
+    # Monta lista de resumo rápido e itens detalhados
+    resumo_itens = []
+    itens_detalhados = []
+
+    for idx, item in enumerate(itens_qs, start=1):
+        num_exibicao = item.numero or idx
+        q = item.questao
+        snap_q = item.snapshot_questao or {}
+
+        tipo = snap_q.get('tipo') or q.tipo
+        tipo_display = snap_q.get('tipo_display') or q.get_tipo_display()
+        topico_nome = snap_q.get('topico_nome') or (q.topico.nome if q.topico else '')
+        origem = snap_q.get('origem') or q.origem
+        origem_numero = snap_q.get('numero_questao') or q.numero_questao
+        dificuldade_display = snap_q.get('dificuldade_display') or q.get_dificuldade_display()
+        enunciado = snap_q.get('enunciado') or q.enunciado
+        criterios_correcao = snap_q.get('criterios_correcao') or q.criterios_correcao
+
+        letra_correta = ''
+        alternativas_lista = []
+
+        if tipo == 'OBJ':
+            # Se houver snapshot com alternativas, usa-o
+            snap_alts = snap_q.get('alternativas')
+            if snap_alts:
+                for a in snap_alts:
+                    alt_dict = {
+                        'letra': a.get('letra', ''),
+                        'texto': a.get('texto', ''),
+                        'correta': a.get('correta', False),
+                    }
+                    alternativas_lista.append(alt_dict)
+                    if alt_dict['correta']:
+                        letra_correta = alt_dict['letra']
+            else:
+                for a in q.alternativas.all():
+                    alt_dict = {
+                        'letra': a.letra,
+                        'texto': a.texto,
+                        'correta': a.correta,
+                    }
+                    alternativas_lista.append(alt_dict)
+                    if alt_dict['correta']:
+                        letra_correta = alt_dict['letra']
+        else:
+            letra_correta = 'DIS'
+
+        resumo_itens.append({
+            'numero': num_exibicao,
+            'tipo': tipo,
+            'letra_correta': letra_correta,
+            'pontuacao': item.pontuacao,
+        })
+
+        itens_detalhados.append({
+            'numero': num_exibicao,
+            'tipo': tipo,
+            'tipo_display': tipo_display,
+            'pontuacao': item.pontuacao,
+            'topico_nome': topico_nome,
+            'origem': origem,
+            'origem_numero': origem_numero,
+            'dificuldade_display': dificuldade_display,
+            'enunciado': enunciado,
+            'letra_correta': letra_correta,
+            'alternativas': alternativas_lista,
+            'criterios_correcao': criterios_correcao,
+        })
+
+    context = {
+        'prova': prova,
+        'disciplina_nome': disciplina.nome if disciplina else None,
+        'docente_nome': docente_nome,
+        'turma': snap.get('turma') or request.GET.get('turma') or '',
+        'turno': snap.get('turno') or request.GET.get('turno') or '',
+        'data_aplicacao': request.GET.get('data') or '',
+        'valor_total': valor_total,
+        'modalidade': modalidade,
+        'total_questoes': len(resumo_itens),
+        'resumo_itens': resumo_itens,
+        'itens_detalhados': itens_detalhados,
+    }
+
+    try:
+        pdf_bytes = PDFGeneratorService.render_pdf_from_template(
+            template_name='provas/pdf_gabarito_versao.html',
+            context=context,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Erro ao gerar Gabarito PDF da prova pk=%s: %s', pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Erro ao gerar o PDF do gabarito: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    filename = f'gabarito_prova_{prova.pk}_caderno{prova.numero_caderno}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
+

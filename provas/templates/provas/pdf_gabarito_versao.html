@@ -1,0 +1,197 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Gabarito Oficial — {{ prova.titulo }} — Caderno {{ prova.numero_caderno }} — FAETERJ-Rio</title>
+  <link rel="stylesheet" href="{% static 'provas/css/print_prova.css' %}">
+</head>
+<body class="gabarito-doc-body">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CABEÇALHO INSTITUCIONAL DO GABARITO
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="gabarito-header-box">
+    <div class="gabarito-header-top">
+      <div class="gabarito-header-identidade">
+        <div class="capa-header-instituicao">FAETERJ-Rio</div>
+        <div class="capa-header-nome-completo">
+          Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+        </div>
+        <div class="capa-header-vinculo">
+          Secretaria de Estado de Ciência, Tecnologia e Inovação &nbsp;•&nbsp;
+          Fundação CECIERJ / FAETEC
+        </div>
+      </div>
+      <div class="gabarito-header-badge-col">
+        <div class="gabarito-badge-docente">USO EXCLUSIVO DO DOCENTE</div>
+        <div class="gabarito-badge-caderno">
+          GABARITO • CADERNO {{ prova.numero_caderno|stringformat:"02d"|default:prova.numero_caderno }}
+        </div>
+      </div>
+    </div>
+
+    <div class="capa-divider"></div>
+
+    <div class="gabarito-titulo-prova">
+      Gabarito Oficial & Critérios de Correção — {{ prova.titulo|upper }}
+    </div>
+
+    <!-- Metadados da Avaliação -->
+    <table class="capa-info-table">
+      <tbody>
+        <tr>
+          <td class="capa-info-label">Disciplina:</td>
+          <td class="capa-info-value" style="width: 55%;">
+            {{ disciplina_nome|default:"—" }}
+          </td>
+          <td class="capa-info-label">Data:</td>
+          <td class="capa-info-value">
+            {{ data_aplicacao|default:"____/____/________" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Docente:</td>
+          <td class="capa-info-value">
+            {{ docente_nome|default:"—" }}
+          </td>
+          <td class="capa-info-label">Turno:</td>
+          <td class="capa-info-value">
+            {{ turno|default:"—" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Turma / Semestre:</td>
+          <td class="capa-info-value">
+            {{ turma|default:"—" }}
+          </td>
+          <td class="capa-info-label">Valor Total:</td>
+          <td class="capa-info-value">
+            {% if valor_total %}{{ valor_total }} ponto(s){% else %}—{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Modalidade:</td>
+          <td class="capa-info-value">
+            {{ modalidade|default:"—" }}
+          </td>
+          <td class="capa-info-label">Nº de Questões:</td>
+          <td class="capa-info-value">
+            {{ total_questoes|default:itens_detalhados|length }} questões
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       QUADRO DE RESUMO RÁPIDO DE RESPOSTAS (CONFERÊNCIA ÁGIL)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="gabarito-secao-titulo">
+    <span class="gabarito-secao-icone">&#9658;</span>
+    Quadro de Respostas Rápidas — Caderno {{ prova.numero_caderno }}
+  </div>
+
+  <div class="gabarito-resumo-container">
+    <table class="gabarito-resumo-tabela">
+      <tbody>
+        <tr>
+          {% for r in resumo_itens %}
+          <td class="gabarito-resumo-celula">
+            <div class="gabarito-resumo-num">Q{{ r.numero|stringformat:"02d" }}</div>
+            {% if r.tipo == 'OBJ' %}
+              <div class="gabarito-resumo-letra">{{ r.letra_correta }}</div>
+            {% else %}
+              <div class="gabarito-resumo-dis">DIS</div>
+            {% endif %}
+            <div class="gabarito-resumo-peso">{{ r.pontuacao }}pt</div>
+          </td>
+          {% if forloop.counter|divisibleby:10 and not forloop.last %}
+        </tr>
+        <tr>
+          {% endif %}
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ESPELHO DETALHADO QUESTÃO A QUESTÃO (ORDEM DA VERSÃO)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="gabarito-secao-titulo" style="margin-top: 14pt;">
+    <span class="gabarito-secao-icone">&#9658;</span>
+    Espelho Detalhado de Respostas e Critérios Pedagógicos
+  </div>
+
+  <div class="gabarito-detalhado-wrapper">
+    {% for item in itens_detalhados %}
+    <div class="gabarito-card-questao">
+
+      <!-- Cabeçalho do Item -->
+      <div class="gabarito-card-header">
+        <div class="gabarito-card-header-esq">
+          <span class="gabarito-card-num-badge">Questão {{ item.numero|stringformat:"02d" }}</span>
+          <span class="gabarito-card-peso">[{{ item.pontuacao }} pt{{ item.pontuacao|pluralize }}]</span>
+          {% if item.topico_nome %}
+          <span class="gabarito-card-topico">{{ item.topico_nome }}</span>
+          {% endif %}
+        </div>
+        <div class="gabarito-card-header-dir">
+          {% if item.origem %}
+          <span class="gabarito-card-origem">
+            {{ item.origem }}{% if item.origem_numero %} • Q{{ item.origem_numero }}{% endif %}
+          </span>
+          {% endif %}
+          <span class="gabarito-card-dificuldade">Dificuldade: {{ item.dificuldade_display }}</span>
+          <span class="gabarito-card-tipo">{{ item.tipo_display }}</span>
+        </div>
+      </div>
+
+      <!-- Enunciado Resumido -->
+      <div class="gabarito-card-enunciado">
+        <strong>Enunciado:</strong> {{ item.enunciado|linebreaksbr }}
+      </div>
+
+      <!-- Gabarito da Questão Objetiva -->
+      {% if item.tipo == 'OBJ' %}
+      <div class="gabarito-card-resposta-obj">
+        <div class="gabarito-resposta-destaque-linha">
+          <span class="gabarito-letra-correta-badge">Gabarito Oficial: Opção ({{ item.letra_correta }})</span>
+        </div>
+
+        <div class="gabarito-alternativas-espelho">
+          {% for alt in item.alternativas %}
+          <div class="gabarito-alt-linha {% if alt.correta %}gabarito-alt-correta{% endif %}">
+            <span class="gabarito-alt-letra">({{ alt.letra }})</span>
+            <span class="gabarito-alt-texto">{{ alt.texto }}</span>
+            {% if alt.correta %}
+            <span class="gabarito-alt-check">&#10004; Resposta Correta</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Critérios da Questão Discursiva -->
+      {% else %}
+      <div class="gabarito-card-resposta-dis">
+        <div class="gabarito-dis-criterios-header">
+          Critérios de Correção & Resposta Padrão Esperada:
+        </div>
+        <div class="gabarito-dis-criterios-conteudo">
+          {% if item.criterios_correcao %}
+            {{ item.criterios_correcao|linebreaksbr }}
+          {% else %}
+            <span style="color: #94A3B8; font-style: italic;">Nenhum critério específico cadastrado para esta questão. Avaliar conforme coerência técnica com a ementa da disciplina.</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+
+</body>
+</html>
