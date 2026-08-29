@@ -224,7 +224,7 @@ MascaraCriterioTopicoFormSet = inlineformset_factory(
     MascaraCriterioTopico,
     form=MascaraCriterioTopicoForm,
     formset=BaseMascaraCriterioTopicoFormSet,
-    extra=3,
+    extra=0,
     can_delete=True,
 )
 

@@ -285,8 +285,13 @@
           {% endfor %}
         </div>
 
-        <div id="topicos-empty-msg" class="p-3 text-muted text-center small {% if formset.forms %}d-none{% endif %}" style="background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px;">
-          <i class="bi bi-info-circle"></i> Nenhum tópico especificado. O sorteio abrangerá todos os tópicos ativos da disciplina. Clique em <strong>"Adicionar Tópico"</strong> para definir proporções customizadas.
+        <div id="topicos-no-disc-msg" class="p-3 text-muted text-center small" style="background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px;">
+          <i class="bi bi-arrow-up-circle-fill text-primary" style="font-size: 1.2rem; display: block; margin-bottom: 0.35rem;"></i>
+          Selecione uma <strong>Disciplina</strong> no passo 1 acima para habilitar a distribuição e carregar os tópicos correspondentes.
+        </div>
+
+        <div id="topicos-empty-msg" class="p-3 text-muted text-center small d-none" style="background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px;">
+          <i class="bi bi-info-circle"></i> Nenhum tópico específico selecionado. O sorteio abrangerá todos os tópicos ativos da disciplina. Clique em <strong>"Adicionar Tópico"</strong> para definir proporções customizadas.
         </div>
 
       </div>
@@ -541,16 +546,28 @@
       }
     });
 
-    if (emptyMsg) {
-      if (visibleCount === 0) {
-        emptyMsg.classList.remove('d-none');
-      } else {
-        emptyMsg.classList.add('d-none');
+    const noDiscMsg = document.getElementById('topicos-no-disc-msg');
+    const discId = disciplinaSelect ? disciplinaSelect.value : '';
+
+    if (!discId) {
+      if (noDiscMsg) noDiscMsg.classList.remove('d-none');
+      if (emptyMsg) emptyMsg.classList.add('d-none');
+    } else {
+      if (noDiscMsg) noDiscMsg.classList.add('d-none');
+      if (emptyMsg) {
+        if (visibleCount === 0) {
+          emptyMsg.classList.remove('d-none');
+        } else {
+          emptyMsg.classList.add('d-none');
+        }
       }
     }
 
     if (badgeTopicos) {
-      if (visibleCount === 0) {
+      if (!discId) {
+        badgeTopicos.className = 'badge-pill badge-pill-inactive';
+        badgeTopicos.textContent = 'Aguardando Disciplina';
+      } else if (visibleCount === 0) {
         badgeTopicos.className = 'badge-pill badge-pill-inactive';
         badgeTopicos.textContent = 'Distribuição Livre';
       } else if (soma === 100) {
@@ -737,6 +754,58 @@
       .catch(err => console.error('Erro ao buscar estoque:', err));
   }
 
+  // ── Controle de visibilidade da seção de tópicos ──────────────────────
+  const topicosSection = document.querySelector('.col-span-6.card-surface:has(#topicos-container)') ||
+                          document.getElementById('topicos-container')?.closest('.card-surface');
+
+  function toggleTopicosVisibility() {
+    const discId = disciplinaSelect ? disciplinaSelect.value : '';
+    if (topicosSection) {
+      if (!discId) {
+        topicosSection.style.opacity = '0.5';
+        topicosSection.style.pointerEvents = 'none';
+        if (btnAddTopico) btnAddTopico.disabled = true;
+        if (btnBalancear) btnBalancear.disabled = true;
+      } else {
+        topicosSection.style.opacity = '1';
+        topicosSection.style.pointerEvents = 'auto';
+        if (btnAddTopico) btnAddTopico.disabled = false;
+        if (btnBalancear) btnBalancear.disabled = false;
+      }
+    }
+  }
+
+  // ── Evento de mudança de disciplina ───────────────────────────────────
+  if (disciplinaSelect) {
+    disciplinaSelect.addEventListener('change', function() {
+      // Limpa tópicos antigos que não pertençam à nova disciplina
+      document.querySelectorAll('.topico-form-row').forEach(function(row) {
+        const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+        const idInput = row.querySelector('input[type="hidden"][name$="-id"]');
+        const hasExistingId = idInput && idInput.value;
+
+        if (hasExistingId && deleteCheckbox) {
+          // Linhas existentes (edição): marca para deleção
+          deleteCheckbox.checked = true;
+          row.style.display = 'none';
+        } else if (!hasExistingId) {
+          // Linhas adicionadas dinamicamente: remove do DOM
+          row.remove();
+        }
+      });
+
+      // Atualiza o TOTAL_FORMS para refletir as remoções de linhas dinâmicas
+      if (totalFormsInput) {
+        const remaining = document.querySelectorAll('.topico-form-row').length;
+        totalFormsInput.value = remaining;
+      }
+
+      toggleTopicosVisibility();
+      atualizarEstoqueDisciplina();
+      recalcularQtdTopicos();
+    });
+  }
+
   // Validação Pre-Submit no Cliente
   const formElement = document.querySelector('form');
   if (formElement) {
@@ -826,8 +895,16 @@
     });
   }
 
+  // ── Inicialização ─────────────────────────────────────────────────────
   syncDificuldade('input');
   recalcularQtdTopicos();
+  toggleTopicosVisibility();
+
+  // Se já há disciplina selecionada (modo edição), carrega tópicos e estoque
+  if (disciplinaSelect && disciplinaSelect.value) {
+    atualizarEstoqueDisciplina();
+  }
 })();
 </script>
 {% endblock %}
+
