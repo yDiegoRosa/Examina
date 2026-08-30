@@ -29,28 +29,27 @@
       <i class="bi bi-arrow-left"></i> Voltar ao Painel
     </a>
     {% endif %}
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}"
+    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao=A"
        target="_blank"
        rel="noopener"
        class="btn flex items-center gap-2"
        style="background: #002B49; color: #FFFFFF;"
-       title="Gera o PDF completo da avaliação com capa e questões formatadas">
-      <i class="bi bi-printer-fill"></i> Imprimir Prova Completa
+       title="Gera o PDF da Versão A com capa e questões formatadas">
+      <i class="bi bi-printer-fill"></i> Imprimir Versão A
     </a>
-    <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}"
+    <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao=A"
        target="_blank"
        rel="noopener"
        class="btn flex items-center gap-2"
        style="background: #065F46; color: #FFFFFF;"
-       title="Gera o Gabarito Oficial e Critérios de Correção específicos para este caderno">
-      <i class="bi bi-file-earmark-check-fill"></i> Gabarito Oficial (Caderno {{ prova.numero_caderno }})
+       title="Gera o Gabarito Oficial da Versão A">
+      <i class="bi bi-file-earmark-check-fill"></i> Gabarito Versão A
     </a>
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?incluir_capa=0"
-       target="_blank"
-       rel="noopener"
-       class="btn btn-outline flex items-center gap-2"
-       title="Gera apenas as folhas de questões com cabeçalho compacto">
-      <i class="bi bi-file-earmark-text"></i> Caderno de Questões
+    <a href="{% url 'provas:prova_pacote_zip' pk=prova.pk %}"
+       class="btn flex items-center gap-2"
+       style="background: #D97706; color: #FFFFFF;"
+       title="Baixa um arquivo compactado ZIP contendo os cadernos e gabaritos de todas as versões geradas (A, B, C...)">
+      <i class="bi bi-file-earmark-zip-fill"></i> Baixar Pacote ZIP (Todas as Versões)
     </a>
     <a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}"
        target="_blank"
@@ -100,19 +99,27 @@
   <div class="flex flex-wrap justify-between items-center mb-3">
     <div>
       <h3 class="font-bold text-base flex items-center gap-2" style="color: #002B49;">
-        <i class="bi bi-shuffle text-primary"></i> Cadernos e Versões da Prova (Prova A / B / C)
+        <i class="bi bi-shuffle text-primary"></i> Cadernos e Versões da Prova (Prova A / B / C) — RF09
       </h3>
       <p class="text-xs text-muted mt-0.5">
         Cadernos com permutações de ordem de questões e alternativas para distribuição aos estudantes com gabaritos individuais.
       </p>
     </div>
-    <form method="post" action="{% url 'provas:prova_gerar_versoes' pk=prova.pk %}" class="inline-flex items-center gap-2">
-      {% csrf_token %}
-      <input type="hidden" name="quantidade_versoes" value="3">
-      <button type="submit" class="btn btn-sm btn-outline flex items-center gap-1.5" title="Reembaralha e regenera as versões A, B e C mantendo as questões selecionadas">
-        <i class="bi bi-arrow-clockwise"></i> Reembaralhar Versões A/B/C
-      </button>
-    </form>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'provas:prova_pacote_zip' pk=prova.pk %}"
+         class="btn btn-sm flex items-center gap-1.5"
+         style="background-color: #D97706; color: #FFFFFF;"
+         title="Baixa todos os cadernos e gabaritos em arquivo compactado">
+        <i class="bi bi-file-earmark-zip-fill"></i> Baixar ZIP (Todas as Versões)
+      </a>
+      <form method="post" action="{% url 'provas:prova_gerar_versoes' pk=prova.pk %}" class="inline-flex items-center gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="quantidade_versoes" value="3">
+        <button type="submit" class="btn btn-sm btn-outline flex items-center gap-1.5" title="Reembaralha e regenera as versões A, B e C mantendo as questões selecionadas">
+          <i class="bi bi-arrow-clockwise"></i> Reembaralhar Versões A/B/C
+        </button>
+      </form>
+    </div>
   </div>
 
   <div class="grid grid-cols-12 gap-3">
@@ -134,21 +141,29 @@
         {% endif %}
       </div>
       <div class="flex flex-col gap-1.5">
-        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador }}"
+        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador }}&incluir_capa=1&incluir_gabarito=0"
            target="_blank"
            rel="noopener"
            class="btn btn-sm text-white flex items-center justify-center gap-1.5"
            style="background-color: #002B49;"
-           title="Gera o caderno de prova completo da Versão {{ v.identificador }}">
-          <i class="bi bi-printer-fill"></i> Caderno Versão {{ v.identificador }} (PDF)
+           title="Gera o caderno de prova do estudante (Capa + Questões)">
+          <i class="bi bi-mortarboard-fill"></i> Caderno Estudante (Versão {{ v.identificador }})
+        </a>
+        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador }}&incluir_capa=1&incluir_gabarito=1"
+           target="_blank"
+           rel="noopener"
+           class="btn btn-sm text-white flex items-center justify-center gap-1.5"
+           style="background-color: #1E3A8A;"
+           title="Gera o pacote completo (Capa + Questões + Gabarito Anexo)">
+          <i class="bi bi-file-earmark-pdf-fill"></i> Prova + Gabarito Completo (PDF)
         </a>
         <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao={{ v.identificador }}"
            target="_blank"
            rel="noopener"
            class="btn btn-sm text-white flex items-center justify-center gap-1.5"
            style="background-color: #065F46;"
-           title="Gera o gabarito oficial com a ordem exata da Versão {{ v.identificador }}">
-          <i class="bi bi-file-earmark-check-fill"></i> Gabarito Versão {{ v.identificador }} (PDF)
+           title="Gera somente o gabarito oficial com a ordem exata da Versão {{ v.identificador }}">
+          <i class="bi bi-file-earmark-check-fill"></i> Gabarito Oficial (Docente)
         </a>
       </div>
     </div>
