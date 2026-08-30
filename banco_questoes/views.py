@@ -13,9 +13,13 @@ from .forms import AlternativaFormSet, CSVUploadForm, QuestaoForm
 from .importer import CSVImportService
 from .models import Disciplina, Questao, Topico
 from .parser import CSVParseError
-from django.core.exceptions import PermissionDenied
+from .permissions import (
+    can_change_questao,
+    docente_ou_coordenador_required,
+    is_docente_ou_coordenador,
+    pode_editar_questao_required,
+)
 
-from .permissions import can_change_questao, is_docente_ou_coordenador, docente_ou_coordenador_required, pode_editar_questao_required
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +30,9 @@ logger = logging.getLogger(__name__)
 def questao_list(request):
     """Lista de questões com filtros avançados via django-filter, métricas e paginação."""
     base_qs = (
-        Questao.objects.select_related('disciplina', 'topico', 'autor').prefetch_related('tags').order_by('-criado_em')
+        Questao.objects.select_related("disciplina", "topico", "autor")
+        .prefetch_related("tags")
+        .order_by("-criado_em")
     )
 
     # Aplicação do FilterSet
@@ -35,42 +41,53 @@ def questao_list(request):
 
     # Paginação (15 itens por página)
     paginator = Paginator(questoes_qs, 15)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    page_range = paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1)
+    page_range = paginator.get_elided_page_range(
+        page_obj.number, on_each_side=2, on_ends=1
+    )
 
     # Query string preservando filtros para navegação entre páginas
     get_params = request.GET.copy()
-    get_params.pop('page', None)
+    get_params.pop("page", None)
     querystring = get_params.urlencode()
 
     # Métricas globais do acervo
     all_questoes = Questao.objects.all()
     metricas = {
-        'total': all_questoes.count(),
-        'objetivas': all_questoes.filter(tipo=Questao.Tipo.OBJETIVA).count(),
-        'discursivas': all_questoes.filter(tipo=Questao.Tipo.DISCURSIVA).count(),
-        'ativas': all_questoes.filter(ativo=True).count(),
+        "total": all_questoes.count(),
+        "objetivas": all_questoes.filter(tipo=Questao.Tipo.OBJETIVA).count(),
+        "discursivas": all_questoes.filter(tipo=Questao.Tipo.DISCURSIVA).count(),
+        "ativas": all_questoes.filter(ativo=True).count(),
     }
 
     # Verifica se há filtros ativos aplicados pelo usuário
     has_active_filters = any(
-        request.GET.get(key) for key in ('disciplina', 'topico', 'dificuldade', 'tipo', 'origem', 'ativo', 'autor')
+        request.GET.get(key)
+        for key in (
+            "disciplina",
+            "topico",
+            "dificuldade",
+            "tipo",
+            "origem",
+            "ativo",
+            "autor",
+        )
     )
 
     return render(
         request,
-        'banco_questoes/questao_list.html',
+        "banco_questoes/questao_list.html",
         {
-            'filter': questao_filter,
-            'questoes': page_obj,
-            'page_obj': page_obj,
-            'page_range': page_range,
-            'querystring': querystring,
-            'metricas': metricas,
-            'has_active_filters': has_active_filters,
-            'pode_criar': is_docente_ou_coordenador(request.user),
-            'pode_editar': can_change_questao(request.user),
+            "filter": questao_filter,
+            "questoes": page_obj,
+            "page_obj": page_obj,
+            "page_range": page_range,
+            "querystring": querystring,
+            "metricas": metricas,
+            "has_active_filters": has_active_filters,
+            "pode_criar": is_docente_ou_coordenador(request.user),
+            "pode_editar": can_change_questao(request.user),
         },
     )
 
@@ -82,12 +99,12 @@ def questao_list(request):
 @docente_ou_coordenador_required
 def questao_create(request):
     """Cadastro de questão via formulário completo + formset inline de alternativas."""
-    if request.method == 'POST':
+    if request.method == "POST":
         form = QuestaoForm(request.POST, request.FILES)
         formset = AlternativaFormSet(request.POST)
 
         if form.is_valid():
-            is_obj = form.cleaned_data.get('tipo') == Questao.Tipo.OBJETIVA
+            is_obj = form.cleaned_data.get("tipo") == Questao.Tipo.OBJETIVA
             formset_valid = formset.is_valid() if is_obj else True
             cross_valid = form.validate_with_alternativas(formset) if is_obj else True
 
@@ -105,33 +122,33 @@ def questao_create(request):
 
                     messages.success(
                         request,
-                        f'Questão Q{questao.pk} ({questao.get_tipo_display()}) cadastrada com sucesso!',
+                        f"Questão Q{questao.pk} ({questao.get_tipo_display()}) cadastrada com sucesso!",
                     )
-                    return redirect('banco_questoes:questao_list')
+                    return redirect("banco_questoes:questao_list")
                 except Exception as exc:
-                    logger.exception('Erro ao salvar questão: %s', exc)
-                    messages.error(request, f'Erro interno ao cadastrar questão: {exc}')
+                    logger.exception("Erro ao salvar questão: %s", exc)
+                    messages.error(request, f"Erro interno ao cadastrar questão: {exc}")
             else:
                 messages.error(
                     request,
-                    'Por favor, corrija os erros apontados no formulário de alternativas.',
+                    "Por favor, corrija os erros apontados no formulário de alternativas.",
                 )
         else:
             messages.error(
                 request,
-                'Por favor, corrija os erros apontados no formulário.',
+                "Por favor, corrija os erros apontados no formulário.",
             )
     else:
-        form = QuestaoForm(initial={'tipo': Questao.Tipo.OBJETIVA})
+        form = QuestaoForm(initial={"tipo": Questao.Tipo.OBJETIVA})
         formset = AlternativaFormSet()
 
     return render(
         request,
-        'banco_questoes/questao_form.html',
+        "banco_questoes/questao_form.html",
         {
-            'form': form,
-            'formset': formset,
-            'titulo': 'Nova Questão',
+            "form": form,
+            "formset": formset,
+            "titulo": "Nova Questão",
         },
     )
 
@@ -145,12 +162,12 @@ def questao_update(request, pk):
     """Edição de questão existente com histórico automático via simple-history."""
     questao = get_object_or_404(Questao, pk=pk)
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form = QuestaoForm(request.POST, request.FILES, instance=questao)
         formset = AlternativaFormSet(request.POST, instance=questao)
 
         if form.is_valid():
-            is_obj = form.cleaned_data.get('tipo') == Questao.Tipo.OBJETIVA
+            is_obj = form.cleaned_data.get("tipo") == Questao.Tipo.OBJETIVA
             formset_valid = formset.is_valid() if is_obj else True
             cross_valid = form.validate_with_alternativas(formset) if is_obj else True
 
@@ -169,21 +186,21 @@ def questao_update(request, pk):
 
                     messages.success(
                         request,
-                        f'Questão Q{questao.pk} atualizada com sucesso!',
+                        f"Questão Q{questao.pk} atualizada com sucesso!",
                     )
-                    return redirect('banco_questoes:questao_list')
+                    return redirect("banco_questoes:questao_list")
                 except Exception as exc:
-                    logger.exception('Erro ao atualizar questão Q%s: %s', pk, exc)
-                    messages.error(request, f'Erro interno ao atualizar questão: {exc}')
+                    logger.exception("Erro ao atualizar questão Q%s: %s", pk, exc)
+                    messages.error(request, f"Erro interno ao atualizar questão: {exc}")
             else:
                 messages.error(
                     request,
-                    'Por favor, corrija os erros apontados no formulário de alternativas.',
+                    "Por favor, corrija os erros apontados no formulário de alternativas.",
                 )
         else:
             messages.error(
                 request,
-                'Por favor, corrija os erros apontados no formulário.',
+                "Por favor, corrija os erros apontados no formulário.",
             )
     else:
         form = QuestaoForm(instance=questao)
@@ -191,12 +208,12 @@ def questao_update(request, pk):
 
     return render(
         request,
-        'banco_questoes/questao_form.html',
+        "banco_questoes/questao_form.html",
         {
-            'form': form,
-            'formset': formset,
-            'titulo': f'Editar Questão Q{questao.pk}',
-            'questao': questao,
+            "form": form,
+            "formset": formset,
+            "titulo": f"Editar Questão Q{questao.pk}",
+            "questao": questao,
         },
     )
 
@@ -213,20 +230,23 @@ def questao_toggle_ativo(request, pk):
     A mudança é registrada no histórico do django-simple-history com o usuário
     que executou a ação.
     """
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
 
     questao = get_object_or_404(Questao, pk=pk)
     questao.ativo = not questao.ativo
     questao._history_user = request.user
-    questao.save(update_fields=['ativo', 'atualizado_em'])
+    questao.save(update_fields=["ativo", "atualizado_em"])
 
     if questao.ativo:
-        messages.success(request, f'Questão Q{questao.pk} reativada com sucesso.')
+        messages.success(request, f"Questão Q{questao.pk} reativada com sucesso.")
     else:
-        messages.success(request, f'Questão Q{questao.pk} inativada. O registro foi preservado no acervo.')
+        messages.success(
+            request,
+            f"Questão Q{questao.pk} inativada. O registro foi preservado no acervo.",
+        )
 
-    return redirect('banco_questoes:questao_list')
+    return redirect("banco_questoes:questao_list")
 
 
 # ---------------------------------------------------------------------------
@@ -241,32 +261,34 @@ def download_modelo_csv(request):
     Caso existam filtros na requisição GET, exporta o conjunto filtrado.
     Se não houver questões cadastradas, gera registros modelo estilo ENADE/POSCOMP.
     """
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = 'attachment; filename="acervo_questoes_faeterj.csv"'
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = (
+        'attachment; filename="acervo_questoes_faeterj.csv"'
+    )
 
     # BOM UTF-8 para compatibilidade direta com Microsoft Excel em PT-BR
-    response.write('\ufeff')
+    response.write("\ufeff")
 
     writer = csv.writer(response)
     writer.writerow(
         [
-            'origem',
-            'questao',
-            'enunciado',
-            'opcao_a',
-            'opcao_b',
-            'opcao_c',
-            'opcao_d',
-            'opcao_e',
-            'gabarito',
-            'comentarios',
+            "origem",
+            "questao",
+            "enunciado",
+            "opcao_a",
+            "opcao_b",
+            "opcao_c",
+            "opcao_d",
+            "opcao_e",
+            "gabarito",
+            "comentarios",
         ]
     )
 
     base_qs = (
-        Questao.objects.select_related('disciplina', 'topico')
-        .prefetch_related('tags', 'alternativas')
-        .order_by('-criado_em')
+        Questao.objects.select_related("disciplina", "topico")
+        .prefetch_related("tags", "alternativas")
+        .order_by("-criado_em")
     )
 
     # Aplica filtros se houver parâmetros GET
@@ -279,50 +301,52 @@ def download_modelo_csv(request):
     if questoes.exists():
         for q in questoes:
             alt_map = {alt.letra: alt.texto for alt in q.alternativas.all()}
-            correta_letra = next((alt.letra for alt in q.alternativas.all() if alt.correta), '')
+            correta_letra = next(
+                (alt.letra for alt in q.alternativas.all() if alt.correta), ""
+            )
 
             writer.writerow(
                 [
-                    q.origem or '',
-                    q.numero_questao or '',
+                    q.origem or "",
+                    q.numero_questao or "",
                     q.enunciado,
-                    alt_map.get('A', ''),
-                    alt_map.get('B', ''),
-                    alt_map.get('C', ''),
-                    alt_map.get('D', ''),
-                    alt_map.get('E', ''),
+                    alt_map.get("A", ""),
+                    alt_map.get("B", ""),
+                    alt_map.get("C", ""),
+                    alt_map.get("D", ""),
+                    alt_map.get("E", ""),
                     correta_letra,
-                    q.criterios_correcao or '',
+                    q.criterios_correcao or "",
                 ]
             )
     else:
         # Exemplos modelo no estilo ENADE / POSCOMP
         writer.writerow(
             [
-                'ENADE ADS 2021',
-                '26',
-                'Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.',
-                'O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.',
-                'O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.',
-                'O processo de resolução de nomes pode envolver consultas recursivas e iterativas.',
-                'O DNS não suporta balanceamento de carga entre servidores.',
-                'Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.',
-                'C',
-                'A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).',
+                "ENADE ADS 2021",
+                "26",
+                "Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.",
+                "O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.",
+                "O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.",
+                "O processo de resolução de nomes pode envolver consultas recursivas e iterativas.",
+                "O DNS não suporta balanceamento de carga entre servidores.",
+                "Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.",
+                "C",
+                "A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).",
             ]
         )
         writer.writerow(
             [
-                'POSCOMP 2025',
-                '15',
+                "POSCOMP 2025",
+                "15",
                 'Considere o seguinte trecho de código em C:\n\nint x = 5;\nint y = ++x + x++;\nprintf("%d %d", x, y);\n\nQual será a saída do programa?',
-                '7 12',
-                '7 13',
-                '6 12',
-                '7 11',
-                '6 11',
-                'A',
-                'O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.',
+                "7 12",
+                "7 13",
+                "6 12",
+                "7 11",
+                "6 11",
+                "A",
+                "O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.",
             ]
         )
 
@@ -348,32 +372,34 @@ def download_modelo_xlsx(request):
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = 'Acervo de Questões'
+    ws.title = "Acervo de Questões"
 
     headers = [
-        'origem',
-        'questao',
-        'enunciado',
-        'opcao_a',
-        'opcao_b',
-        'opcao_c',
-        'opcao_d',
-        'opcao_e',
-        'gabarito',
-        'comentarios',
+        "origem",
+        "questao",
+        "enunciado",
+        "opcao_a",
+        "opcao_b",
+        "opcao_c",
+        "opcao_d",
+        "opcao_e",
+        "gabarito",
+        "comentarios",
     ]
     ws.append(headers)
 
     # Estilos para cabeçalho
-    header_font = Font(name='Segoe UI', size=11, bold=True, color='FFFFFF')
-    header_fill = PatternFill(start_color='002B49', end_color='002B49', fill_type='solid')
-    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(
+        start_color="002B49", end_color="002B49", fill_type="solid"
+    )
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     thin_border = Border(
-        left=Side(style='thin', color='D0D5DD'),
-        right=Side(style='thin', color='D0D5DD'),
-        top=Side(style='thin', color='D0D5DD'),
-        bottom=Side(style='thin', color='D0D5DD'),
+        left=Side(style="thin", color="D0D5DD"),
+        right=Side(style="thin", color="D0D5DD"),
+        top=Side(style="thin", color="D0D5DD"),
+        bottom=Side(style="thin", color="D0D5DD"),
     )
 
     ws.row_dimensions[1].height = 26
@@ -385,9 +411,9 @@ def download_modelo_xlsx(request):
         cell.border = thin_border
 
     base_qs = (
-        Questao.objects.select_related('disciplina', 'topico')
-        .prefetch_related('tags', 'alternativas')
-        .order_by('-criado_em')
+        Questao.objects.select_related("disciplina", "topico")
+        .prefetch_related("tags", "alternativas")
+        .order_by("-criado_em")
     )
 
     # Aplica filtros se houver parâmetros GET
@@ -397,56 +423,58 @@ def download_modelo_xlsx(request):
     else:
         questoes = base_qs
 
-    data_font = Font(name='Segoe UI', size=10)
-    data_align_left = Alignment(horizontal='left', vertical='top', wrap_text=True)
-    data_align_center = Alignment(horizontal='center', vertical='top', wrap_text=True)
+    data_font = Font(name="Segoe UI", size=10)
+    data_align_left = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    data_align_center = Alignment(horizontal="center", vertical="top", wrap_text=True)
 
     if questoes.exists():
         for q in questoes:
             alt_map = {alt.letra: alt.texto for alt in q.alternativas.all()}
-            correta_letra = next((alt.letra for alt in q.alternativas.all() if alt.correta), '')
+            correta_letra = next(
+                (alt.letra for alt in q.alternativas.all() if alt.correta), ""
+            )
 
             row_data = [
-                q.origem or '',
-                q.numero_questao or '',
+                q.origem or "",
+                q.numero_questao or "",
                 q.enunciado,
-                alt_map.get('A', ''),
-                alt_map.get('B', ''),
-                alt_map.get('C', ''),
-                alt_map.get('D', ''),
-                alt_map.get('E', ''),
+                alt_map.get("A", ""),
+                alt_map.get("B", ""),
+                alt_map.get("C", ""),
+                alt_map.get("D", ""),
+                alt_map.get("E", ""),
                 correta_letra,
-                q.criterios_correcao or '',
+                q.criterios_correcao or "",
             ]
             ws.append(row_data)
     else:
         # Exemplos modelo no estilo ENADE / POSCOMP
         ws.append(
             [
-                'ENADE ADS 2021',
-                '26',
-                'Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.',
-                'O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.',
-                'O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.',
-                'O processo de resolução de nomes pode envolver consultas recursivas e iterativas.',
-                'O DNS não suporta balanceamento de carga entre servidores.',
-                'Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.',
-                'C',
-                'A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).',
+                "ENADE ADS 2021",
+                "26",
+                "Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.",
+                "O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.",
+                "O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.",
+                "O processo de resolução de nomes pode envolver consultas recursivas e iterativas.",
+                "O DNS não suporta balanceamento de carga entre servidores.",
+                "Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.",
+                "C",
+                "A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).",
             ]
         )
         ws.append(
             [
-                'POSCOMP 2025',
-                '15',
+                "POSCOMP 2025",
+                "15",
                 'Considere o seguinte trecho de código em C:\n\nint x = 5;\nint y = ++x + x++;\nprintf("%d %d", x, y);\n\nQual será a saída do programa?',
-                '7 12',
-                '7 13',
-                '6 12',
-                '7 11',
-                '6 11',
-                'A',
-                'O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.',
+                "7 12",
+                "7 13",
+                "6 12",
+                "7 11",
+                "6 11",
+                "A",
+                "O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.",
             ]
         )
 
@@ -465,16 +493,16 @@ def download_modelo_xlsx(request):
 
     # Configuração de larguras de colunas personalizadas para excelente legibilidade
     col_widths = {
-        'A': 18,  # origem
-        'B': 12,  # questao
-        'C': 50,  # enunciado
-        'D': 35,  # opcao_a
-        'E': 35,  # opcao_b
-        'F': 35,  # opcao_c
-        'G': 35,  # opcao_d
-        'H': 35,  # opcao_e
-        'I': 12,  # gabarito
-        'J': 45,  # comentarios
+        "A": 18,  # origem
+        "B": 12,  # questao
+        "C": 50,  # enunciado
+        "D": 35,  # opcao_a
+        "E": 35,  # opcao_b
+        "F": 35,  # opcao_c
+        "G": 35,  # opcao_d
+        "H": 35,  # opcao_e
+        "I": 12,  # gabarito
+        "J": 45,  # comentarios
     }
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
@@ -485,9 +513,11 @@ def download_modelo_xlsx(request):
 
     response = HttpResponse(
         output.getvalue(),
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    response['Content-Disposition'] = 'attachment; filename="acervo_questoes_faeterj.xlsx"'
+    response["Content-Disposition"] = (
+        'attachment; filename="acervo_questoes_faeterj.xlsx"'
+    )
     return response
 
 
@@ -500,68 +530,74 @@ def questao_import(request):
     """View para upload de planilhas Excel (.xlsx) ou arquivos CSV, commit e relatório de inconsistências."""
     relatorio = None
 
-    if request.method == 'POST':
+    if request.method == "POST":
         upload_form = CSVUploadForm(request.POST, request.FILES)
 
         if not upload_form.is_valid():
             # Mensagem de erro vinda de clean_arquivo() (extensão, tamanho, magic bytes)
-            for error in upload_form.errors.get('arquivo', []):
+            for error in upload_form.errors.get("arquivo", []):
                 messages.error(request, error)
             return render(
                 request,
-                'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': upload_form},
+                "banco_questoes/questao_import.html",
+                {"titulo": "Importação em Lote", "upload_form": upload_form},
             )
 
-        arquivo = upload_form.cleaned_data['arquivo']
+        arquivo = upload_form.cleaned_data["arquivo"]
 
         try:
-            relatorio = CSVImportService.import_file(arquivo, filename=arquivo.name, autor=request.user)
+            relatorio = CSVImportService.import_file(
+                arquivo, filename=arquivo.name, autor=request.user
+            )
         except CSVParseError as err:
-            logger.warning('Erro de formato durante importação: %s', err)
-            messages.error(request, f'Erro ao ler o arquivo: {err}')
+            logger.warning("Erro de formato durante importação: %s", err)
+            messages.error(request, f"Erro ao ler o arquivo: {err}")
             return render(
                 request,
-                'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+                "banco_questoes/questao_import.html",
+                {"titulo": "Importação em Lote", "upload_form": CSVUploadForm()},
             )
         except Exception as exc:
-            logger.exception('Erro inesperado durante importação: %s', exc)
-            messages.error(request, f'Ocorreu um erro interno durante o processamento: {exc}')
+            logger.exception("Erro inesperado durante importação: %s", exc)
+            messages.error(
+                request, f"Ocorreu um erro interno durante o processamento: {exc}"
+            )
             return render(
                 request,
-                'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+                "banco_questoes/questao_import.html",
+                {"titulo": "Importação em Lote", "upload_form": CSVUploadForm()},
             )
 
         if relatorio.total_processadas == 0:
-            messages.warning(request, 'O arquivo enviado não contém linhas de dados para importação.')
+            messages.warning(
+                request, "O arquivo enviado não contém linhas de dados para importação."
+            )
             return render(
                 request,
-                'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+                "banco_questoes/questao_import.html",
+                {"titulo": "Importação em Lote", "upload_form": CSVUploadForm()},
             )
 
         if relatorio.total_sucesso > 0:
             messages.success(
                 request,
-                f'Importação concluída: {relatorio.total_sucesso} questão(ões) importada(s) e comitadas no acervo.',
+                f"Importação concluída: {relatorio.total_sucesso} questão(ões) importada(s) e comitadas no acervo.",
             )
         if relatorio.total_rejeitadas > 0:
             messages.warning(
                 request,
-                f'Atenção: {relatorio.total_rejeitadas} questão(ões) foram rejeitadas devido a inconsistências/duplicidade.',
+                f"Atenção: {relatorio.total_rejeitadas} questão(ões) foram rejeitadas devido a inconsistências/duplicidade.",
             )
     else:
         upload_form = CSVUploadForm()
 
     return render(
         request,
-        'banco_questoes/questao_import.html',
+        "banco_questoes/questao_import.html",
         {
-            'relatorio': relatorio,
-            'titulo': 'Importação em Lote de Questões',
-            'upload_form': upload_form,
+            "relatorio": relatorio,
+            "titulo": "Importação em Lote de Questões",
+            "upload_form": upload_form,
         },
     )
 
@@ -573,37 +609,37 @@ def questao_import(request):
 # Campos internos do simple_history que não devem aparecer no diff
 _HISTORY_META_FIELDS = frozenset(
     [
-        'history_date',
-        'history_change_reason',
-        'history_user',
-        'history_user_id',
-        'history_type',
-        'history_id',
-        'atualizado_em',
+        "history_date",
+        "history_change_reason",
+        "history_user",
+        "history_user_id",
+        "history_type",
+        "history_id",
+        "atualizado_em",
     ]
 )
 
 # Mapeamento de nomes de campo técnicos → rótulos legíveis em português
 _FIELD_LABELS = {
-    'tipo': 'Tipo',
-    'dificuldade': 'Dificuldade',
-    'disciplina_id': 'Disciplina',
-    'topico_id': 'Tópico',
-    'origem': 'Origem / Exame',
-    'numero_questao': 'Nº da Questão',
-    'texto_auxiliar': 'Texto Auxiliar',
-    'imagem': 'Imagem de Apoio',
-    'enunciado': 'Enunciado',
-    'criterios_correcao': 'Critérios de Correção',
-    'ativo': 'Status (Ativo)',
-    'autor_id': 'Autor',
+    "tipo": "Tipo",
+    "dificuldade": "Dificuldade",
+    "disciplina_id": "Disciplina",
+    "topico_id": "Tópico",
+    "origem": "Origem / Exame",
+    "numero_questao": "Nº da Questão",
+    "texto_auxiliar": "Texto Auxiliar",
+    "imagem": "Imagem de Apoio",
+    "enunciado": "Enunciado",
+    "criterios_correcao": "Critérios de Correção",
+    "ativo": "Status (Ativo)",
+    "autor_id": "Autor",
 }
 
 # Rótulos legíveis para o tipo de ação do simple_history
 _ACTION_LABELS = {
-    '+': ('Criação', 'history-action-create'),
-    '~': ('Edição', 'history-action-edit'),
-    '-': ('Exclusão', 'history-action-delete'),
+    "+": ("Criação", "history-action-create"),
+    "~": ("Edição", "history-action-edit"),
+    "-": ("Exclusão", "history-action-delete"),
 }
 
 
@@ -616,14 +652,16 @@ def questao_history(request, pk):
     quem realizou a alteração e quando.
     """
     questao = get_object_or_404(Questao, pk=pk)
-    registros = questao.history.all().order_by('-history_date')
+    registros = questao.history.all().order_by("-history_date")
 
     versoes = []
     registros_list = list(registros)
 
     for idx, record in enumerate(registros_list):
         autor = record.history_user
-        action_label, action_css = _ACTION_LABELS.get(record.history_type, ('Alteração', 'history-action-edit'))
+        action_label, action_css = _ACTION_LABELS.get(
+            record.history_type, ("Alteração", "history-action-edit")
+        )
 
         diffs = []
 
@@ -636,10 +674,10 @@ def questao_history(request, pk):
                     continue
                 diffs.append(
                     {
-                        'campo': _FIELD_LABELS.get(change.field, change.field),
-                        'campo_raw': change.field,
-                        'old': change.old,
-                        'new': change.new,
+                        "campo": _FIELD_LABELS.get(change.field, change.field),
+                        "campo_raw": change.field,
+                        "old": change.old,
+                        "new": change.new,
                     }
                 )
         else:
@@ -649,37 +687,39 @@ def questao_history(request, pk):
                     value = getattr(record, field_name, None)
                 except Exception:
                     value = None
-                if value not in (None, '', False):
+                if value not in (None, "", False):
                     diffs.append(
                         {
-                            'campo': label,
-                            'campo_raw': field_name,
-                            'old': None,
-                            'new': value,
+                            "campo": label,
+                            "campo_raw": field_name,
+                            "old": None,
+                            "new": value,
                         }
                     )
 
         versoes.append(
             {
-                'record': record,
-                'diffs': diffs,
-                'autor': autor,
-                'data': record.history_date,
-                'action_label': action_label,
-                'action_css': action_css,
-                'is_creation': idx == len(registros_list) - 1,
+                "record": record,
+                "diffs": diffs,
+                "autor": autor,
+                "data": record.history_date,
+                "action_label": action_label,
+                "action_css": action_css,
+                "is_creation": idx == len(registros_list) - 1,
             }
         )
 
-    logger.debug('Histórico da questão Q%s: %d versão(ões) carregada(s).', pk, len(versoes))
+    logger.debug(
+        "Histórico da questão Q%s: %d versão(ões) carregada(s).", pk, len(versoes)
+    )
 
     return render(
         request,
-        'banco_questoes/questao_history.html',
+        "banco_questoes/questao_history.html",
         {
-            'questao': questao,
-            'versoes': versoes,
-            'titulo': f'Histórico — Q{questao.pk}',
+            "questao": questao,
+            "versoes": versoes,
+            "titulo": f"Histórico — Q{questao.pk}",
         },
     )
 
@@ -690,21 +730,20 @@ def questao_history(request, pk):
 @login_required
 def api_topicos_por_disciplina(request):
     """Retorna JSON com tópicos ativos de uma disciplina específica."""
-    disciplina_id = request.GET.get('disciplina_id')
+    disciplina_id = request.GET.get("disciplina_id")
     if not disciplina_id:
-        return JsonResponse({'topicos': []})
+        return JsonResponse({"topicos": []})
 
     disciplina = get_object_or_404(Disciplina, pk=disciplina_id, ativo=True)
     topicos = list(
         Topico.objects.filter(disciplina=disciplina, ativo=True)
-        .values('id', 'nome')
-        .order_by('nome')
+        .values("id", "nome")
+        .order_by("nome")
     )
     return JsonResponse(
         {
-            'disciplina_id': disciplina.pk,
-            'disciplina_nome': disciplina.nome,
-            'topicos': topicos,
+            "disciplina_id": disciplina.pk,
+            "disciplina_nome": disciplina.nome,
+            "topicos": topicos,
         }
     )
-

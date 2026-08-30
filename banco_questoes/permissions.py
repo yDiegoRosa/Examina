@@ -13,9 +13,9 @@ def is_docente_ou_coordenador(user):
         return False
     if user.is_superuser:
         return True
-    return user.groups.filter(name__in=['Docente', 'Coordenador']).exists() or user.has_perm(
-        'banco_questoes.add_questao'
-    )
+    return user.groups.filter(
+        name__in=["Docente", "Coordenador"]
+    ).exists() or user.has_perm("banco_questoes.add_questao")
 
 
 def can_change_questao(user):
@@ -24,9 +24,9 @@ def can_change_questao(user):
         return False
     if user.is_superuser:
         return True
-    return user.groups.filter(name__in=['Docente', 'Coordenador']).exists() or user.has_perm(
-        'banco_questoes.change_questao'
-    )
+    return user.groups.filter(
+        name__in=["Docente", "Coordenador"]
+    ).exists() or user.has_perm("banco_questoes.change_questao")
 
 
 class DocenteOuCoordenadorRequiredMixin(UserPassesTestMixin):
@@ -50,10 +50,11 @@ def docente_ou_coordenador_required(view_func):
 
             return redirect_to_login(request.get_full_path())
         if not is_docente_ou_coordenador(request.user):
-            raise PermissionDenied('Acesso restrito a docentes e coordenadores.')
+            raise PermissionDenied("Acesso restrito a docentes e coordenadores.")
         return view_func(request, *args, **kwargs)
 
     return _wrapped_view
+
 
 def pode_editar_questao_required(view_func):
     """Decorator para Function-Based Views exigindo permissão de edição de questão."""
@@ -64,7 +65,7 @@ def pode_editar_questao_required(view_func):
 
             return redirect_to_login(request.get_full_path())
         if not can_change_questao(request.user):
-            raise PermissionDenied('Acesso restrito a quem pode editar questões.')
+            raise PermissionDenied("Acesso restrito a quem pode editar questões.")
         return view_func(request, *args, **kwargs)
 
     return _wrapped_view

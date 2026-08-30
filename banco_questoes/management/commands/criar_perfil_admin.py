@@ -7,12 +7,14 @@ class Command(BaseCommand):
     help = 'Cria o grupo "Administrador" com todas as permissões do app banco_questoes.'
 
     def handle(self, *args, **options):
-        grupo, criado = Group.objects.get_or_create(name='Administrador')
+        grupo, criado = Group.objects.get_or_create(name="Administrador")
 
-        permissoes = Permission.objects.filter(content_type__app_label='banco_questoes')
+        permissoes = Permission.objects.filter(content_type__app_label="banco_questoes")
         grupo.permissions.set(permissoes)
 
-        self.stdout.write(self.style.SUCCESS(
-            f'Grupo "Administrador" {"criado" if criado else "atualizado"} '
-            f'com {permissoes.count()} permissão(ões).'
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Grupo "Administrador" {"criado" if criado else "atualizado"} '
+                f"com {permissoes.count()} permissão(ões)."
+            )
+        )
