@@ -20,7 +20,6 @@ urlpatterns = [
     path('provas/<int:pk>/pdf/', views.prova_pdf, name='prova_pdf'),
     path('provas/<int:pk>/gabarito-pdf/', views.prova_gabarito_pdf, name='prova_gabarito_pdf'),
     path('provas/<int:pk>/gerar-versoes/', views.prova_gerar_versoes_view, name='prova_gerar_versoes'),
-    path('provas/<int:pk>/pacote-zip/', views.prova_pacote_zip, name='prova_pacote_zip'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),
     path('itens/<int:item_pk>/substituir/', views.item_substituir_questao, name='item_substituir_questao'),
     # AJAX / APIs

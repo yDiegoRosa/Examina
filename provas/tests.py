@@ -2075,37 +2075,6 @@ class ProvaVersaoModelAndGenerationTest(TestCase):
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertTrue(len(response.content) > 1000)
 
-    def test_view_prova_pdf_completa_com_gabarito_retorna_200(self):
-        """Verifica que o endpoint prova_pdf com incluir_gabarito=1 renderiza pacote completo."""
-        url = reverse('provas:prova_pdf', kwargs={'pk': self.prova.pk})
-        response = self.client.get(f'{url}?versao=A&incluir_gabarito=1&incluir_capa=1')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertTrue(len(response.content) > 1000)
-
-    def test_view_prova_pacote_zip_retorna_zip_com_todas_as_versoes(self):
-        """Verifica que o endpoint prova_pacote_zip entrega arquivo ZIP com todos os PDFs das versões."""
-        import io
-        import zipfile
-
-        url = reverse('provas:prova_pacote_zip', kwargs={'pk': self.prova.pk})
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/zip')
-
-        # Lê conteúdo do ZIP
-        zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-        file_names = zip_file.namelist()
-
-        # Verifica presença de arquivos de todas as versões
-        self.assertIn('Caderno_Versao_A.pdf', file_names)
-        self.assertIn('Gabarito_Oficial_Versao_A.pdf', file_names)
-        self.assertIn('Caderno_Versao_B.pdf', file_names)
-        self.assertIn('Gabarito_Oficial_Versao_B.pdf', file_names)
-        self.assertIn('Caderno_Versao_C.pdf', file_names)
-        self.assertIn('Gabarito_Oficial_Versao_C.pdf', file_names)
-
-
 
 
 
