@@ -1188,3 +1188,190 @@ def prova_gabarito_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
+
+
+# ---------------------------------------------------------------------------
+# Download do Pacote Completo ZIP (Todas as Versões A, B, C + Gabaritos)
+# ---------------------------------------------------------------------------
+@login_required
+def prova_pacote_zip(request, pk):
+    """
+    Gera dinamicamente e entrega em arquivo ZIP todos os cadernos de prova
+    e gabaritos oficiais correspondentes para todas as versões geradas (A, B, C...).
+    """
+    import io
+    import zipfile
+
+    prova = get_object_or_404(
+        Prova.objects.select_related(
+            'mascara',
+            'mascara__disciplina',
+            'disciplina',
+            'autor',
+        ),
+        pk=pk,
+    )
+
+    versoes = list(prova.versoes.prefetch_related('itens').order_by('numero_versao'))
+    if not versoes and prova.itens.exists():
+        from provas.services.version_generator import gerar_versoes_prova
+
+        versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=3)
+
+    disciplina = prova.disciplina_efetiva
+    mascara = prova.mascara
+    snap = prova.snapshot_mascara or {}
+
+    valor_total = None
+    tempo_minutos = None
+    modalidade = None
+
+    if mascara:
+        valor_total = mascara.valor_total
+        tempo_minutos = mascara.tempo_estimado_minutos
+        modalidade = mascara.get_modalidade_display()
+    elif snap:
+        valor_total = snap.get('valor_total')
+        tempo_minutos = snap.get('tempo_estimado_minutos')
+        modalidade_code = snap.get('modalidade', '')
+        _modalidade_map = {
+            'OBJ': 'Somente Objetivas',
+            'DIS': 'Somente Discursivas',
+            'MISTA': 'Mista (Objetivas e Discursivas)',
+        }
+        modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
+
+    docente_nome = None
+    if prova.autor:
+        docente_nome = prova.autor.get_full_name() or prova.autor.username
+
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for versao in versoes:
+            itens_versao_qs = (
+                versao.itens
+                .select_related(
+                    'prova_questao__questao',
+                    'prova_questao__questao__topico',
+                    'prova_questao__questao__disciplina',
+                )
+                .order_by('ordem')
+            )
+
+            itens_render = []
+            resumo_itens = []
+            itens_detalhados = []
+
+            for iv in itens_versao_qs:
+                q = iv.prova_questao.questao
+                snap_q = iv.prova_questao.snapshot_questao or {}
+                tipo = snap_q.get('tipo') or q.tipo
+                tipo_display = snap_q.get('tipo_display') or q.get_tipo_display()
+                topico_nome = snap_q.get('topico_nome') or (q.topico.nome if q.topico else '')
+                origem = snap_q.get('origem') or q.origem
+                origem_numero = snap_q.get('numero_questao') or q.numero_questao
+                dificuldade_display = snap_q.get('dificuldade_display') or q.get_dificuldade_display()
+                enunciado = snap_q.get('enunciado') or q.enunciado
+                criterios_correcao = snap_q.get('criterios_correcao') or q.criterios_correcao
+
+                letra_correta = ''
+                alternativas_lista = list(iv.alternativas_embaralhadas)
+                if tipo == 'OBJ':
+                    for alt in alternativas_lista:
+                        if alt.get('correta'):
+                            letra_correta = alt.get('letra', '')
+                            break
+                else:
+                    letra_correta = 'DIS'
+
+                itens_render.append({
+                    'numero': iv.numero,
+                    'ordem': iv.ordem,
+                    'pontuacao': iv.pontuacao,
+                    'questao': q,
+                    'snapshot_questao': snap_q,
+                    'alternativas_versao': alternativas_lista,
+                })
+
+                resumo_itens.append({
+                    'numero': iv.numero,
+                    'tipo': tipo,
+                    'letra_correta': letra_correta,
+                    'pontuacao': iv.pontuacao,
+                })
+
+                itens_detalhados.append({
+                    'numero': iv.numero,
+                    'tipo': tipo,
+                    'tipo_display': tipo_display,
+                    'pontuacao': iv.pontuacao,
+                    'topico_nome': topico_nome,
+                    'origem': origem,
+                    'origem_numero': origem_numero,
+                    'dificuldade_display': dificuldade_display,
+                    'enunciado': enunciado,
+                    'letra_correta': letra_correta,
+                    'alternativas': alternativas_lista,
+                    'criterios_correcao': criterios_correcao,
+                })
+
+            identificador_display = f'Versão {versao.identificador}'
+
+            context_prova = {
+                'prova': prova,
+                'versao': versao,
+                'identificador_display': identificador_display,
+                'itens': itens_render,
+                'itens_render': itens_render,
+                'disciplina_nome': disciplina.nome if disciplina else None,
+                'docente_nome': docente_nome,
+                'turma': snap.get('turma') or request.GET.get('turma') or '',
+                'turno': snap.get('turno') or request.GET.get('turno') or '',
+                'data_aplicacao': request.GET.get('data') or '',
+                'valor_total': valor_total,
+                'tempo_minutos': tempo_minutos,
+                'modalidade': modalidade,
+                'total_questoes': len(itens_render),
+                'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
+                'incluir_capa': True,
+                'incluir_gabarito': False,
+            }
+
+            context_gabarito = {
+                'prova': prova,
+                'versao': versao,
+                'identificador_display': identificador_display,
+                'disciplina_nome': disciplina.nome if disciplina else None,
+                'docente_nome': docente_nome,
+                'turma': snap.get('turma') or request.GET.get('turma') or '',
+                'turno': snap.get('turno') or request.GET.get('turno') or '',
+                'data_aplicacao': request.GET.get('data') or '',
+                'valor_total': valor_total,
+                'modalidade': modalidade,
+                'total_questoes': len(resumo_itens),
+                'resumo_itens': resumo_itens,
+                'itens_detalhados': itens_detalhados,
+            }
+
+            try:
+                pdf_prova = PDFGeneratorService.render_pdf_from_template(
+                    template_name='provas/pdf_prova_completa.html',
+                    context=context_prova,
+                )
+                zf.writestr(f'Caderno_Versao_{versao.identificador}.pdf', pdf_prova)
+
+                pdf_gabarito = PDFGeneratorService.render_pdf_from_template(
+                    template_name='provas/pdf_gabarito_versao.html',
+                    context=context_gabarito,
+                )
+                zf.writestr(f'Gabarito_Oficial_Versao_{versao.identificador}.pdf', pdf_gabarito)
+            except Exception as exc:
+                logger.error('Erro ao empacotar PDFs da versão %s no ZIP: %s', versao.identificador, exc, exc_info=True)
+
+    zip_buffer.seek(0)
+    filename = f'pacote_avaliacao_{prova.pk}_todas_versoes.zip'
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
