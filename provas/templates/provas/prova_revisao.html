@@ -29,28 +29,27 @@
       <i class="bi bi-arrow-left"></i> Voltar ao Painel
     </a>
     {% endif %}
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}"
+    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao=A"
        target="_blank"
        rel="noopener"
        class="btn flex items-center gap-2"
        style="background: #002B49; color: #FFFFFF;"
-       title="Gera o PDF completo da avaliação com capa e questões formatadas">
-      <i class="bi bi-printer-fill"></i> Imprimir Prova Completa
+       title="Gera o PDF da Versão A com capa e questões formatadas">
+      <i class="bi bi-printer-fill"></i> Imprimir Versão A
     </a>
-    <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}"
+    <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao=A"
        target="_blank"
        rel="noopener"
        class="btn flex items-center gap-2"
        style="background: #065F46; color: #FFFFFF;"
-       title="Gera o Gabarito Oficial e Critérios de Correção específicos para este caderno">
-      <i class="bi bi-file-earmark-check-fill"></i> Gabarito Oficial (Caderno {{ prova.numero_caderno }})
+       title="Gera o Gabarito Oficial da Versão A">
+      <i class="bi bi-file-earmark-check-fill"></i> Gabarito Versão A
     </a>
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?incluir_capa=0"
-       target="_blank"
-       rel="noopener"
-       class="btn btn-outline flex items-center gap-2"
-       title="Gera apenas as folhas de questões com cabeçalho compacto">
-      <i class="bi bi-file-earmark-text"></i> Caderno de Questões
+    <a href="{% url 'provas:prova_pacote_zip' pk=prova.pk %}"
+       class="btn flex items-center gap-2"
+       style="background: #D97706; color: #FFFFFF;"
+       title="Baixa um arquivo compactado ZIP contendo os cadernos e gabaritos de todas as versões geradas (A, B, C...)">
+      <i class="bi bi-file-earmark-zip-fill"></i> Baixar Pacote ZIP (Todas as Versões)
     </a>
     <a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}"
        target="_blank"
