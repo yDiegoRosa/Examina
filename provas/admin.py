@@ -64,4 +64,3 @@ class ProvaAdmin(admin.ModelAdmin):
     list_filter = ['mascara__disciplina', 'criado_em']
     search_fields = ['titulo', 'mascara__titulo']
     inlines = [ProvaQuestaoInline]
-

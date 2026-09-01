@@ -150,9 +150,7 @@ class MascaraCriterioTopicoForm(forms.ModelForm):
             disciplina = getattr(self.instance.mascara, 'disciplina', None)
 
         if disciplina:
-            self.fields['topico'].queryset = Topico.objects.filter(
-                disciplina=disciplina, ativo=True
-            ).order_by('nome')
+            self.fields['topico'].queryset = Topico.objects.filter(disciplina=disciplina, ativo=True).order_by('nome')
         else:
             self.fields['topico'].queryset = Topico.objects.filter(ativo=True).order_by('nome')
 
@@ -213,7 +211,11 @@ class BaseMascaraCriterioTopicoFormSet(forms.BaseInlineFormSet):
                 active_forms += 1
 
         if active_forms > 0 and total_percentual != 100:
-            diff_str = f'faltam {100 - total_percentual}%' if total_percentual < 100 else f'excede em {total_percentual - 100}%'
+            diff_str = (
+                f'faltam {100 - total_percentual}%'
+                if total_percentual < 100
+                else f'excede em {total_percentual - 100}%'
+            )
             raise forms.ValidationError(
                 f'A soma dos percentuais dos tópicos selecionados deve ser exatamente 100% (atual: {total_percentual}% — {diff_str}).'
             )
@@ -287,4 +289,3 @@ class ProvaManualForm(forms.Form):
             },
         ),
     )
-

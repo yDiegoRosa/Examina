@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('banco_questoes', '0007_add_origem_numero_questao'),
         ('provas', '0002_rename_historicalmascaraprova_historicalmascara_and_more'),
@@ -26,10 +25,43 @@ class Migration(migrations.Migration):
                 ('history_id', models.AutoField(primary_key=True, serialize=False)),
                 ('history_date', models.DateTimeField(db_index=True)),
                 ('history_change_reason', models.CharField(max_length=100, null=True)),
-                ('history_type', models.CharField(choices=[('+', 'Created'), ('~', 'Changed'), ('-', 'Deleted')], max_length=1)),
-                ('autor', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='docente responsável')),
-                ('history_user', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL)),
-                ('mascara', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='provas.mascara', verbose_name='máscara de prova')),
+                (
+                    'history_type',
+                    models.CharField(choices=[('+', 'Created'), ('~', 'Changed'), ('-', 'Deleted')], max_length=1),
+                ),
+                (
+                    'autor',
+                    models.ForeignKey(
+                        blank=True,
+                        db_constraint=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name='+',
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name='docente responsável',
+                    ),
+                ),
+                (
+                    'history_user',
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='+',
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    'mascara',
+                    models.ForeignKey(
+                        blank=True,
+                        db_constraint=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name='+',
+                        to='provas.mascara',
+                        verbose_name='máscara de prova',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'historical prova gerada',
@@ -47,8 +79,26 @@ class Migration(migrations.Migration):
                 ('numero_caderno', models.PositiveIntegerField(default=1, verbose_name='número do caderno')),
                 ('criado_em', models.DateTimeField(auto_now_add=True, verbose_name='data de geração')),
                 ('atualizado_em', models.DateTimeField(auto_now=True)),
-                ('autor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='provas_geradas', to=settings.AUTH_USER_MODEL, verbose_name='docente responsável')),
-                ('mascara', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='provas_geradas', to='provas.mascara', verbose_name='máscara de prova')),
+                (
+                    'autor',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='provas_geradas',
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name='docente responsável',
+                    ),
+                ),
+                (
+                    'mascara',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='provas_geradas',
+                        to='provas.mascara',
+                        verbose_name='máscara de prova',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'prova gerada',
@@ -62,10 +112,31 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('numero', models.PositiveIntegerField(default=1, verbose_name='número da questão no exame')),
                 ('ordem', models.PositiveIntegerField(default=1, verbose_name='ordem de exibição')),
-                ('pontuacao', models.DecimalField(decimal_places=2, default=1.0, max_digits=5, verbose_name='pontuação da questão')),
+                (
+                    'pontuacao',
+                    models.DecimalField(
+                        decimal_places=2, default=1.0, max_digits=5, verbose_name='pontuação da questão'
+                    ),
+                ),
                 ('criado_em', models.DateTimeField(auto_now_add=True)),
-                ('prova', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='itens', to='provas.prova', verbose_name='prova')),
-                ('questao', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='utilizacoes_provas', to='banco_questoes.questao', verbose_name='questão')),
+                (
+                    'prova',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='itens',
+                        to='provas.prova',
+                        verbose_name='prova',
+                    ),
+                ),
+                (
+                    'questao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='utilizacoes_provas',
+                        to='banco_questoes.questao',
+                        verbose_name='questão',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'questão da prova',
@@ -77,6 +148,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='prova',
             name='questoes',
-            field=models.ManyToManyField(related_name='provas', through='provas.ProvaQuestao', to='banco_questoes.questao', verbose_name='questões da prova'),
+            field=models.ManyToManyField(
+                related_name='provas',
+                through='provas.ProvaQuestao',
+                to='banco_questoes.questao',
+                verbose_name='questões da prova',
+            ),
         ),
     ]

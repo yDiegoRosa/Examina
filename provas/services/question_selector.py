@@ -254,5 +254,3 @@ def gerar_prova_automatizada(
         gerar_versoes_prova(prova=prova, quantidade_versoes=3)
 
     return prova
-
-

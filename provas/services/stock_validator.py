@@ -56,10 +56,7 @@ class RelatorioDiagnosticoEstoque:
             f'(demanda: {d.quantidade_necessaria}, estoque: {d.quantidade_disponivel})'
             for d in self.deficits
         )
-        return (
-            f'Estoque insuficiente no banco de questões para gerar a avaliação. '
-            f'Déficits identificados: {itens_str}.'
-        )
+        return f'Estoque insuficiente no banco de questões para gerar a avaliação. Déficits identificados: {itens_str}.'
 
 
 class EstoqueInsuficienteError(Exception):

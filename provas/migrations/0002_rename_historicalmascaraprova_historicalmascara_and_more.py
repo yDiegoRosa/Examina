@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('banco_questoes', '0007_add_origem_numero_questao'),
         ('provas', '0001_initial'),
@@ -27,10 +26,40 @@ class Migration(migrations.Migration):
             name='MascaraCriterioDificuldade',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('dificuldade', models.CharField(choices=[('F', 'Fácil'), ('M', 'Médio'), ('D', 'Difícil')], max_length=1, verbose_name='nível de dificuldade')),
-                ('percentual', models.PositiveIntegerField(default=0, help_text='Percentual da avaliação dedicado a este nível de dificuldade.', validators=[django.core.validators.MaxValueValidator(100)], verbose_name='% de dificuldade')),
-                ('quantidade_questoes', models.PositiveIntegerField(default=0, help_text='Número exato de questões calculadas para esta dificuldade.', verbose_name='quantidade calculada de questões')),
-                ('mascara', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='criterios_dificuldade', to='provas.mascara', verbose_name='máscara de prova')),
+                (
+                    'dificuldade',
+                    models.CharField(
+                        choices=[('F', 'Fácil'), ('M', 'Médio'), ('D', 'Difícil')],
+                        max_length=1,
+                        verbose_name='nível de dificuldade',
+                    ),
+                ),
+                (
+                    'percentual',
+                    models.PositiveIntegerField(
+                        default=0,
+                        help_text='Percentual da avaliação dedicado a este nível de dificuldade.',
+                        validators=[django.core.validators.MaxValueValidator(100)],
+                        verbose_name='% de dificuldade',
+                    ),
+                ),
+                (
+                    'quantidade_questoes',
+                    models.PositiveIntegerField(
+                        default=0,
+                        help_text='Número exato de questões calculadas para esta dificuldade.',
+                        verbose_name='quantidade calculada de questões',
+                    ),
+                ),
+                (
+                    'mascara',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='criterios_dificuldade',
+                        to='provas.mascara',
+                        verbose_name='máscara de prova',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'critério de dificuldade',
@@ -43,10 +72,41 @@ class Migration(migrations.Migration):
             name='MascaraCriterioTopico',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('percentual', models.PositiveIntegerField(default=0, help_text='Percentual da prova dedicado a este tópico.', validators=[django.core.validators.MaxValueValidator(100)], verbose_name='% do tópico')),
-                ('quantidade_questoes', models.PositiveIntegerField(default=0, help_text='Número de questões calculadas para este tópico.', verbose_name='quantidade estimada de questões')),
-                ('mascara', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='topicos_distribuicao', to='provas.mascara', verbose_name='máscara de prova')),
-                ('topico', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mascaras_criterio_topico', to='banco_questoes.topico', verbose_name='tópico curricular')),
+                (
+                    'percentual',
+                    models.PositiveIntegerField(
+                        default=0,
+                        help_text='Percentual da prova dedicado a este tópico.',
+                        validators=[django.core.validators.MaxValueValidator(100)],
+                        verbose_name='% do tópico',
+                    ),
+                ),
+                (
+                    'quantidade_questoes',
+                    models.PositiveIntegerField(
+                        default=0,
+                        help_text='Número de questões calculadas para este tópico.',
+                        verbose_name='quantidade estimada de questões',
+                    ),
+                ),
+                (
+                    'mascara',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='topicos_distribuicao',
+                        to='provas.mascara',
+                        verbose_name='máscara de prova',
+                    ),
+                ),
+                (
+                    'topico',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='mascaras_criterio_topico',
+                        to='banco_questoes.topico',
+                        verbose_name='tópico curricular',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'critério de tópico',

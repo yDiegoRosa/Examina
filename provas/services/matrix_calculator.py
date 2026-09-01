@@ -121,9 +121,7 @@ def calcular_metas_celulas(
     eh_distribuicao_livre = not topicos or len(topicos) == 0
 
     if eh_distribuicao_livre:
-        topicos_normalizados = [
-            {'id': None, 'nome': 'Sorteio Livre (Todos os Tópicos)', 'percentual': 100}
-        ]
+        topicos_normalizados = [{'id': None, 'nome': 'Sorteio Livre (Todos os Tópicos)', 'percentual': 100}]
     else:
         topicos_normalizados = [
             {
@@ -195,11 +193,7 @@ def calcular_metas_celulas(
 
     for topico in topicos_normalizados:
         top_id = topico['id']
-        linha_celulas = {
-            c.dificuldade: c
-            for c in celulas
-            if c.topico_id == top_id
-        }
+        linha_celulas = {c.dificuldade: c for c in celulas if c.topico_id == top_id}
         soma_linha = sum(c.quantidade for c in linha_celulas.values())
 
         linhas.append(

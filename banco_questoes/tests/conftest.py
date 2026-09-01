@@ -181,4 +181,4 @@ def csv_discursivo_valido():
 @pytest.fixture
 def csv_sem_enunciado():
     """CSV com coluna enunciado ausente (header inválido)."""
-    return 'origem,questao,opcao_a,opcao_b,gabarito\n' 'ENADE,1,Alt A,Alt B,A\n'
+    return 'origem,questao,opcao_a,opcao_b,gabarito\nENADE,1,Alt A,Alt B,A\n'

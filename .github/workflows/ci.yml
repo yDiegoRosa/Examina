@@ -35,7 +35,7 @@ jobs:
           cache: pip
 
       - name: Install Ruff
-        run: pip install "ruff>=0.5.0"
+        run: pip install "ruff==0.16.4"
 
       - name: Ruff lint
         run: ruff check . --output-format=github
@@ -58,7 +58,7 @@ jobs:
           cache: pip
 
       - name: Install Ruff
-        run: pip install "ruff>=0.5.0"
+        run: pip install "ruff==0.16.4"
 
       - name: Check formatting (Black-compatible)
         run: ruff format --check --diff .
@@ -96,7 +96,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          coverage run manage.py test --verbosity=2
+          coverage run -m pytest
           coverage report
           coverage xml -o coverage.xml
 

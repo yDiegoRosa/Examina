@@ -126,7 +126,7 @@ class TestCSVQuestaoParserDiscursiva:
         assert row['correta'] is None
 
     def test_parse_comentarios_preservados(self):
-        csv = 'enunciado,comentarios\n' 'Discuta Big O.,O(n log n) para QuickSort.\n'
+        csv = 'enunciado,comentarios\nDiscuta Big O.,O(n log n) para QuickSort.\n'
         result = CSVQuestaoParser.parse(csv)
         assert result[0]['criterios_correcao'] == 'O(n log n) para QuickSort.'
 
@@ -138,14 +138,14 @@ class TestCSVQuestaoParserDiscursiva:
 
 class TestCSVDelimitador:
     def test_delimitador_ponto_e_virgula(self):
-        csv = 'origem;questao;enunciado;opcao_a;opcao_b;gabarito;comentarios\n' 'ENADE;1;2+2=?;3;4;B;\n'
+        csv = 'origem;questao;enunciado;opcao_a;opcao_b;gabarito;comentarios\nENADE;1;2+2=?;3;4;B;\n'
         result = CSVQuestaoParser.parse(csv)
         assert len(result) == 1
         assert result[0]['enunciado'] == '2+2=?'
         assert result[0]['correta'] == 'B'
 
     def test_delimitador_virgula_padrao(self):
-        csv = 'enunciado,opcao_a,opcao_b,gabarito\n' 'Questão?,Alt A,Alt B,A\n'
+        csv = 'enunciado,opcao_a,opcao_b,gabarito\nQuestão?,Alt A,Alt B,A\n'
         result = CSVQuestaoParser.parse(csv)
         assert len(result) == 1
 
@@ -171,9 +171,7 @@ class TestCSVEncoding:
 
     def test_bytes_latin1_decodificados(self):
         """Arquivo latin-1 deve ser decodificado sem erro."""
-        csv_bytes = (
-            'enunciado,opcao_a,opcao_b,gabarito\n' 'Quest\xe3o?,Alt A,Alt B,B\n'  # \xe3 = ã em latin-1
-        )
+        csv_bytes = 'enunciado,opcao_a,opcao_b,gabarito\nQuest\xe3o?,Alt A,Alt B,B\n'  # \xe3 = ã em latin-1
         result = CSVQuestaoParser.parse(csv_bytes.encode('latin-1'))
         assert len(result) == 1
 
@@ -186,7 +184,7 @@ class TestCSVEncoding:
 class TestCSVCabecalho:
     def test_sem_coluna_enunciado_levanta_erro(self):
         """Header sem 'enunciado' deve levantar CSVParseError."""
-        csv = 'origem,questao,opcao_a,gabarito\n' 'X,1,Alt A,A\n'
+        csv = 'origem,questao,opcao_a,gabarito\nX,1,Alt A,A\n'
         with pytest.raises(CSVParseError, match='enunciado'):
             CSVQuestaoParser.parse(csv)
 
@@ -210,7 +208,7 @@ class TestCSVCabecalho:
 class TestCSVAliases:
     def test_alias_opcao_a_mapeado(self):
         """'opção a' deve ser mapeado para alt_a."""
-        csv = 'enunciado,opção a,opção b,gabarito\n' 'Questão?,Texto A,Texto B,A\n'
+        csv = 'enunciado,opção a,opção b,gabarito\nQuestão?,Texto A,Texto B,A\n'
         result = CSVQuestaoParser.parse(csv)
         alts = result[0]['alternativas']
         assert alts[0]['letra'] == 'A'
@@ -218,7 +216,7 @@ class TestCSVAliases:
 
     def test_alias_alternativa_b_mapeado(self):
         """'alternativa b' deve ser mapeado para alt_b."""
-        csv = 'enunciado,alternativa a,alternativa b,gabarito\n' 'Pergunta?,Resp A,Resp B,B\n'
+        csv = 'enunciado,alternativa a,alternativa b,gabarito\nPergunta?,Resp A,Resp B,B\n'
         result = CSVQuestaoParser.parse(csv)
         alts = result[0]['alternativas']
         assert alts[1]['letra'] == 'B'
@@ -226,7 +224,7 @@ class TestCSVAliases:
 
     def test_alias_correta_mapeado_para_gabarito(self):
         """'correta' como nome de coluna deve ser mapeada para gabarito."""
-        csv = 'enunciado,opcao_a,opcao_b,correta\n' 'Questão?,Alt A,Alt B,B\n'
+        csv = 'enunciado,opcao_a,opcao_b,correta\nQuestão?,Alt A,Alt B,B\n'
         result = CSVQuestaoParser.parse(csv)
         assert result[0]['correta'] == 'B'
 
@@ -246,7 +244,7 @@ class TestCSVAliases:
 class TestFileQuestaoParserDispatcher:
     def test_dispatch_csv_por_extensao(self):
         """FileQuestaoParser deve despachar para CSVQuestaoParser para .csv."""
-        csv = 'enunciado,opcao_a,opcao_b,gabarito\n' 'Questão?,Alt A,Alt B,A\n'
+        csv = 'enunciado,opcao_a,opcao_b,gabarito\nQuestão?,Alt A,Alt B,A\n'
         result = FileQuestaoParser.parse(csv.encode(), filename='questoes.csv')
         assert len(result) == 1
         assert result[0]['enunciado'] == 'Questão?'

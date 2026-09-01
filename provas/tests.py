@@ -194,7 +194,6 @@ class MascaraProvaModelTest(TestCase):
         self.assertEqual(mascara.criterios_topico.count(), 1)
 
 
-
 class MascaraViewsTest(TestCase):
     """Testes de integração das views de Máscara de Prova."""
 
@@ -978,7 +977,9 @@ class SelecaoQuestoesMenosUsadasTest(TestCase):
 
         # Os 4 primeiros itens do queryset devem ser as não usadas
         primeiras_4_ids = {q.id for q in candidatas[:4]}
-        self.assertEqual(primeiras_4_ids, {self.questoes[2].id, self.questoes[3].id, self.questoes[4].id, self.questoes[5].id})
+        self.assertEqual(
+            primeiras_4_ids, {self.questoes[2].id, self.questoes[3].id, self.questoes[4].id, self.questoes[5].id}
+        )
 
     def test_janela_deslizante_ultimas_5_geracoes(self):
         """Verifica que apenas as 5 provas mais recentes da máscara são consideradas na contagem."""
@@ -1220,7 +1221,6 @@ class BloqueioEstoqueInsuficienteTest(TestCase):
         self.assertContains(response, 'gerada com sucesso')
 
 
-
 class SnapshotProvaTest(TestCase):
     """
     Testes de integridade e imutabilidade dos snapshots JSON
@@ -1273,12 +1273,23 @@ class SnapshotProvaTest(TestCase):
         """Verifica que snapshot_mascara contém todos os parâmetros da máscara."""
         snap = self.prova.snapshot_mascara
         campos_obrigatorios = [
-            'mascara_id', 'titulo', 'disciplina_id', 'disciplina_nome',
-            'quantidade_questoes', 'modalidade', 'modalidade_display',
-            'quantidade_objetivas', 'quantidade_discursivas',
-            'percentual_facil', 'percentual_medio', 'percentual_dificil',
-            'valor_total', 'tempo_estimado_minutos',
-            'embaralhar_questoes', 'embaralhar_alternativas', 'priorizar_enade',
+            'mascara_id',
+            'titulo',
+            'disciplina_id',
+            'disciplina_nome',
+            'quantidade_questoes',
+            'modalidade',
+            'modalidade_display',
+            'quantidade_objetivas',
+            'quantidade_discursivas',
+            'percentual_facil',
+            'percentual_medio',
+            'percentual_dificil',
+            'valor_total',
+            'tempo_estimado_minutos',
+            'embaralhar_questoes',
+            'embaralhar_alternativas',
+            'priorizar_enade',
         ]
         for campo in campos_obrigatorios:
             self.assertIn(campo, snap, f'Campo "{campo}" ausente no snapshot_mascara')
@@ -1586,7 +1597,9 @@ class TrocaIndividualQuestaoTest(TestCase):
         candidatas = list(obter_candidatas_substituicao(self.item1))
 
         self.assertIn(self.q1_candidata, candidatas)
-        self.assertNotIn(self.q1_original, candidatas, 'Questão atual não deve ser sugerida como substituta de si mesma')
+        self.assertNotIn(
+            self.q1_original, candidatas, 'Questão atual não deve ser sugerida como substituta de si mesma'
+        )
         self.assertNotIn(self.q_outro_topico, candidatas, 'Questão de outro tópico não deve ser sugerida')
         self.assertNotIn(self.q_outra_dificuldade, candidatas, 'Questão de outra dificuldade não deve ser sugerida')
 
@@ -2104,9 +2117,3 @@ class ProvaVersaoModelAndGenerationTest(TestCase):
         self.assertIn('Gabarito_Oficial_Versao_B.pdf', file_names)
         self.assertIn('Caderno_Versao_C.pdf', file_names)
         self.assertIn('Gabarito_Oficial_Versao_C.pdf', file_names)
-
-
-
-
-
-

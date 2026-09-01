@@ -124,25 +124,29 @@ def criar_prova_manual(
 
     for tid, tnome in topicos_vistos.items():
         qtd = contagem_topico[tid]
-        snapshot_criterios_top.append({
-            'topico_id': tid,
-            'topico_nome': tnome,
-            'percentual': round((qtd / total_questoes) * 100, 1) if total_questoes else 0,
-            'quantidade': qtd,
-        })
+        snapshot_criterios_top.append(
+            {
+                'topico_id': tid,
+                'topico_nome': tnome,
+                'percentual': round((qtd / total_questoes) * 100, 1) if total_questoes else 0,
+                'quantidade': qtd,
+            }
+        )
 
     celulas_matriz = []
     for (tid, dif), qtd in contagem_celula.items():
-        celulas_matriz.append({
-            'topico_id': tid,
-            'topico_nome': topicos_vistos.get(tid, 'Sem tópico'),
-            'dificuldade': dif,
-            'dificuldade_display': dif_display_map.get(dif, dif),
-            'quantidade': qtd,
-            'percentual_composto': round((qtd / total_questoes) * 100, 1) if total_questoes else 0,
-            'cota_exata': float(qtd),
-            'resto': 0.0,
-        })
+        celulas_matriz.append(
+            {
+                'topico_id': tid,
+                'topico_nome': topicos_vistos.get(tid, 'Sem tópico'),
+                'dificuldade': dif,
+                'dificuldade_display': dif_display_map.get(dif, dif),
+                'quantidade': qtd,
+                'percentual_composto': round((qtd / total_questoes) * 100, 1) if total_questoes else 0,
+                'cota_exata': float(qtd),
+                'resto': 0.0,
+            }
+        )
 
     snapshot_matriz = {
         'total_questoes': total_questoes,
@@ -224,4 +228,3 @@ def criar_prova_manual(
         )
 
     return prova
-

@@ -206,9 +206,11 @@ class TestCleanTopico:
             topico=topico_outra.pk,
         )
         form = QuestaoForm(data=form_data)
-        form.is_valid()
+        # O queryset de `topico` é filtrado pela disciplina submetida (ver QuestaoForm.__init__),
+        # então um tópico de outra disciplina é rejeitado no nível do campo, antes de clean_topico.
+        # O essencial é que a combinação inválida não seja aceita.
+        assert form.is_valid() is False
         assert 'topico' in form.errors
-        assert 'não pertence' in str(form.errors['topico'])
 
 
 # ---------------------------------------------------------------------------

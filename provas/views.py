@@ -853,49 +853,48 @@ def prova_pdf(request, pk):
 
     # Prepara itens da versão ou itens base da prova
     if versao:
-        itens_versao_qs = (
-            versao.itens
-            .select_related(
-                'prova_questao__questao',
-                'prova_questao__questao__topico',
-                'prova_questao__questao__disciplina',
-            )
-            .order_by('ordem')
-        )
+        itens_versao_qs = versao.itens.select_related(
+            'prova_questao__questao',
+            'prova_questao__questao__topico',
+            'prova_questao__questao__disciplina',
+        ).order_by('ordem')
         itens_render = []
         for iv in itens_versao_qs:
             q = iv.prova_questao.questao
             snap_q = iv.prova_questao.snapshot_questao or {}
             # Usa alternativas embaralhadas persistidas na versão
             alts_versao = iv.alternativas_embaralhadas
-            itens_render.append({
-                'numero': iv.numero,
-                'ordem': iv.ordem,
-                'pontuacao': iv.pontuacao,
-                'questao': q,
-                'snapshot_questao': snap_q,
-                'alternativas_versao': alts_versao,
-            })
+            itens_render.append(
+                {
+                    'numero': iv.numero,
+                    'ordem': iv.ordem,
+                    'pontuacao': iv.pontuacao,
+                    'questao': q,
+                    'snapshot_questao': snap_q,
+                    'alternativas_versao': alts_versao,
+                }
+            )
     else:
         itens_qs = (
-            prova.itens
-            .select_related('questao', 'questao__topico', 'questao__disciplina')
+            prova.itens.select_related('questao', 'questao__topico', 'questao__disciplina')
             .prefetch_related('questao__alternativas')
             .order_by('ordem')
         )
         itens_render = []
         for it in itens_qs:
-            itens_render.append({
-                'numero': it.numero,
-                'ordem': it.ordem,
-                'pontuacao': it.pontuacao,
-                'questao': it.questao,
-                'snapshot_questao': it.snapshot_questao,
-                'alternativas_versao': [
-                    {'letra': a.letra, 'texto': a.texto, 'correta': a.correta}
-                    for a in it.questao.alternativas.all()
-                ],
-            })
+            itens_render.append(
+                {
+                    'numero': it.numero,
+                    'ordem': it.ordem,
+                    'pontuacao': it.pontuacao,
+                    'questao': it.questao,
+                    'snapshot_questao': it.snapshot_questao,
+                    'alternativas_versao': [
+                        {'letra': a.letra, 'texto': a.texto, 'correta': a.correta}
+                        for a in it.questao.alternativas.all()
+                    ],
+                }
+            )
 
     disciplina = prova.disciplina_efetiva
     mascara = prova.mascara
@@ -1030,15 +1029,11 @@ def prova_gabarito_pdf(request, pk):
     itens_detalhados = []
 
     if versao:
-        itens_versao_qs = (
-            versao.itens
-            .select_related(
-                'prova_questao__questao',
-                'prova_questao__questao__topico',
-                'prova_questao__questao__disciplina',
-            )
-            .order_by('ordem')
-        )
+        itens_versao_qs = versao.itens.select_related(
+            'prova_questao__questao',
+            'prova_questao__questao__topico',
+            'prova_questao__questao__disciplina',
+        ).order_by('ordem')
         for iv in itens_versao_qs:
             q = iv.prova_questao.questao
             snap_q = iv.prova_questao.snapshot_questao or {}
@@ -1061,32 +1056,35 @@ def prova_gabarito_pdf(request, pk):
             else:
                 letra_correta = 'DIS'
 
-            resumo_itens.append({
-                'numero': iv.numero,
-                'tipo': tipo,
-                'letra_correta': letra_correta,
-                'pontuacao': iv.pontuacao,
-            })
+            resumo_itens.append(
+                {
+                    'numero': iv.numero,
+                    'tipo': tipo,
+                    'letra_correta': letra_correta,
+                    'pontuacao': iv.pontuacao,
+                }
+            )
 
-            itens_detalhados.append({
-                'numero': iv.numero,
-                'tipo': tipo,
-                'tipo_display': tipo_display,
-                'pontuacao': iv.pontuacao,
-                'topico_nome': topico_nome,
-                'origem': origem,
-                'origem_numero': origem_numero,
-                'dificuldade_display': dificuldade_display,
-                'enunciado': enunciado,
-                'letra_correta': letra_correta,
-                'alternativas': alternativas_lista,
-                'criterios_correcao': criterios_correcao,
-            })
+            itens_detalhados.append(
+                {
+                    'numero': iv.numero,
+                    'tipo': tipo,
+                    'tipo_display': tipo_display,
+                    'pontuacao': iv.pontuacao,
+                    'topico_nome': topico_nome,
+                    'origem': origem,
+                    'origem_numero': origem_numero,
+                    'dificuldade_display': dificuldade_display,
+                    'enunciado': enunciado,
+                    'letra_correta': letra_correta,
+                    'alternativas': alternativas_lista,
+                    'criterios_correcao': criterios_correcao,
+                }
+            )
     else:
         # Fallback para prova sem versões
         itens_qs = (
-            prova.itens
-            .select_related('questao', 'questao__topico', 'questao__disciplina')
+            prova.itens.select_related('questao', 'questao__topico', 'questao__disciplina')
             .prefetch_related('questao__alternativas')
             .order_by('ordem')
         )
@@ -1130,27 +1128,31 @@ def prova_gabarito_pdf(request, pk):
             else:
                 letra_correta = 'DIS'
 
-            resumo_itens.append({
-                'numero': num_exibicao,
-                'tipo': tipo,
-                'letra_correta': letra_correta,
-                'pontuacao': item.pontuacao,
-            })
+            resumo_itens.append(
+                {
+                    'numero': num_exibicao,
+                    'tipo': tipo,
+                    'letra_correta': letra_correta,
+                    'pontuacao': item.pontuacao,
+                }
+            )
 
-            itens_detalhados.append({
-                'numero': num_exibicao,
-                'tipo': tipo,
-                'tipo_display': tipo_display,
-                'pontuacao': item.pontuacao,
-                'topico_nome': topico_nome,
-                'origem': origem,
-                'origem_numero': origem_numero,
-                'dificuldade_display': dificuldade_display,
-                'enunciado': enunciado,
-                'letra_correta': letra_correta,
-                'alternativas': alternativas_lista,
-                'criterios_correcao': criterios_correcao,
-            })
+            itens_detalhados.append(
+                {
+                    'numero': num_exibicao,
+                    'tipo': tipo,
+                    'tipo_display': tipo_display,
+                    'pontuacao': item.pontuacao,
+                    'topico_nome': topico_nome,
+                    'origem': origem,
+                    'origem_numero': origem_numero,
+                    'dificuldade_display': dificuldade_display,
+                    'enunciado': enunciado,
+                    'letra_correta': letra_correta,
+                    'alternativas': alternativas_lista,
+                    'criterios_correcao': criterios_correcao,
+                }
+            )
 
     identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
 
@@ -1249,15 +1251,11 @@ def prova_pacote_zip(request, pk):
 
     with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         for versao in versoes:
-            itens_versao_qs = (
-                versao.itens
-                .select_related(
-                    'prova_questao__questao',
-                    'prova_questao__questao__topico',
-                    'prova_questao__questao__disciplina',
-                )
-                .order_by('ordem')
-            )
+            itens_versao_qs = versao.itens.select_related(
+                'prova_questao__questao',
+                'prova_questao__questao__topico',
+                'prova_questao__questao__disciplina',
+            ).order_by('ordem')
 
             itens_render = []
             resumo_itens = []
@@ -1285,36 +1283,42 @@ def prova_pacote_zip(request, pk):
                 else:
                     letra_correta = 'DIS'
 
-                itens_render.append({
-                    'numero': iv.numero,
-                    'ordem': iv.ordem,
-                    'pontuacao': iv.pontuacao,
-                    'questao': q,
-                    'snapshot_questao': snap_q,
-                    'alternativas_versao': alternativas_lista,
-                })
+                itens_render.append(
+                    {
+                        'numero': iv.numero,
+                        'ordem': iv.ordem,
+                        'pontuacao': iv.pontuacao,
+                        'questao': q,
+                        'snapshot_questao': snap_q,
+                        'alternativas_versao': alternativas_lista,
+                    }
+                )
 
-                resumo_itens.append({
-                    'numero': iv.numero,
-                    'tipo': tipo,
-                    'letra_correta': letra_correta,
-                    'pontuacao': iv.pontuacao,
-                })
+                resumo_itens.append(
+                    {
+                        'numero': iv.numero,
+                        'tipo': tipo,
+                        'letra_correta': letra_correta,
+                        'pontuacao': iv.pontuacao,
+                    }
+                )
 
-                itens_detalhados.append({
-                    'numero': iv.numero,
-                    'tipo': tipo,
-                    'tipo_display': tipo_display,
-                    'pontuacao': iv.pontuacao,
-                    'topico_nome': topico_nome,
-                    'origem': origem,
-                    'origem_numero': origem_numero,
-                    'dificuldade_display': dificuldade_display,
-                    'enunciado': enunciado,
-                    'letra_correta': letra_correta,
-                    'alternativas': alternativas_lista,
-                    'criterios_correcao': criterios_correcao,
-                })
+                itens_detalhados.append(
+                    {
+                        'numero': iv.numero,
+                        'tipo': tipo,
+                        'tipo_display': tipo_display,
+                        'pontuacao': iv.pontuacao,
+                        'topico_nome': topico_nome,
+                        'origem': origem,
+                        'origem_numero': origem_numero,
+                        'dificuldade_display': dificuldade_display,
+                        'enunciado': enunciado,
+                        'letra_correta': letra_correta,
+                        'alternativas': alternativas_lista,
+                        'criterios_correcao': criterios_correcao,
+                    }
+                )
 
             identificador_display = f'Versão {versao.identificador}'
 
@@ -1374,4 +1378,3 @@ def prova_pacote_zip(request, pk):
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
-

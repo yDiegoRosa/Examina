@@ -42,7 +42,7 @@ def _validate_upload_file(arquivo):
     # InMemoryUploadedFile expõe .size; TemporaryFileUploadedFile também.
     if arquivo.size > max_bytes:
         raise forms.ValidationError(
-            f'O arquivo é muito grande ({arquivo.size / 1024 / 1024:.1f} MB). ' f'O limite é {max_mb} MB.'
+            f'O arquivo é muito grande ({arquivo.size / 1024 / 1024:.1f} MB). O limite é {max_mb} MB.'
         )
 
     # -- 3. Magic bytes (assinatura binária real) ---------------------------
@@ -64,7 +64,7 @@ def _validate_upload_file(arquivo):
         arquivo.seek(0)
         if b'\x00' in sample:
             raise forms.ValidationError(
-                'O arquivo CSV parece ser um arquivo binário. ' 'Envie um arquivo de texto puro com extensão .csv.'
+                'O arquivo CSV parece ser um arquivo binário. Envie um arquivo de texto puro com extensão .csv.'
             )
 
     return arquivo
@@ -242,9 +242,9 @@ class QuestaoForm(forms.ModelForm):
             disciplina_id = self.instance.disciplina_id
 
         if disciplina_id:
-            self.fields['topico'].queryset = Topico.objects.filter(
-                disciplina_id=disciplina_id, ativo=True
-            ).order_by('nome')
+            self.fields['topico'].queryset = Topico.objects.filter(disciplina_id=disciplina_id, ativo=True).order_by(
+                'nome'
+            )
         else:
             self.fields['topico'].queryset = Topico.objects.filter(ativo=True).order_by('nome')
 

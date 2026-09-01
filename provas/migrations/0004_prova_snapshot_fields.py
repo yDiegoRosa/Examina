@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('provas', '0003_historicalprova_prova_provaquestao_prova_questoes'),
     ]
@@ -13,46 +12,91 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='historicalprova',
             name='snapshot_criterios_dificuldade',
-            field=models.JSONField(blank=True, default=list, help_text='Critérios F/M/D com percentuais e quantidades calculadas.', verbose_name='snapshot dos critérios de dificuldade'),
+            field=models.JSONField(
+                blank=True,
+                default=list,
+                help_text='Critérios F/M/D com percentuais e quantidades calculadas.',
+                verbose_name='snapshot dos critérios de dificuldade',
+            ),
         ),
         migrations.AddField(
             model_name='historicalprova',
             name='snapshot_criterios_topico',
-            field=models.JSONField(blank=True, default=list, help_text='Tópicos curriculares com percentuais e quantidades calculadas.', verbose_name='snapshot dos critérios de tópico'),
+            field=models.JSONField(
+                blank=True,
+                default=list,
+                help_text='Tópicos curriculares com percentuais e quantidades calculadas.',
+                verbose_name='snapshot dos critérios de tópico',
+            ),
         ),
         migrations.AddField(
             model_name='historicalprova',
             name='snapshot_mascara',
-            field=models.JSONField(blank=True, default=dict, help_text='Parâmetros completos da máscara congelados no instante da geração.', verbose_name='snapshot da máscara'),
+            field=models.JSONField(
+                blank=True,
+                default=dict,
+                help_text='Parâmetros completos da máscara congelados no instante da geração.',
+                verbose_name='snapshot da máscara',
+            ),
         ),
         migrations.AddField(
             model_name='historicalprova',
             name='snapshot_matriz_metas',
-            field=models.JSONField(blank=True, default=dict, help_text='Matriz 2D completa (Tópico × Dificuldade) com metas inteiras por célula.', verbose_name='snapshot da matriz de metas'),
+            field=models.JSONField(
+                blank=True,
+                default=dict,
+                help_text='Matriz 2D completa (Tópico × Dificuldade) com metas inteiras por célula.',
+                verbose_name='snapshot da matriz de metas',
+            ),
         ),
         migrations.AddField(
             model_name='prova',
             name='snapshot_criterios_dificuldade',
-            field=models.JSONField(blank=True, default=list, help_text='Critérios F/M/D com percentuais e quantidades calculadas.', verbose_name='snapshot dos critérios de dificuldade'),
+            field=models.JSONField(
+                blank=True,
+                default=list,
+                help_text='Critérios F/M/D com percentuais e quantidades calculadas.',
+                verbose_name='snapshot dos critérios de dificuldade',
+            ),
         ),
         migrations.AddField(
             model_name='prova',
             name='snapshot_criterios_topico',
-            field=models.JSONField(blank=True, default=list, help_text='Tópicos curriculares com percentuais e quantidades calculadas.', verbose_name='snapshot dos critérios de tópico'),
+            field=models.JSONField(
+                blank=True,
+                default=list,
+                help_text='Tópicos curriculares com percentuais e quantidades calculadas.',
+                verbose_name='snapshot dos critérios de tópico',
+            ),
         ),
         migrations.AddField(
             model_name='prova',
             name='snapshot_mascara',
-            field=models.JSONField(blank=True, default=dict, help_text='Parâmetros completos da máscara congelados no instante da geração.', verbose_name='snapshot da máscara'),
+            field=models.JSONField(
+                blank=True,
+                default=dict,
+                help_text='Parâmetros completos da máscara congelados no instante da geração.',
+                verbose_name='snapshot da máscara',
+            ),
         ),
         migrations.AddField(
             model_name='prova',
             name='snapshot_matriz_metas',
-            field=models.JSONField(blank=True, default=dict, help_text='Matriz 2D completa (Tópico × Dificuldade) com metas inteiras por célula.', verbose_name='snapshot da matriz de metas'),
+            field=models.JSONField(
+                blank=True,
+                default=dict,
+                help_text='Matriz 2D completa (Tópico × Dificuldade) com metas inteiras por célula.',
+                verbose_name='snapshot da matriz de metas',
+            ),
         ),
         migrations.AddField(
             model_name='provaquestao',
             name='snapshot_questao',
-            field=models.JSONField(blank=True, default=dict, help_text='Dados completos da questão congelados no momento da inclusão na prova.', verbose_name='snapshot da questão'),
+            field=models.JSONField(
+                blank=True,
+                default=dict,
+                help_text='Dados completos da questão congelados no momento da inclusão na prova.',
+                verbose_name='snapshot da questão',
+            ),
         ),
     ]

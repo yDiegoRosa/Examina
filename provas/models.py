@@ -151,7 +151,11 @@ class Mascara(models.Model):
         # 1. Validação da soma de dificuldade (deve fechar em 100%)
         soma_dificuldade = self.percentual_facil + self.percentual_medio + self.percentual_dificil
         if soma_dificuldade != 100:
-            diff_str = f'faltam {100 - soma_dificuldade}%' if soma_dificuldade < 100 else f'excede em {soma_dificuldade - 100}%'
+            diff_str = (
+                f'faltam {100 - soma_dificuldade}%'
+                if soma_dificuldade < 100
+                else f'excede em {soma_dificuldade - 100}%'
+            )
             errors['percentual_facil'] = (
                 f'A soma dos percentuais de dificuldade (Fácil + Médio + Difícil) deve ser exatamente 100% (atual: {soma_dificuldade}% — {diff_str}).'
             )
@@ -295,11 +299,6 @@ class Mascara(models.Model):
     @property
     def criterios_topico(self):
         """Propriedade de conveniência para a convenção de critérios de tópicos."""
-        return self.topicos_distribuicao
-
-    @property
-    def topicos_distribuicao_compat(self):
-        """Compatibilidade."""
         return self.topicos_distribuicao
 
 
@@ -638,5 +637,3 @@ class ProvaVersaoItem(models.Model):
 # Aliases para retrocompatibilidade contínua
 MascaraProva = Mascara
 MascaraTopico = MascaraCriterioTopico
-
-

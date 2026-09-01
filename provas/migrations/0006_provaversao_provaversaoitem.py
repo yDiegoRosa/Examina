@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('provas', '0005_historicalprova_disciplina_and_more'),
     ]
@@ -15,11 +14,33 @@ class Migration(migrations.Migration):
             name='ProvaVersao',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('identificador', models.CharField(help_text='Letra ou código identificador da versão (ex.: A, B, C).', max_length=10, verbose_name='identificador da versão')),
-                ('numero_versao', models.PositiveIntegerField(default=1, help_text='Índice sequencial da versão (1 para A, 2 para B, etc.).', verbose_name='número ordinal da versão')),
+                (
+                    'identificador',
+                    models.CharField(
+                        help_text='Letra ou código identificador da versão (ex.: A, B, C).',
+                        max_length=10,
+                        verbose_name='identificador da versão',
+                    ),
+                ),
+                (
+                    'numero_versao',
+                    models.PositiveIntegerField(
+                        default=1,
+                        help_text='Índice sequencial da versão (1 para A, 2 para B, etc.).',
+                        verbose_name='número ordinal da versão',
+                    ),
+                ),
                 ('criado_em', models.DateTimeField(auto_now_add=True)),
                 ('atualizado_em', models.DateTimeField(auto_now=True)),
-                ('prova', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='versoes', to='provas.prova', verbose_name='avaliação base')),
+                (
+                    'prova',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='versoes',
+                        to='provas.prova',
+                        verbose_name='avaliação base',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'versão de prova',
@@ -34,9 +55,33 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('numero', models.PositiveIntegerField(default=1, verbose_name='número da questão nesta versão')),
                 ('ordem', models.PositiveIntegerField(default=1, verbose_name='ordem de exibição na versão')),
-                ('alternativas_embaralhadas', models.JSONField(blank=True, default=list, help_text='Lista de alternativas com a ordem e letras sorteadas para esta versão específica.', verbose_name='alternativas embaralhadas')),
-                ('prova_questao', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='itens_versao', to='provas.provaquestao', verbose_name='questão da prova base')),
-                ('versao', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='itens', to='provas.provaversao', verbose_name='versão de prova')),
+                (
+                    'alternativas_embaralhadas',
+                    models.JSONField(
+                        blank=True,
+                        default=list,
+                        help_text='Lista de alternativas com a ordem e letras sorteadas para esta versão específica.',
+                        verbose_name='alternativas embaralhadas',
+                    ),
+                ),
+                (
+                    'prova_questao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='itens_versao',
+                        to='provas.provaquestao',
+                        verbose_name='questão da prova base',
+                    ),
+                ),
+                (
+                    'versao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='itens',
+                        to='provas.provaversao',
+                        verbose_name='versão de prova',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'item da versão de prova',

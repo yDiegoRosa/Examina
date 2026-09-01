@@ -10,12 +10,12 @@ Projeto de uso interno institucional (instituição única, sem suporte a multi-
 
 ## Status atual
 
-🚧 **Em desenvolvimento — Módulo 1 (Banco de Questões) em andamento.**
+🚧 **Em desenvolvimento — Módulos 1 (Banco de Questões) e 2 (Geração de Provas) em andamento.**
 
 | Módulo | Descrição | Status |
 |---|---|---|
 | 1 — Banco de Questões | Cadastro, importação em lote e organização das questões | 🚧 Em andamento |
-| 2 — Geração de Provas | Montagem automática/manual de avaliações por máscara | 📋 Planejado |
+| 2 — Geração de Provas | Montagem automática/manual de avaliações por máscara, versões A/B/C e exportação em PDF | 🚧 Em andamento |
 | 3 — Correção e Reconhecimento *(desejável)* | QR Code + leitura óptica de gabaritos | 📋 Planejado |
 | 4 — Análise de Desempenho | Dashboards e psicometria básica | 📋 Planejado |
 
@@ -54,20 +54,20 @@ Projeto de uso interno institucional (instituição única, sem suporte a multi-
 | Infraestrutura | Docker + GitHub Actions (CI) |
 | Testes | pytest + Django test client |
 
-## Estrutura do repositório (planejada)
+## Estrutura do repositório
 
 ```
-examina/
-├── apps/
-│   ├── questoes/        # Módulo 1 — banco de questões
-│   ├── provas/          # Módulo 2 — geração de provas
-│   ├── correcao/        # Módulo 3 — QR code e OMR
-│   └── desempenho/      # Módulo 4 — análise e dashboards
-├── docs/
-│   └── plano-execucao.md
+Examina/
+├── Examina/             # configuração do projeto (settings, urls, wsgi/asgi)
+├── banco_questoes/      # Módulo 1 — banco de questões
+├── provas/              # Módulo 2 — geração de provas (máscaras, versões A/B/C, PDF)
+├── docs/                # runbooks operacionais (ex.: backup-restore)
+├── scripts/             # scripts de backup/restore MySQL
 ├── requirements.txt
 └── manage.py
 ```
+
+> Os módulos 3 (Correção/OMR) e 4 (Análise de Desempenho) ainda não possuem apps neste repositório.
 
 ## Como rodar localmente
 
@@ -76,9 +76,11 @@ examina/
 git clone <url-do-repositorio>
 cd examina
 
-# criar e ativar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# criar e ativar ambiente virtual (pasta .venv)
+python -m venv .venv
+# Windows (PowerShell): .venv\Scripts\Activate.ps1
+# Windows (cmd):        .venv\Scripts\activate
+# Linux/macOS:          source .venv/bin/activate
 
 # instalar dependências
 pip install -r requirements.txt

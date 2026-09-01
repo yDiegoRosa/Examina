@@ -64,11 +64,7 @@ def gerar_versoes_prova(
     else:
         quantidade_versoes = len(identificadores)
 
-    itens_base = list(
-        prova.itens.select_related('questao')
-        .prefetch_related('questao__alternativas')
-        .order_by('ordem')
-    )
+    itens_base = list(prova.itens.select_related('questao').prefetch_related('questao__alternativas').order_by('ordem'))
 
     if not itens_base:
         return []
@@ -129,13 +125,17 @@ def gerar_versoes_prova(
 
                     # Reatribui letras visuais (A, B, C, D, E)
                     for i_alt, alt_d in enumerate(alts_trabalho):
-                        letra_visual = LETRAS_ALTERNATIVAS[i_alt] if i_alt < len(LETRAS_ALTERNATIVAS) else alt_d['letra_original']
-                        alts_embaralhadas.append({
-                            'letra': letra_visual,
-                            'letra_original': alt_d.get('letra_original', ''),
-                            'texto': alt_d['texto'],
-                            'correta': alt_d['correta'],
-                        })
+                        letra_visual = (
+                            LETRAS_ALTERNATIVAS[i_alt] if i_alt < len(LETRAS_ALTERNATIVAS) else alt_d['letra_original']
+                        )
+                        alts_embaralhadas.append(
+                            {
+                                'letra': letra_visual,
+                                'letra_original': alt_d.get('letra_original', ''),
+                                'texto': alt_d['texto'],
+                                'correta': alt_d['correta'],
+                            }
+                        )
 
                 itens_versao_db.append(
                     ProvaVersaoItem(
