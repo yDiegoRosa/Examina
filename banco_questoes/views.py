@@ -246,13 +246,18 @@ def questao_toggle_ativo(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# Download / Exportação do Acervo em CSV (Formato 10 Colunas — Padrão Cliente)
+# Download / Exportação do Acervo em CSV (Formato 15 Colunas — Padrão Cliente + Classificação)
 # ---------------------------------------------------------------------------
 @login_required
 def download_modelo_csv(request):
     """
-    Exporta o acervo de questões no formato CSV padrão com 10 colunas:
-    origem, questao, enunciado, opcao_a, opcao_b, opcao_c, opcao_d, opcao_e, gabarito, comentarios.
+    Exporta o acervo de questões no formato CSV padrão com 15 colunas:
+    origem, questao, tipo, disciplina, topico, dificuldade, enunciado,
+    opcao_a, opcao_b, opcao_c, opcao_d, opcao_e, gabarito, tags, comentarios.
+
+    As colunas de classificação (tipo/disciplina/topico/dificuldade/tags) são opcionais
+    para o parser, mas recomendadas: sem elas as questões entram como "Não Classificada"/
+    Médio, o que inviabiliza a geração de provas por máscara.
 
     Caso existam filtros na requisição GET, exporta o conjunto filtrado.
     Se não houver questões cadastradas, gera registros modelo estilo ENADE/POSCOMP.
@@ -268,6 +273,10 @@ def download_modelo_csv(request):
         [
             'origem',
             'questao',
+            'tipo',
+            'disciplina',
+            'topico',
+            'dificuldade',
             'enunciado',
             'opcao_a',
             'opcao_b',
@@ -275,6 +284,7 @@ def download_modelo_csv(request):
             'opcao_d',
             'opcao_e',
             'gabarito',
+            'tags',
             'comentarios',
         ]
     )
@@ -301,6 +311,10 @@ def download_modelo_csv(request):
                 [
                     q.origem or '',
                     q.numero_questao or '',
+                    q.tipo,
+                    q.disciplina.nome,
+                    q.topico.nome if q.topico else '',
+                    q.dificuldade,
                     q.enunciado,
                     alt_map.get('A', ''),
                     alt_map.get('B', ''),
@@ -308,15 +322,20 @@ def download_modelo_csv(request):
                     alt_map.get('D', ''),
                     alt_map.get('E', ''),
                     correta_letra,
+                    ', '.join(t.name for t in q.tags.all()),
                     q.criterios_correcao or '',
                 ]
             )
     else:
-        # Exemplos modelo no estilo ENADE / POSCOMP
+        # Exemplos modelo no estilo ENADE / POSCOMP (2 objetivas + 1 discursiva)
         writer.writerow(
             [
                 'ENADE ADS 2021',
                 '26',
+                'OBJ',
+                'Redes de Computadores',
+                'DNS',
+                'M',
                 'Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.',
                 'O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.',
                 'O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.',
@@ -324,6 +343,7 @@ def download_modelo_csv(request):
                 'O DNS não suporta balanceamento de carga entre servidores.',
                 'Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.',
                 'C',
+                'redes; dns',
                 'A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).',
             ]
         )
@@ -331,6 +351,10 @@ def download_modelo_csv(request):
             [
                 'POSCOMP 2025',
                 '15',
+                'OBJ',
+                'Programação',
+                'Linguagem C',
+                'D',
                 'Considere o seguinte trecho de código em C:\n\nint x = 5;\nint y = ++x + x++;\nprintf("%d %d", x, y);\n\nQual será a saída do programa?',
                 '7 12',
                 '7 13',
@@ -338,7 +362,28 @@ def download_modelo_csv(request):
                 '7 11',
                 '6 11',
                 'A',
+                'c; operadores',
                 'O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.',
+            ]
+        )
+        # Exemplo de questão DISCURSIVA: opções e gabarito vazios; critérios em "comentarios".
+        writer.writerow(
+            [
+                'ENADE ADS 2021',
+                '4',
+                'DIS',
+                'Engenharia de Software',
+                'Processos de Software',
+                'M',
+                'Explique as diferenças entre os modelos de processo em cascata e ágil, destacando vantagens e limitações de cada abordagem.',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                'engenharia-de-software; processos-ageis',
+                'Espera-se que o candidato contraste a previsibilidade e a documentação extensa do modelo cascata com a natureza iterativa e adaptativa do ágil (ex.: Scrum, XP), citando vantagens e limitações de cada um.',
             ]
         )
 
@@ -346,13 +391,14 @@ def download_modelo_csv(request):
 
 
 # ---------------------------------------------------------------------------
-# Download / Exportação do Acervo em Excel (.xlsx — Formato 10 Colunas)
+# Download / Exportação do Acervo em Excel (.xlsx — Formato 15 Colunas)
 # ---------------------------------------------------------------------------
 @login_required
 def download_modelo_xlsx(request):
     """
-    Exporta o acervo de questões no formato Microsoft Excel (.xlsx) com 10 colunas:
-    origem, questao, enunciado, opcao_a, opcao_b, opcao_c, opcao_d, opcao_e, gabarito, comentarios.
+    Exporta o acervo de questões no formato Microsoft Excel (.xlsx) com 15 colunas:
+    origem, questao, tipo, disciplina, topico, dificuldade, enunciado,
+    opcao_a, opcao_b, opcao_c, opcao_d, opcao_e, gabarito, tags, comentarios.
 
     Inclui estilização institucional (cabeçalho azul marinho, larguras automáticas,
     alinhamentos e quebra de texto) e respeita os filtros ativos da requisição GET.
@@ -369,6 +415,10 @@ def download_modelo_xlsx(request):
     headers = [
         'origem',
         'questao',
+        'tipo',
+        'disciplina',
+        'topico',
+        'dificuldade',
         'enunciado',
         'opcao_a',
         'opcao_b',
@@ -376,6 +426,7 @@ def download_modelo_xlsx(request):
         'opcao_d',
         'opcao_e',
         'gabarito',
+        'tags',
         'comentarios',
     ]
     ws.append(headers)
@@ -425,6 +476,10 @@ def download_modelo_xlsx(request):
             row_data = [
                 q.origem or '',
                 q.numero_questao or '',
+                q.tipo,
+                q.disciplina.nome,
+                q.topico.nome if q.topico else '',
+                q.dificuldade,
                 q.enunciado,
                 alt_map.get('A', ''),
                 alt_map.get('B', ''),
@@ -432,15 +487,20 @@ def download_modelo_xlsx(request):
                 alt_map.get('D', ''),
                 alt_map.get('E', ''),
                 correta_letra,
+                ', '.join(t.name for t in q.tags.all()),
                 q.criterios_correcao or '',
             ]
             ws.append(row_data)
     else:
-        # Exemplos modelo no estilo ENADE / POSCOMP
+        # Exemplos modelo no estilo ENADE / POSCOMP (2 objetivas + 1 discursiva)
         ws.append(
             [
                 'ENADE ADS 2021',
                 '26',
+                'OBJ',
+                'Redes de Computadores',
+                'DNS',
+                'M',
                 'Em relação ao serviço DNS (Domain Name System), considere as seguintes afirmações e assinale a alternativa correta.',
                 'O DNS utiliza exclusivamente o protocolo TCP para todas as suas consultas.',
                 'O servidor DNS raiz é responsável por armazenar todos os registros de domínio da Internet.',
@@ -448,6 +508,7 @@ def download_modelo_xlsx(request):
                 'O DNS não suporta balanceamento de carga entre servidores.',
                 'Registros do tipo MX são utilizados para mapear endereços IP em nomes de domínio.',
                 'C',
+                'redes; dns',
                 'A alternativa C está correta porque o DNS utiliza consultas recursivas (o resolver solicita ao servidor que resolva completamente) e iterativas (o servidor retorna referências para outros servidores).',
             ]
         )
@@ -455,6 +516,10 @@ def download_modelo_xlsx(request):
             [
                 'POSCOMP 2025',
                 '15',
+                'OBJ',
+                'Programação',
+                'Linguagem C',
+                'D',
                 'Considere o seguinte trecho de código em C:\n\nint x = 5;\nint y = ++x + x++;\nprintf("%d %d", x, y);\n\nQual será a saída do programa?',
                 '7 12',
                 '7 13',
@@ -462,7 +527,28 @@ def download_modelo_xlsx(request):
                 '7 11',
                 '6 11',
                 'A',
+                'c; operadores',
                 'O pré-incremento (++x) incrementa x para 6 antes da avaliação. Em seguida, x++ usa o valor 6 e depois incrementa para 7. Assim, y = 6 + 6 = 12 e x = 7. Saída: 7 12.',
+            ]
+        )
+        # Exemplo de questão DISCURSIVA: opções e gabarito vazios; critérios em "comentarios".
+        ws.append(
+            [
+                'ENADE ADS 2021',
+                '4',
+                'DIS',
+                'Engenharia de Software',
+                'Processos de Software',
+                'M',
+                'Explique as diferenças entre os modelos de processo em cascata e ágil, destacando vantagens e limitações de cada abordagem.',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                'engenharia-de-software; processos-ageis',
+                'Espera-se que o candidato contraste a previsibilidade e a documentação extensa do modelo cascata com a natureza iterativa e adaptativa do ágil (ex.: Scrum, XP), citando vantagens e limitações de cada um.',
             ]
         )
 
@@ -474,7 +560,7 @@ def download_modelo_xlsx(request):
             cell.font = data_font
             cell.border = thin_border
             # Alinha centralizado colunas de código/gabarito e à esquerda as de texto
-            if col_idx in (1, 2, 9):
+            if col_idx in (1, 2, 3, 6, 13):
                 cell.alignment = data_align_center
             else:
                 cell.alignment = data_align_left
@@ -483,14 +569,19 @@ def download_modelo_xlsx(request):
     col_widths = {
         'A': 18,  # origem
         'B': 12,  # questao
-        'C': 50,  # enunciado
-        'D': 35,  # opcao_a
-        'E': 35,  # opcao_b
-        'F': 35,  # opcao_c
-        'G': 35,  # opcao_d
-        'H': 35,  # opcao_e
-        'I': 12,  # gabarito
-        'J': 45,  # comentarios
+        'C': 8,  # tipo
+        'D': 24,  # disciplina
+        'E': 24,  # topico
+        'F': 12,  # dificuldade
+        'G': 50,  # enunciado
+        'H': 32,  # opcao_a
+        'I': 32,  # opcao_b
+        'J': 32,  # opcao_c
+        'K': 32,  # opcao_d
+        'L': 32,  # opcao_e
+        'M': 12,  # gabarito
+        'N': 22,  # tags
+        'O': 45,  # comentarios
     }
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width

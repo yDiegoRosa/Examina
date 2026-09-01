@@ -13,6 +13,7 @@ from banco_questoes.models import Disciplina, Questao, Topico
 
 from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm
 from .models import MascaraProva, Prova, ProvaQuestao
+from .presets import preset_enade_initial
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
 from .services.question_replacer import (
@@ -109,7 +110,13 @@ def mascara_create(request):
     else:
         disc_param = request.GET.get('disciplina')
         disciplina_init = Disciplina.objects.filter(pk=disc_param, ativo=True).first() if disc_param else None
-        form = MascaraProvaForm(initial={'disciplina': disciplina_init} if disciplina_init else None)
+
+        if request.GET.get('preset') == 'enade':
+            # Pré-preenche o formulário com a estrutura de Simulado ENADE (RF — máscara ENADE).
+            form = MascaraProvaForm(initial=preset_enade_initial(disciplina_init))
+        else:
+            form = MascaraProvaForm(initial={'disciplina': disciplina_init} if disciplina_init else None)
+
         formset = MascaraTopicoFormSet(disciplina=disciplina_init)
 
     return render(

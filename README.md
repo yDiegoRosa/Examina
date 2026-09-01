@@ -23,7 +23,7 @@ Projeto de uso interno institucional (instituição única, sem suporte a multi-
 
 **Módulo 1 — Banco de Questões**
 - Cadastro manual de questões objetivas e discursivas, com taxonomia obrigatória (disciplina, tópico, dificuldade, tipo)
-- Importação em lote via CSV, com validação e relatório de inconsistências
+- Importação em lote via CSV/Excel, com validação e relatório de inconsistências (ver [formato de importação](docs/importacao-questoes.md))
 - Busca, edição, inativação e versionamento do acervo
 
 **Módulo 2 — Geração de Provas**

@@ -7,6 +7,7 @@ from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
+from .presets import preset_enade_initial
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
 from .views import mascara_list
 
@@ -2117,3 +2118,52 @@ class ProvaVersaoModelAndGenerationTest(TestCase):
         self.assertIn('Gabarito_Oficial_Versao_B.pdf', file_names)
         self.assertIn('Caderno_Versao_C.pdf', file_names)
         self.assertIn('Gabarito_Oficial_Versao_C.pdf', file_names)
+
+
+class PresetEnadeTest(TestCase):
+    """Testes do preset de Simulado ENADE (WS2 Fase 1) — máscara MISTA de 40 questões."""
+
+    def setUp(self):
+        self.disciplina = Disciplina.objects.create(nome='Análise e Desenvolvimento de Sistemas')
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='coord_enade', password='secret_password')  # noqa: S106
+
+    def test_preset_initial_tem_estrutura_oficial_enade(self):
+        """O preset propõe 40 questões (35 objetivas + 5 discursivas) em modalidade mista."""
+        initial = preset_enade_initial(self.disciplina)
+        self.assertEqual(initial['modalidade'], MascaraProva.Modalidade.MISTA)
+        self.assertEqual(initial['quantidade_questoes'], 40)
+        self.assertEqual(initial['quantidade_objetivas'], 35)
+        self.assertEqual(initial['quantidade_discursivas'], 5)
+        self.assertTrue(initial['priorizar_enade'])
+        self.assertEqual(
+            initial['percentual_facil'] + initial['percentual_medio'] + initial['percentual_dificil'],
+            100,
+        )
+        self.assertEqual(initial['disciplina'], self.disciplina)
+        self.assertIn(self.disciplina.nome, initial['titulo'])
+
+    def test_preset_sem_disciplina_nao_quebra(self):
+        """Sem disciplina, o preset ainda retorna valores válidos e título genérico."""
+        initial = preset_enade_initial()
+        self.assertNotIn('disciplina', initial)
+        self.assertEqual(initial['titulo'], 'Simulado ENADE')
+
+    def test_mascara_montada_pelo_preset_passa_na_validacao(self):
+        """Uma máscara construída com os valores do preset deve passar no full_clean()."""
+        initial = preset_enade_initial(self.disciplina)
+        mascara = MascaraProva(autor=self.user, **initial)
+        # Não deve levantar ValidationError: soma de dificuldade = 100 e objetivas + discursivas = total.
+        mascara.full_clean()
+
+    def test_create_view_com_preset_enade_pre_preenche_formulario(self):
+        """GET em mascara_create?preset=enade retorna o formulário com os valores ENADE."""
+        self.client.login(username='coord_enade', password='secret_password')  # noqa: S106
+        url = reverse('provas:mascara_create')
+        response = self.client.get(f'{url}?preset=enade&disciplina={self.disciplina.pk}')
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        self.assertEqual(form.initial['quantidade_questoes'], 40)
+        self.assertEqual(form.initial['modalidade'], MascaraProva.Modalidade.MISTA)
+        self.assertEqual(form.initial['quantidade_objetivas'], 35)
+        self.assertEqual(form.initial['disciplina'], self.disciplina)

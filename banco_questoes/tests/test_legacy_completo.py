@@ -1163,7 +1163,7 @@ class QuestaoFormUnitTest(TestCase):
 
 
 class CSVExportViewTest(TestCase):
-    """Testes de integração para o download e exportação no formato de 10 colunas."""
+    """Testes de integração para o download e exportação no formato de 15 colunas."""
 
     def setUp(self):
         from django.contrib.auth import get_user_model
@@ -1209,8 +1209,8 @@ class CSVExportViewTest(TestCase):
         )
         self.q_dis.tags.add('http', 'web')
 
-    def test_export_csv_10col_contains_real_database_records(self):
-        """Verifica se o CSV de 10 colunas exporta os registros reais incluindo origem e numero_questao."""
+    def test_export_csv_15col_contains_real_database_records(self):
+        """Verifica se o CSV de 15 colunas exporta os registros reais, incluindo classificação."""
         from django.urls import reverse
 
         url = reverse('banco_questoes:download_modelo_csv')
@@ -1226,9 +1226,10 @@ class CSVExportViewTest(TestCase):
         content = response.content.decode('utf-8')
         self.assertTrue(content.startswith('\ufeff'))
 
-        # Verifica cabeçalho de 10 colunas
+        # Verifica cabeçalho de 15 colunas (com classificação)
         self.assertIn(
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios',
+            'origem,questao,tipo,disciplina,topico,dificuldade,enunciado,'
+            'opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,tags,comentarios',
             content,
         )
 
@@ -1241,9 +1242,9 @@ class CSVExportViewTest(TestCase):
         self.assertIn('Explique o ciclo de vida de uma requisição HTTP.', content)
         self.assertIn('DNS, handshake TCP, requisição HTTP, resposta do servidor.', content)
 
-        # Verifica que campos internos NÃO estão no CSV
-        self.assertNotIn('Estrutura de Dados (ESD)', content)
-        self.assertNotIn('Árvores Binárias', content)
+        # Classificação AGORA é exportada (disciplina, tópico e tags)
+        self.assertIn('Estrutura de Dados (ESD)', content)
+        self.assertIn('Árvores Binárias', content)
 
     def test_export_csv_respects_active_filters(self):
         """Verifica se o CSV exporta apenas os registros que atendem aos filtros ativos da query string."""
@@ -1324,7 +1325,7 @@ class ExcelExportViewTest(TestCase):
         )
 
     def test_export_excel_contains_real_database_records(self):
-        """Verifica se o workbook .xlsx exportado contém as 10 colunas e dados reais do banco."""
+        """Verifica se o workbook .xlsx exportado contém as 15 colunas e dados reais do banco."""
         import openpyxl
         from django.urls import reverse
 
@@ -1335,11 +1336,15 @@ class ExcelExportViewTest(TestCase):
         self.assertIn('Acervo de Questões', wb.sheetnames)
         ws = wb['Acervo de Questões']
 
-        # Verifica cabeçalhos na linha 1
+        # Verifica cabeçalhos na linha 1 (15 colunas, com classificação)
         headers = [cell.value for cell in ws[1]]
         expected_headers = [
             'origem',
             'questao',
+            'tipo',
+            'disciplina',
+            'topico',
+            'dificuldade',
             'enunciado',
             'opcao_a',
             'opcao_b',
@@ -1347,6 +1352,7 @@ class ExcelExportViewTest(TestCase):
             'opcao_d',
             'opcao_e',
             'gabarito',
+            'tags',
             'comentarios',
         ]
         self.assertEqual(headers, expected_headers)
@@ -1354,20 +1360,23 @@ class ExcelExportViewTest(TestCase):
         # Deve conter 3 linhas: cabeçalho + 2 questões
         self.assertEqual(ws.max_row, 3)
 
-        # Linha 2: Questão HTTP (mais recente por -criado_em)
+        # Linha 2: Questão HTTP discursiva (mais recente por -criado_em)
         row2 = [cell.value for cell in ws[2]]
         self.assertEqual(row2[0], 'POSCOMP 2025')
         self.assertEqual(row2[1], '15')
-        self.assertEqual(row2[2], 'Explique o ciclo de vida de uma requisição HTTP.')
-        self.assertEqual(row2[9], 'DNS, handshake TCP, requisição HTTP, resposta do servidor.')
+        self.assertEqual(row2[2], 'DIS')
+        self.assertEqual(row2[3], 'Construção de Aplicações WEB (CAW)')
+        self.assertEqual(row2[6], 'Explique o ciclo de vida de uma requisição HTTP.')
+        self.assertEqual(row2[14], 'DNS, handshake TCP, requisição HTTP, resposta do servidor.')
 
-        # Linha 3: Questão AVL
+        # Linha 3: Questão AVL objetiva
         row3 = [cell.value for cell in ws[3]]
         self.assertEqual(row3[0], 'ENADE ADS 2021')
         self.assertEqual(row3[1], '26')
-        self.assertEqual(row3[2], 'Qual a complexidade de inserção numa árvore AVL balanceada?')
-        self.assertEqual(row3[3], 'O(log n)')
-        self.assertEqual(row3[8], 'A')
+        self.assertEqual(row3[2], 'OBJ')
+        self.assertEqual(row3[6], 'Qual a complexidade de inserção numa árvore AVL balanceada?')
+        self.assertEqual(row3[7], 'O(log n)')
+        self.assertEqual(row3[12], 'A')
 
     def test_export_excel_respects_active_filters(self):
         """Verifica se a exportação em Excel exporta apenas registros correspondentes ao filtro GET."""
@@ -1385,7 +1394,7 @@ class ExcelExportViewTest(TestCase):
         self.assertEqual(ws.max_row, 2)
         row2 = [cell.value for cell in ws[2]]
         self.assertEqual(row2[0], 'ENADE ADS 2021')
-        self.assertEqual(row2[2], 'Qual a complexidade de inserção numa árvore AVL balanceada?')
+        self.assertEqual(row2[6], 'Qual a complexidade de inserção numa árvore AVL balanceada?')
 
     def test_export_excel_empty_database_generates_sample_records(self):
         """Verifica se o acervo vazio gera planilha modelo com dados de exemplo ENADE/POSCOMP."""
@@ -1402,11 +1411,12 @@ class ExcelExportViewTest(TestCase):
         wb = openpyxl.load_workbook(io.BytesIO(response.content))
         ws = wb['Acervo de Questões']
 
-        self.assertEqual(ws.max_row, 3)
+        # Cabeçalho + 3 exemplos (2 objetivas + 1 discursiva)
+        self.assertEqual(ws.max_row, 4)
         row2 = [cell.value for cell in ws[2]]
         self.assertEqual(row2[0], 'ENADE ADS 2021')
         self.assertEqual(row2[1], '26')
-        self.assertIn('DNS', row2[2])
+        self.assertIn('DNS', row2[6])
 
 
 class AuthenticationViewsTest(TestCase):
