@@ -38,6 +38,9 @@ class Mascara(models.Model):
         'banco_questoes.Disciplina',
         on_delete=models.PROTECT,
         related_name='mascaras',
+        null=True,
+        blank=True,
+        help_text='Opcional. Sem disciplina, a máscara considera questões de todas as disciplinas.',
         verbose_name='disciplina',
     )
     quantidade_questoes = models.PositiveIntegerField(
@@ -137,7 +140,8 @@ class Mascara(models.Model):
         verbose_name_plural = 'máscaras de prova'
 
     def __str__(self):
-        return f'{self.titulo} ({self.disciplina.nome})'
+        escopo = self.disciplina.nome if self.disciplina else 'Todas as disciplinas'
+        return f'{self.titulo} ({escopo})'
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

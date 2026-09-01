@@ -34,7 +34,7 @@ class MascaraForm(forms.ModelForm):
         labels = {
             'titulo': 'Título da Máscara',
             'descricao': 'Descrição / Observações Pedagógicas (Opcional)',
-            'disciplina': 'Disciplina',
+            'disciplina': 'Disciplina (opcional)',
             'quantidade_questoes': 'Quantidade Total de Questões',
             'modalidade': 'Modalidade das Questões',
             'quantidade_objetivas': 'Qtd. de Questões Objetivas',
@@ -99,6 +99,11 @@ class MascaraForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['disciplina'].queryset = Disciplina.objects.filter(ativo=True)
 
+        self.fields['disciplina'].required = False
+        self.fields['disciplina'].empty_label = 'Todas as disciplinas (simulado integrado)'
+        self.fields['disciplina'].help_text = (
+            'Deixe em branco para criar um simulado integrado e identificar dificuldades por tópico em todo o acervo.'
+        )
     def clean(self):
         cleaned = super().clean()
         facil = cleaned.get('percentual_facil') or 0

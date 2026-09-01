@@ -30,10 +30,10 @@ ENADE_VALOR_TOTAL = 10
 def preset_enade_initial(disciplina=None):
     """
     Retorna o dicionário de valores iniciais para pré-preencher o MascaraForm
-    no formato de Simulado ENADE. A disciplina é opcional (o docente escolhe).
+    no formato de Simulado ENADE. Sem disciplina, o simulado abrange todo o acervo do curso.
     """
     initial = {
-        'titulo': f'Simulado ENADE — {disciplina.nome}' if disciplina else 'Simulado ENADE',
+        'titulo': f'Simulado ENADE — {disciplina.nome}' if disciplina else 'Simulado ENADE 2026 — ADS',
         'modalidade': Mascara.Modalidade.MISTA,
         'quantidade_questoes': ENADE_TOTAL_QUESTOES,
         'quantidade_objetivas': ENADE_QTD_OBJETIVAS,

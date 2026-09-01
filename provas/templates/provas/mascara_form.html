@@ -57,10 +57,11 @@
 
         <div class="col-span-4">
           <label for="{{ form.disciplina.id_for_label }}" class="form-label font-bold">
-            {{ form.disciplina.label }} <span class="text-danger">*</span>
+            {{ form.disciplina.label }}
           </label>
           {{ form.disciplina }}
           {% if form.disciplina.errors %}
+          <div class="form-help">{{ form.disciplina.help_text }}</div>
           <div class="invalid-feedback">{{ form.disciplina.errors|join:", " }}</div>
           {% endif %}
         </div>

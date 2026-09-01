@@ -141,7 +141,7 @@ def mascara_update(request, pk):
     if request.method == 'POST':
         form = MascaraProvaForm(request.POST, instance=mascara)
         disc_id = request.POST.get('disciplina')
-        disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else mascara.disciplina
+        disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else None
         formset = MascaraTopicoFormSet(
             request.POST,
             instance=mascara,
@@ -196,7 +196,9 @@ def mascara_detail(request, pk):
     distribuicao_dif = mascara.calcular_distribuicao_dificuldade()
 
     # Diagnóstico de estoque real no acervo de questões
-    questoes_base = Questao.objects.filter(disciplina=mascara.disciplina, ativo=True)
+    questoes_base = Questao.objects.filter(ativo=True)
+    if mascara.disciplina_id:
+        questoes_base = questoes_base.filter(disciplina=mascara.disciplina)
 
     if mascara.modalidade == MascaraProva.Modalidade.OBJETIVA:
         questoes_base = questoes_base.filter(tipo=Questao.Tipo.OBJETIVA)

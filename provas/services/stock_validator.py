@@ -87,10 +87,9 @@ def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
     """
     matriz = mascara.calcular_matriz_metas()
 
-    questoes_base = Questao.objects.filter(
-        disciplina=mascara.disciplina,
-        ativo=True,
-    )
+    questoes_base = Questao.objects.filter(ativo=True)
+    if mascara.disciplina_id:
+        questoes_base = questoes_base.filter(disciplina=mascara.disciplina)
 
     if mascara.modalidade == mascara.Modalidade.OBJETIVA:
         questoes_base = questoes_base.filter(tipo=Questao.Tipo.OBJETIVA)

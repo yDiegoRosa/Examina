@@ -120,7 +120,7 @@
             </div>
           </td>
           <td>
-            <span class="font-bold" style="color: var(--fae-blue-primary);">{{ m.disciplina.nome }}</span>
+            <span class="font-bold" style="color: var(--fae-blue-primary);">{% if m.disciplina %}{{ m.disciplina.nome }}{% else %}Todas as disciplinas{% endif %}</span>
           </td>
           <td>
             <div class="font-bold text-main">{{ m.quantidade_questoes }} itens</div>

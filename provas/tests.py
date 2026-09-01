@@ -302,6 +302,56 @@ class MascaraViewsTest(TestCase):
         self.assertIn('estoque', data)
 
 
+class MascaraInterdisciplinarTest(TestCase):
+    """Garante a geração automática de simulados com todas as disciplinas."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='coord_integrado', password='secret_password')  # noqa: S106
+        self.disciplina_1 = Disciplina.objects.create(nome='Algoritmos')
+        self.disciplina_2 = Disciplina.objects.create(nome='Banco de Dados')
+        self.topico_1 = Topico.objects.create(disciplina=self.disciplina_1, nome='Estruturas de Controle')
+        self.topico_2 = Topico.objects.create(disciplina=self.disciplina_2, nome='Modelagem Relacional')
+
+        Questao.objects.create(
+            disciplina=self.disciplina_1,
+            topico=self.topico_1,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.FACIL,
+            enunciado='Questão integrada fácil.',
+        )
+        Questao.objects.create(
+            disciplina=self.disciplina_2,
+            topico=self.topico_2,
+            tipo=Questao.Tipo.OBJETIVA,
+            dificuldade=Questao.Dificuldade.MEDIO,
+            enunciado='Questão integrada média.',
+        )
+
+    def test_gera_prova_com_questoes_de_disciplinas_distintas(self):
+        mascara = Mascara.objects.create(
+            titulo='Simulado ENADE 2026 — ADS',
+            quantidade_questoes=2,
+            modalidade=Mascara.Modalidade.OBJETIVA,
+            quantidade_objetivas=2,
+            quantidade_discursivas=0,
+            percentual_facil=50,
+            percentual_medio=50,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        self.assertIsNone(mascara.disciplina)
+        self.assertTrue(mascara.validar_estoque().esta_valido)
+        prova = mascara.gerar_prova(autor=self.user)
+
+        self.assertIsNone(prova.disciplina)
+        self.assertEqual(prova.itens.count(), 2)
+        self.assertEqual(
+            {item.questao.disciplina_id for item in prova.itens.all()},
+            {self.disciplina_1.pk, self.disciplina_2.pk},
+        )
+
 class WeasyPrintPDFGenerationTest(TestCase):
     """Testes de compilação de PDF com WeasyPrint e validação de layout."""
 
@@ -2147,7 +2197,7 @@ class PresetEnadeTest(TestCase):
         """Sem disciplina, o preset ainda retorna valores válidos e título genérico."""
         initial = preset_enade_initial()
         self.assertNotIn('disciplina', initial)
-        self.assertEqual(initial['titulo'], 'Simulado ENADE')
+        self.assertEqual(initial['titulo'], 'Simulado ENADE 2026 — ADS')
 
     def test_mascara_montada_pelo_preset_passa_na_validacao(self):
         """Uma máscara construída com os valores do preset deve passar no full_clean()."""

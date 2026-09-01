@@ -27,7 +27,7 @@ def construir_snapshot_mascara(mascara: Mascara) -> dict[str, Any]:
         'mascara_id': mascara.pk,
         'titulo': mascara.titulo,
         'disciplina_id': mascara.disciplina_id,
-        'disciplina_nome': mascara.disciplina.nome,
+        'disciplina_nome': mascara.disciplina.nome if mascara.disciplina else 'Todas as disciplinas',
         'quantidade_questoes': mascara.quantidade_questoes,
         'modalidade': mascara.modalidade,
         'modalidade_display': mascara.get_modalidade_display(),
