@@ -36,7 +36,7 @@ ignore = [
 "**/migrations/**" = ["E501"]   # migrations geradas podem ter linhas longas
 
 [lint.isort]
-known-first-party = ["Examina", "banco_questoes", "provas"]
+known-first-party = ["Examina", "academico", "banco_questoes", "provas"]
 
 [format]
 quote-style = "single"

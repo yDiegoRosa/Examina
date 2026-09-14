@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'taggit',
     'django_filters',
     # Local apps
+    'academico.apps.AcademicoConfig',
     'banco_questoes',
     'provas.apps.ProvasConfig',
 ]
