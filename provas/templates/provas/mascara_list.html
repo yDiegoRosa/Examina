@@ -3,6 +3,10 @@
 {% block title %}Máscaras de Avaliação — Examina FAETERJ-Rio{% endblock %}
 
 {% block content %}
+<div class="flex flex-wrap gap-2 mb-4" aria-label="Navegação de provas">
+  <a href="{% url 'provas:index' %}" class="btn btn-outline"><i class="bi bi-collection"></i> Provas salvas</a>
+  <a href="{% url 'provas:mascara_list' %}" class="btn btn-primary" aria-current="page">Máscaras de avaliação</a>
+</div>
 <div class="hero-card mb-4">
   <div>
     <div class="flex items-center gap-2 mb-2">

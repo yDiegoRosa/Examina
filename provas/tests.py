@@ -14,7 +14,7 @@ from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
 from .presets import preset_enade_initial
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
-from .views import mascara_list
+from .views import prova_list
 
 
 @skipUnless(connection.vendor == 'mysql', 'Regressão da estrutura legada específica do MySQL.')
@@ -113,9 +113,9 @@ class ProvasAppBaseTest(TestCase):
         self.user = user_model.objects.create_user(username='docente_provas', password='secret_password')  # noqa: S106
 
     def test_provas_index_url_resolves(self):
-        """Verifica se a rota /provas/ resolve para a view mascara_list (painel principal)."""
+        """O painel principal dá acesso às provas persistidas."""
         found = resolve('/provas/')
-        self.assertEqual(found.func, mascara_list)
+        self.assertEqual(found.func, prova_list)
 
     def test_provas_index_requires_login(self):
         """Verifica que /provas/ redireciona usuários anônimos para o login."""
@@ -130,7 +130,64 @@ class ProvasAppBaseTest(TestCase):
         url = reverse('provas:index')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Máscaras de Avaliação')
+        self.assertContains(response, 'Provas salvas')
+        self.assertContains(response, reverse('provas:mascara_list'))
+
+
+class ProvaListTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from provas.models import Prova
+
+        cls.user = get_user_model().objects.create_user(username='docente_painel')
+        cls.disciplina = Disciplina.objects.create(nome='Disciplina arquivada', ativo=False)
+        cls.outra = Disciplina.objects.create(nome='Outra disciplina')
+        cls.manual = Prova.objects.create(
+            titulo='Avaliação manual salva', tipo_geracao='MANUAL', disciplina=cls.disciplina
+        )
+        cls.mascara = MascaraProva.objects.create(titulo='Máscara de referência', disciplina=cls.outra)
+        cls.automatica = Prova.objects.create(titulo='Avaliação por máscara', mascara=cls.mascara)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_painel_inclui_provas_sem_mascara_e_metricas(self):
+        response = self.client.get(reverse('provas:index'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['metricas'], {'total': 2, 'manuais': 1, 'automaticas': 1})
+        self.assertContains(response, self.manual.titulo)
+        self.assertContains(response, self.automatica.titulo)
+        self.assertContains(response, reverse('provas:prova_revisao', kwargs={'pk': self.manual.pk}))
+
+    def test_filtros_busca_tipo_e_disciplina_inativa(self):
+        response = self.client.get(
+            reverse('provas:prova_list'), {'q': 'manual salva', 'tipo': 'MANUAL', 'disciplina': self.disciplina.pk}
+        )
+        self.assertEqual(list(response.context['provas']), [self.manual])
+        self.assertContains(response, 'Disciplina arquivada')
+        self.assertNotContains(response, self.automatica.titulo)
+
+    def test_filtro_considera_disciplina_herdada_da_mascara(self):
+        response = self.client.get(reverse('provas:index'), {'disciplina': self.outra.pk, 'tipo': 'AUTOMATICA'})
+        self.assertEqual(list(response.context['provas']), [self.automatica])
+
+    def test_filtros_invalidos_e_estado_sem_resultados(self):
+        response = self.client.get(reverse('provas:index'), {'disciplina': 'invalida', 'tipo': 'invalido'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 2)
+        response = self.client.get(reverse('provas:index'), {'q': 'titulo inexistente'})
+        self.assertContains(response, 'Nenhuma prova encontrada')
+
+    def test_paginacao_mantem_filtros_e_ordem_das_provas(self):
+        from provas.models import Prova
+
+        Prova.objects.bulk_create(
+            [Prova(titulo=f'Lote {numero}', tipo_geracao='MANUAL', disciplina=self.disciplina) for numero in range(13)]
+        )
+        response = self.client.get(reverse('provas:index'), {'q': 'Lote', 'tipo': 'MANUAL', 'page': '2'})
+        self.assertEqual(len(response.context['provas']), 1)
+        self.assertEqual(response.context['provas'][0].titulo, 'Lote 0')
+        self.assertEqual(response.context['querystring'], 'q=Lote&tipo=MANUAL')
 
 
 class MascaraProvaModelTest(TestCase):
@@ -2006,6 +2063,35 @@ class MontagemManualProvaTest(TestCase):
         self.assertContains(response, 'Sistemas Distribuídos')
         self.assertEqual(response.context['total_meta'], 2)
         self.assertEqual(response.context['total_atual'], 2)
+        self.assertEqual([v.identificador for v in response.context['versoes']], ['A', 'B', 'C'])
+        self.assertContains(response, 'Prova salva no painel')
+        self.assertNotContains(response, 'algoritmo RF07')
+        self.assertContains(response, 'versao=B&incluir_capa=1&incluir_gabarito=0')
+
+    def test_prova_manual_pode_ser_reaberta_pelo_painel_em_nova_sessao(self):
+        from provas.models import Prova
+
+        response = self.client.post(
+            reverse('provas:prova_manual_create'),
+            {
+                'titulo': 'Prova para usar depois',
+                'disciplina': self.disc.pk,
+                'numero_caderno': 1,
+                'questoes_selecionadas': [self.q2.pk, self.q1.pk],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        prova = Prova.objects.get(titulo='Prova para usar depois')
+        self.client.logout()
+        self.client.force_login(self.user)
+        painel = self.client.get(reverse('provas:index'))
+        self.assertContains(painel, prova.titulo)
+        self.assertEqual(painel.context['provas'][0].total_itens, 2)
+        self.assertEqual(painel.context['provas'][0].total_versoes, 3)
+        revisao = self.client.get(reverse('provas:prova_revisao', kwargs={'pk': prova.pk}))
+        self.assertEqual(revisao.status_code, 200)
+        self.assertEqual([item.questao_id for item in revisao.context['itens']], [self.q2.pk, self.q1.pk])
+        self.assertEqual([v.identificador for v in revisao.context['versoes']], ['A', 'B', 'C'])
 
     def test_troca_questao_em_prova_manual(self):
         """Garante que a troca individual de questão funciona em avaliações manuais."""

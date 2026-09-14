@@ -26,6 +26,53 @@ from .services.stock_validator import EstoqueInsuficienteError
 logger = logging.getLogger(__name__)
 
 
+@login_required
+def prova_list(request):
+    """Lista as provas persistidas, inclusive montagens manuais sem máscara."""
+    provas = Prova.objects.select_related('disciplina', 'mascara__disciplina', 'autor').annotate(
+        total_itens=Count('itens', distinct=True), total_versoes=Count('versoes', distinct=True)
+    )
+    metricas = Prova.objects.aggregate(
+        total=Count('pk'),
+        manuais=Count('pk', filter=Q(tipo_geracao=Prova.TipoGeracao.MANUAL)),
+        automaticas=Count('pk', filter=Q(tipo_geracao=Prova.TipoGeracao.AUTOMATICA)),
+    )
+    busca = request.GET.get('q', '').strip()
+    tipo = request.GET.get('tipo', '')
+    disciplina_id = request.GET.get('disciplina', '')
+    if busca:
+        provas = provas.filter(titulo__icontains=busca)
+    if tipo in Prova.TipoGeracao.values:
+        provas = provas.filter(tipo_geracao=tipo)
+    else:
+        tipo = ''
+    if disciplina_id.isascii() and disciplina_id.isdigit() and len(disciplina_id) <= 18:
+        provas = provas.filter(
+            Q(disciplina_id=disciplina_id) | Q(disciplina__isnull=True, mascara__disciplina_id=disciplina_id)
+        )
+    else:
+        disciplina_id = ''
+    paginator = Paginator(provas.order_by('-criado_em', '-pk'), 12)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(
+        request,
+        'provas/prova_list.html',
+        {
+            'provas': page_obj,
+            'page_obj': page_obj,
+            'page_range': paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1),
+            'querystring': params.urlencode(),
+            'metricas': metricas,
+            'busca': busca,
+            'tipo_selecionado': tipo,
+            'disciplina_selecionada': disciplina_id,
+            'disciplinas': Disciplina.objects.order_by('nome'),
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Listagem de Máscaras (Blueprints)
 # ---------------------------------------------------------------------------
@@ -528,8 +575,10 @@ def prova_revisao(request, pk):
             'linhas_comparativo': linhas_comparativo,
             'resumo_dificuldade': resumo_dificuldade,
             'resumo_topicos': topicos_ordenados,
+            'total_topicos': sum(topico['topico_id'] is not None for topico in topicos_ordenados),
             'total_meta': total_meta,
             'total_atual': total_atual,
+            'versoes': prova.versoes.annotate(total_itens=Count('itens')).order_by('numero_versao', 'identificador'),
         },
     )
 

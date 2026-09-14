@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
   <!-- Design System Vanilla CSS (Zero Bootstrap) -->
-  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}">
+  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20260914.1">
 
   {% block extra_css %}{% endblock %}
 </head>
@@ -36,7 +36,7 @@
 
         <ul class="nav-links">
           <li>
-            <a class="nav-item-link {% if request.resolver_match.app_name == 'banco_questoes' and request.resolver_match.url_name == 'questao_list' or request.resolver_match.url_name == 'index' %}active{% endif %}" href="{% url 'banco_questoes:questao_list' %}">
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'banco_questoes' %}active{% endif %}" href="{% url 'banco_questoes:questao_list' %}">
               <i class="bi bi-grid-fill"></i> Acervo de Questões
             </a>
           </li>

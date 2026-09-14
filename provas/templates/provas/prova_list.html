@@ -1,42 +1,40 @@
 {% extends "banco_questoes/base.html" %}
-
-{% block title %}Módulo de Provas — Examina FAETERJ-Rio{% endblock %}
-
+{% load static %}
+{% block title %}Provas salvas — Examina{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'provas/css/workspace.css' %}">{% endblock %}
 {% block content %}
-<div class="hero-card mb-4">
-  <div>
-    <div class="flex items-center gap-2 mb-2">
-      <span class="hero-tag">
-        <i class="bi bi-file-earmark-ruled-fill"></i> Módulo 2 • Geração de Provas e Avaliações
-      </span>
+<div class="exam-workspace">
+  <header class="exam-heading">
+    <div><span class="exam-eyebrow">BIBLIOTECA DE AVALIAÇÕES</span><h1>Suas provas, prontas para usar.</h1><p>Retome uma avaliação, revise as questões e imprima seus cadernos quando precisar.</p></div>
+    <a href="{% url 'provas:prova_manual_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Nova prova manual</a>
+  </header>
+  <nav class="exam-tabs" aria-label="Navegação de provas">
+    <a href="{% url 'provas:index' %}" aria-current="page">Provas salvas <span>{{ metricas.total }}</span></a>
+    <a href="{% url 'provas:mascara_list' %}">Máscaras de avaliação <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+  </nav>
+  <div class="exam-library-summary"><span><strong>{{ metricas.manuais }}</strong> manuais</span><span><strong>{{ metricas.automaticas }}</strong> geradas por máscara</span><span class="exam-summary-note"><i class="bi bi-check2-circle" aria-hidden="true"></i> Salvas automaticamente ao gerar</span></div>
+  <section class="exam-panel" aria-labelledby="library-title">
+    <div class="exam-section-heading"><div><h2 id="library-title">Provas salvas</h2><p>{{ page_obj.paginator.count }} {% if page_obj.paginator.count == 1 %}avaliação encontrada{% else %}avaliações encontradas{% endif %}</p></div><a href="{% url 'provas:mascara_list' %}" class="exam-text-link">Gerar por máscara <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+    <form method="get" class="exam-filters">
+      <div class="exam-search"><label for="prova-busca">Buscar prova</label><input id="prova-busca" name="q" value="{{ busca }}" class="form-input" placeholder="Digite o título da avaliação"></div>
+      <div><label for="prova-disciplina">Disciplina</label><select id="prova-disciplina" name="disciplina" class="form-select"><option value="">Todas as disciplinas</option>{% for d in disciplinas %}<option value="{{ d.pk }}" {% if disciplina_selecionada == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.nome }}</option>{% endfor %}</select></div>
+      <div><label for="prova-tipo">Criação</label><select id="prova-tipo" name="tipo" class="form-select"><option value="">Todos os tipos</option><option value="MANUAL" {% if tipo_selecionado == 'MANUAL' %}selected{% endif %}>Manual</option><option value="AUTOMATICA" {% if tipo_selecionado == 'AUTOMATICA' %}selected{% endif %}>Por máscara</option></select></div>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Filtrar</button>
+      {% if busca or disciplina_selecionada or tipo_selecionado %}<a class="exam-text-link" href="{% url 'provas:index' %}">Limpar</a>{% endif %}
+    </form>
+    <div class="exam-saved-list">
+      {% for p in provas %}
+      <article class="exam-saved-row">
+        <div class="exam-document-icon" aria-hidden="true"><i class="bi bi-file-earmark-text"></i></div>
+        <div class="exam-saved-info"><div class="exam-row-labels"><span class="exam-id">#{{ p.pk }}</span><span class="exam-chip {% if p.tipo_geracao == 'MANUAL' %}exam-chip-manual{% endif %}">{% if p.tipo_geracao == 'MANUAL' %}Manual{% else %}Por máscara{% endif %}</span></div><h3><a href="{% url 'provas:prova_revisao' pk=p.pk %}">{{ p.titulo }}</a></h3><p>{% if p.disciplina_efetiva %}{{ p.disciplina_efetiva.nome }}{% else %}Todas as disciplinas{% endif %}</p><small>{{ p.criado_em|date:"d/m/Y · H:i" }}{% if p.autor %} · {{ p.autor.get_full_name|default:p.autor.username }}{% endif %}</small></div>
+        <div class="exam-saved-numbers"><span><strong>{{ p.total_itens }}</strong> questões</span><span><strong>{{ p.total_versoes }}</strong> versões</span></div>
+        <a href="{% url 'provas:prova_revisao' pk=p.pk %}" class="btn btn-outline" aria-label="Abrir prova {{ p.titulo }}">Abrir prova <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+      </article>
+      {% empty %}
+      <div class="exam-empty"><i class="bi bi-journal-bookmark" aria-hidden="true"></i>{% if busca or disciplina_selecionada or tipo_selecionado %}<h3>Nenhuma prova encontrada</h3><p>Ajuste os filtros ou busque por outro título.</p><a href="{% url 'provas:index' %}" class="btn btn-outline">Ver todas as provas</a>{% else %}<h3>Sua primeira prova começa aqui</h3><p>Escolha questões do acervo ou use uma máscara. A avaliação ficará salva neste painel.</p><a href="{% url 'provas:prova_manual_create' %}" class="btn btn-primary">Criar prova manual</a>{% endif %}</div>
+      {% endfor %}
     </div>
-    <h1 class="mb-1">Provas e Avaliações</h1>
-    <p class="text-secondary" style="max-width: 580px;">
-      Composição, formatação e geração automatizada de avaliações acadêmicas e gabaritos para a FAETERJ-Rio.
-    </p>
-  </div>
-  <div class="flex flex-wrap gap-2 mt-3 items-center">
-    <a href="{% url 'provas:mascara_list' %}" class="btn btn-primary flex items-center gap-2">
-      <i class="bi bi-card-checklist"></i> Máscaras de Avaliação
-    </a>
-    <a href="{% url 'provas:pdf_teste' %}" target="_blank" class="btn btn-gold flex items-center gap-2">
-      <i class="bi bi-file-earmark-pdf-fill"></i> Testar Geração de PDF (WeasyPrint)
-    </a>
-  </div>
-</div>
-
-<div class="card-surface p-4 text-center">
-  <div class="text-muted mb-2" style="font-size: 3rem; color: var(--fae-blue-electric);">
-    <i class="bi bi-journal-bookmark-fill"></i>
-  </div>
-  <h3 class="font-bold text-main mb-2">Motor WeasyPrint Configurado</h3>
-  <p class="text-secondary mb-4" style="max-width: 500px; margin: 0 auto;">
-    O motor de geração de PDFs está ativo com suporte completo a CSS Paged Media (<code>@page</code>), contadores de página, cabeçalhos institucionais e quebras de página automáticas.
-  </p>
-  <div>
-    <a href="{% url 'provas:pdf_teste' %}" target="_blank" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
-      <i class="bi bi-file-pdf"></i> Visualizar PDF Modelo de Teste
-    </a>
-  </div>
+    {% include "banco_questoes/includes/pagination.html" %}
+  </section>
 </div>
 {% endblock %}

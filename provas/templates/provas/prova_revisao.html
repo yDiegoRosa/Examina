@@ -1,390 +1,55 @@
 {% extends "banco_questoes/base.html" %}
-
-{% block title %}Revisão — {{ prova.titulo }} — Examina FAETERJ-Rio{% endblock %}
-
+{% load static %}
+{% block title %}Revisão — {{ prova.titulo }} — Examina{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'provas/css/workspace.css' %}">{% endblock %}
 {% block content %}
-<!-- Hero Card -->
-<div class="hero-card mb-4">
-  <div>
-    <div class="flex items-center gap-2 mb-2">
-      <span class="hero-tag">
-        <i class="bi bi-clipboard2-check-fill"></i> Revisão da Seleção • Prova #{{ prova.pk }}
-      </span>
-      <span class="badge-pill badge-pill-active small">Caderno {{ prova.numero_caderno }}</span>
-    </div>
-    <h1 class="mb-1">{{ prova.titulo }}</h1>
-    <p class="text-secondary" style="max-width: 650px;">
-      {% if prova.disciplina_efetiva %}{{ prova.disciplina_efetiva.nome }}{% else %}Todas as disciplinas{% endif %} • {{ total_atual }} questões selecionadas • Gerada em {{ prova.criado_em|date:"d/m/Y H:i" }}
-      {% if prova.tipo_geracao == 'MANUAL' %}<span class="badge-pill badge-pill-inactive small ms-1">Montagem Manual</span>{% endif %}
-      {% if prova.autor %} por {{ prova.autor.get_full_name|default:prova.autor.username }}{% endif %}
-    </p>
+<div class="exam-workspace">
+  <nav class="exam-breadcrumb" aria-label="Caminho de navegação"><a href="{% url 'provas:index' %}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Provas salvas</a><span aria-hidden="true">/</span><span>Revisão da prova</span></nav>
+  <header class="exam-heading exam-review-heading">
+    <div><div class="exam-row-labels"><span class="exam-eyebrow">AVALIAÇÃO #{{ prova.pk }}</span><span class="exam-chip {% if prova.tipo_geracao == 'MANUAL' %}exam-chip-manual{% endif %}">{% if prova.tipo_geracao == 'MANUAL' %}Montagem Manual{% else %}Gerada por máscara{% endif %}</span></div><h1>{{ prova.titulo }}</h1><p>{% if prova.disciplina_efetiva %}{{ prova.disciplina_efetiva.nome }}{% else %}Todas as disciplinas{% endif %}{% if prova.autor %} · {{ prova.autor.get_full_name|default:prova.autor.username }}{% endif %}</p></div>
+    <div class="exam-heading-actions">{% if versoes %}<a class="btn btn-primary" href="{% url 'provas:prova_pacote_zip' pk=prova.pk %}"><i class="bi bi-download" aria-hidden="true"></i> Baixar todos os cadernos</a>{% endif %}<a href="#questoes-selecionadas" class="btn btn-outline">Revisar questões <i class="bi bi-arrow-down" aria-hidden="true"></i></a></div>
+  </header>
+  <div class="exam-saved-notice"><i class="bi bi-check-circle-fill" aria-hidden="true"></i><div><strong>Prova salva no painel</strong><span>Criada em {{ prova.criado_em|date:"d/m/Y" }} às {{ prova.criado_em|date:"H:i" }}. Você pode sair e acessá-la novamente quando precisar.</span></div><a href="{% url 'provas:index' %}">Ir para o painel <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a></div>
+  <div class="exam-stats">
+    <div><span>Questões selecionadas</span><strong>{{ total_atual }}</strong><small>na avaliação base</small></div>
+    <div><span>Cadernos disponíveis</span><strong>{{ versoes|length }}</strong><small>com gabaritos individuais</small></div>
+    <div><span>Tópicos contemplados</span><strong>{{ total_topicos }}</strong><small>na seleção de questões</small></div>
+    <div><span>Dificuldade das questões</span><div class="exam-difficulty-counts"><span><b>{{ resumo_dificuldade.F.atual }}</b> Fácil</span><span><b>{{ resumo_dificuldade.M.atual }}</b> Médio</span><span><b>{{ resumo_dificuldade.D.atual }}</b> Difícil</span></div><small>{{ total_atual }} questões ao todo</small></div>
   </div>
-  <div class="flex flex-wrap gap-2 mt-3 items-center">
-    {% if mascara %}
-    <a href="{% url 'provas:mascara_detail' pk=mascara.pk %}" class="btn btn-outline flex items-center gap-2">
-      <i class="bi bi-arrow-left"></i> Voltar à Máscara
-    </a>
-    {% else %}
-    <a href="{% url 'provas:mascara_list' %}" class="btn btn-outline flex items-center gap-2">
-      <i class="bi bi-arrow-left"></i> Voltar ao Painel
-    </a>
-    {% endif %}
-    <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao=A"
-       target="_blank"
-       rel="noopener"
-       class="btn flex items-center gap-2"
-       style="background: #002B49; color: #FFFFFF;"
-       title="Gera o PDF da Versão A com capa e questões formatadas">
-      <i class="bi bi-printer-fill"></i> Imprimir Versão A
-    </a>
-    <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao=A"
-       target="_blank"
-       rel="noopener"
-       class="btn flex items-center gap-2"
-       style="background: #065F46; color: #FFFFFF;"
-       title="Gera o Gabarito Oficial da Versão A">
-      <i class="bi bi-file-earmark-check-fill"></i> Gabarito Versão A
-    </a>
-    <a href="{% url 'provas:prova_pacote_zip' pk=prova.pk %}"
-       class="btn flex items-center gap-2"
-       style="background: #D97706; color: #FFFFFF;"
-       title="Baixa um arquivo compactado ZIP contendo os cadernos e gabaritos de todas as versões geradas (A, B, C...)">
-      <i class="bi bi-file-earmark-zip-fill"></i> Baixar Pacote ZIP (Todas as Versões)
-    </a>
-    <a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}"
-       target="_blank"
-       rel="noopener"
-       class="btn btn-outline flex items-center gap-2"
-       title="Abre somente a folha de rosto / capa padronizada">
-      <i class="bi bi-file-earmark-image"></i> Apenas Capa
-    </a>
-  </div>
-</div>
-
-<!-- Cards de Resumo Rápido -->
-<div class="grid grid-cols-12 gap-4 mb-4">
-  <div class="col-span-3 card-surface p-4 text-center">
-    <div class="stat-label-unified">Total de Questões</div>
-    <div class="stat-num-unified font-mono" style="font-size: 2rem; color: {% if total_atual == total_meta %}var(--color-success){% else %}var(--color-danger){% endif %};">
-      {{ total_atual }}<span class="text-muted" style="font-size: 1rem;"> / {{ total_meta }}</span>
+  <section class="exam-panel" aria-labelledby="versions-title">
+    <div class="exam-section-heading"><div><span class="exam-eyebrow">PRONTA PARA APLICAÇÃO</span><h2 id="versions-title">Cadernos e gabaritos</h2><p>Escolha uma versão para imprimir ou baixe todos os arquivos em um único ZIP.</p></div><a href="{% url 'provas:prova_capa_pdf' pk=prova.pk %}" target="_blank" rel="noopener" class="exam-text-link"><i class="bi bi-file-earmark" aria-hidden="true"></i> Apenas capa</a></div>
+    <div class="exam-version-grid">
+      {% for v in versoes %}
+      <article class="exam-version-card">
+        <div class="exam-version-top"><span class="exam-version-letter" aria-hidden="true">{{ v.identificador }}</span><div><h3>Versão {{ v.identificador }}</h3><p>{{ v.total_itens }} questões · Caderno {{ v.numero_versao }}</p></div></div>
+        <p class="exam-version-description">Caderno e gabarito correspondentes à versão {{ v.identificador }}.</p>
+        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador|urlencode }}&incluir_capa=1&incluir_gabarito=0" target="_blank" rel="noopener" class="btn btn-primary"><i class="bi bi-printer" aria-hidden="true"></i> Caderno do estudante <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+        <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao={{ v.identificador|urlencode }}" target="_blank" rel="noopener" class="btn btn-outline"><i class="bi bi-check2-square" aria-hidden="true"></i> Gabarito do docente</a>
+        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador|urlencode }}&incluir_capa=1&incluir_gabarito=1" target="_blank" rel="noopener" class="exam-complete-link">Prova + gabarito em um PDF <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+      </article>
+      {% empty %}<div class="exam-empty"><h3>Nenhum caderno disponível</h3><p>Use a opção abaixo para gerar as versões desta prova.</p></div>{% endfor %}
     </div>
-    <div class="text-muted small mt-1">
-      {% if total_atual == total_meta %}
-      <i class="bi bi-check-circle-fill text-success"></i> Meta atingida
-      {% else %}
-      <i class="bi bi-exclamation-triangle-fill text-danger"></i> Divergente
-      {% endif %}
+    <details class="exam-manage-versions"><summary><i class="bi bi-sliders" aria-hidden="true"></i> Gerenciar versões</summary><div><p>Gerar novamente substitui os cadernos existentes e pode alterar a ordem de questões e alternativas. Se já imprimiu uma versão, confira o novo gabarito antes de utilizá-la.</p><form method="post" action="{% url 'provas:prova_gerar_versoes' pk=prova.pk %}">{% csrf_token %}<input type="hidden" name="quantidade_versoes" value="3"><button class="btn btn-outline" type="submit"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> {% if versoes %}Gerar novamente{% else %}Gerar{% endif %} versões A/B/C</button></form></div></details>
+  </section>
+  <section class="exam-panel" id="questoes-selecionadas" aria-labelledby="questions-title">
+    <div class="exam-section-heading"><div><span class="exam-eyebrow">CONTEÚDO DA AVALIAÇÃO</span><h2 id="questions-title">Questões Selecionadas <span class="exam-title-count">{{ total_atual }}</span></h2><p>{% if prova.tipo_geracao == 'MANUAL' %}Sua seleção manual, na ordem definida ao criar a prova.{% else %}Confira as questões selecionadas a partir dos critérios da máscara.{% endif %} Abra uma questão para ler o conteúdo completo.</p></div>{% if mascara %}<a href="{% url 'provas:mascara_detail' pk=mascara.pk %}" class="exam-text-link">Ver máscara de origem <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>{% endif %}</div>
+    <div class="exam-question-list" id="tabela-questoes">
+      {% for item in itens %}
+      <article class="exam-question" id="item-row-{{ item.pk }}">
+        <span class="exam-question-number">{{ item.numero|stringformat:"02d" }}</span>
+        <div class="exam-question-main"><div class="exam-question-meta"><span>{% if item.questao.topico %}{{ item.questao.topico.nome }}{% else %}Sem tópico{% endif %}</span><span class="badge-pill {% if item.questao.dificuldade == 'F' %}badge-pill-facil{% elif item.questao.dificuldade == 'M' %}badge-pill-medio{% else %}badge-pill-dificil{% endif %}">{{ item.questao.get_dificuldade_display }}</span><span>{{ item.questao.get_tipo_display }}</span></div>
+          <details class="exam-question-content"><summary><span>{{ item.snapshot_questao.enunciado|default:item.questao.enunciado|striptags|truncatechars:220 }}</span><small>Ver questão completa <i class="bi bi-chevron-down" aria-hidden="true"></i></small></summary><div class="exam-question-full">{{ item.snapshot_questao.enunciado|default:item.questao.enunciado|linebreaksbr }}{% if item.snapshot_questao.alternativas %}<ul class="exam-alternatives">{% for alternativa in item.snapshot_questao.alternativas %}<li><strong>{{ alternativa.letra }}.</strong> {{ alternativa.texto }}{% if alternativa.correta %} <span class="exam-correct-answer">Resposta correta</span>{% endif %}</li>{% endfor %}</ul>{% endif %}</div></details>
+          <div class="exam-question-foot">Q{{ item.questao.pk }}{% if item.questao.origem %} · {{ item.questao.origem }}{% endif %}<span>{{ item.pontuacao }} pts</span></div>
+        </div><button type="button" class="btn btn-outline btn-trocar-questao" data-item-id="{{ item.pk }}" data-item-numero="{{ item.numero }}" data-questao-id="{{ item.questao.pk }}" aria-label="Trocar questão {{ item.numero }}" title="Substituir por outra questão do mesmo tópico e dificuldade"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Trocar</button>
+      </article>
+      {% empty %}<div class="exam-empty"><p>Esta prova ainda não possui questões.</p></div>{% endfor %}
     </div>
-  </div>
-
-  {% for d_code, info in resumo_dificuldade.items %}
-  <div class="col-span-3 card-surface p-4 text-center">
-    <div class="stat-label-unified">{{ info.display }}</div>
-    <div class="stat-num-unified font-mono" style="font-size: 2rem; color: {% if info.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
-      {{ info.atual }}<span class="text-muted" style="font-size: 1rem;"> / {{ info.meta }}</span>
-    </div>
-    <div class="text-muted small mt-1">
-      {% if info.status == 'ok' %}
-      <i class="bi bi-check-circle-fill text-success"></i> OK
-      {% else %}
-      <i class="bi bi-exclamation-triangle-fill text-warning"></i> Divergente
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-<!-- Seção de Versões e Cadernos (Versões A / B / C) -->
-<div class="card-surface p-4 mb-4 border" style="border-color: #002B49; border-left-width: 4px;">
-  <div class="flex flex-wrap justify-between items-center mb-3">
-    <div>
-      <h3 class="font-bold text-base flex items-center gap-2" style="color: #002B49;">
-        <i class="bi bi-shuffle text-primary"></i> Cadernos e Versões da Prova (Prova A / B / C) — RF09
-      </h3>
-      <p class="text-xs text-muted mt-0.5">
-        Cadernos com permutações de ordem de questões e alternativas para distribuição aos estudantes com gabaritos individuais.
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
-      <a href="{% url 'provas:prova_pacote_zip' pk=prova.pk %}"
-         class="btn btn-sm flex items-center gap-1.5"
-         style="background-color: #D97706; color: #FFFFFF;"
-         title="Baixa todos os cadernos e gabaritos em arquivo compactado">
-        <i class="bi bi-file-earmark-zip-fill"></i> Baixar ZIP (Todas as Versões)
-      </a>
-      <form method="post" action="{% url 'provas:prova_gerar_versoes' pk=prova.pk %}" class="inline-flex items-center gap-2">
-        {% csrf_token %}
-        <input type="hidden" name="quantidade_versoes" value="3">
-        <button type="submit" class="btn btn-sm btn-outline flex items-center gap-1.5" title="Reembaralha e regenera as versões A, B e C mantendo as questões selecionadas">
-          <i class="bi bi-arrow-clockwise"></i> Reembaralhar Versões A/B/C
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <div class="grid grid-cols-12 gap-3">
-    {% for v in versoes %}
-    <div class="col-span-4 p-3 rounded-lg border bg-white shadow-sm flex flex-col justify-between" style="border-color: #CBD5E1;">
-      <div class="flex items-center justify-between mb-2">
-        <span class="font-bold text-sm px-2.5 py-1 rounded text-white" style="background-color: #002B49;">
-          Versão {{ v.identificador }}
-        </span>
-        <span class="text-xs text-muted">
-          {{ v.total_questoes }} questões
-        </span>
-      </div>
-      <div class="text-xs text-muted mb-3">
-        {% if forloop.first %}
-        Ordem padrão da avaliação base.
-        {% else %}
-        Questões e alternativas permutadas.
-        {% endif %}
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador }}&incluir_capa=1&incluir_gabarito=0"
-           target="_blank"
-           rel="noopener"
-           class="btn btn-sm text-white flex items-center justify-center gap-1.5"
-           style="background-color: #002B49;"
-           title="Gera o caderno de prova do estudante (Capa + Questões)">
-          <i class="bi bi-mortarboard-fill"></i> Caderno Estudante (Versão {{ v.identificador }})
-        </a>
-        <a href="{% url 'provas:prova_pdf' pk=prova.pk %}?versao={{ v.identificador }}&incluir_capa=1&incluir_gabarito=1"
-           target="_blank"
-           rel="noopener"
-           class="btn btn-sm text-white flex items-center justify-center gap-1.5"
-           style="background-color: #1E3A8A;"
-           title="Gera o pacote completo (Capa + Questões + Gabarito Anexo)">
-          <i class="bi bi-file-earmark-pdf-fill"></i> Prova + Gabarito Completo (PDF)
-        </a>
-        <a href="{% url 'provas:prova_gabarito_pdf' pk=prova.pk %}?versao={{ v.identificador }}"
-           target="_blank"
-           rel="noopener"
-           class="btn btn-sm text-white flex items-center justify-center gap-1.5"
-           style="background-color: #065F46;"
-           title="Gera somente o gabarito oficial com a ordem exata da Versão {{ v.identificador }}">
-          <i class="bi bi-file-earmark-check-fill"></i> Gabarito Oficial (Docente)
-        </a>
-      </div>
-    </div>
-    {% empty %}
-    <div class="col-span-12 text-center text-muted py-3 text-sm">
-      Nenhuma versão gerada ainda. Clique em "Reembaralhar Versões A/B/C" para gerar os cadernos.
-    </div>
-    {% endfor %}
-  </div>
-</div>
-
-
-<!-- Painel Comparativo Meta vs. Atual -->
-<div class="card-surface p-4 mb-4">
-  <div class="flex items-center justify-between mb-3">
-    <div>
-      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
-        <i class="bi bi-grid-3x3-gap-fill" style="color: var(--fae-blue-electric);"></i> Comparativo Meta vs. Atual (Tópico × Dificuldade)
-      </h3>
-      <p class="text-muted small mb-0">
-        Confronto entre as quantidades planejadas pela máscara e as efetivamente selecionadas pelo algoritmo RF07.
-      </p>
-    </div>
-    <span class="badge-pill {% if total_atual == total_meta %}badge-pill-active{% else %}badge-pill-inactive{% endif %} font-bold">
-      {% if total_atual == total_meta %}
-      ✅ Seleção 100% Conforme
-      {% else %}
-      ⚠️ Divergências Detectadas
-      {% endif %}
-    </span>
-  </div>
-
-  <div class="table-responsive">
-    <table class="saas-table" id="tabela-comparativo">
-      <thead>
-        <tr>
-          <th>Tópico Curricular</th>
-          <th style="width: 170px;" class="text-center">
-            <span class="badge-pill badge-pill-facil small">Fácil</span>
-          </th>
-          <th style="width: 170px;" class="text-center">
-            <span class="badge-pill badge-pill-medio small">Médio</span>
-          </th>
-          <th style="width: 170px;" class="text-center">
-            <span class="badge-pill badge-pill-dificil small">Difícil</span>
-          </th>
-          <th style="width: 140px;" class="text-right">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for linha in linhas_comparativo %}
-        <tr>
-          <td class="font-bold text-main">{{ linha.topico_nome }}</td>
-          <!-- Fácil -->
-          <td class="text-center">
-            {% with cel=linha.celulas.F %}
-            <div class="font-mono font-bold" style="font-size: 1.1rem; color: {% if cel.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
-              {{ cel.atual }} <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ cel.meta }}</span>
-            </div>
-            <div class="small" style="font-size: 0.7rem;">
-              {% if cel.status == 'ok' %}
-              <span class="text-success"><i class="bi bi-check-circle-fill"></i> OK</span>
-              {% else %}
-              <span style="color: var(--color-warning);"><i class="bi bi-exclamation-triangle-fill"></i></span>
-              {% endif %}
-            </div>
-            {% endwith %}
-          </td>
-          <!-- Médio -->
-          <td class="text-center">
-            {% with cel=linha.celulas.M %}
-            <div class="font-mono font-bold" style="font-size: 1.1rem; color: {% if cel.status == 'ok' %}var(--fae-blue-primary){% else %}var(--color-warning){% endif %};">
-              {{ cel.atual }} <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ cel.meta }}</span>
-            </div>
-            <div class="small" style="font-size: 0.7rem;">
-              {% if cel.status == 'ok' %}
-              <span style="color: var(--fae-blue-primary);"><i class="bi bi-check-circle-fill"></i> OK</span>
-              {% else %}
-              <span style="color: var(--color-warning);"><i class="bi bi-exclamation-triangle-fill"></i></span>
-              {% endif %}
-            </div>
-            {% endwith %}
-          </td>
-          <!-- Difícil -->
-          <td class="text-center">
-            {% with cel=linha.celulas.D %}
-            <div class="font-mono font-bold" style="font-size: 1.1rem; color: {% if cel.status == 'ok' %}var(--color-danger){% else %}var(--color-warning){% endif %};">
-              {{ cel.atual }} <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ cel.meta }}</span>
-            </div>
-            <div class="small" style="font-size: 0.7rem;">
-              {% if cel.status == 'ok' %}
-              <span class="text-danger"><i class="bi bi-check-circle-fill"></i> OK</span>
-              {% else %}
-              <span style="color: var(--color-warning);"><i class="bi bi-exclamation-triangle-fill"></i></span>
-              {% endif %}
-            </div>
-            {% endwith %}
-          </td>
-          <!-- Total -->
-          <td class="text-right font-mono font-bold text-main" style="font-size: 1.05rem;">
-            <span style="color: {% if linha.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
-              {{ linha.total_atual }}
-            </span>
-            <span class="text-muted font-normal" style="font-size: 0.85rem;">/ {{ linha.total_meta }}</span>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr style="background: #F8FAFC; border-top: 2px solid var(--border-color); font-weight: 800;">
-          <td>Total Geral</td>
-          <td class="text-center font-mono" style="font-size: 1.1rem;">
-            <span style="color: {% if resumo_dificuldade.F.status == 'ok' %}var(--color-success){% else %}var(--color-warning){% endif %};">
-              {{ resumo_dificuldade.F.atual }}
-            </span>
-            <span class="text-muted" style="font-size: 0.85rem;">/ {{ resumo_dificuldade.F.meta }}</span>
-          </td>
-          <td class="text-center font-mono" style="font-size: 1.1rem;">
-            <span style="color: {% if resumo_dificuldade.M.status == 'ok' %}var(--fae-blue-primary){% else %}var(--color-warning){% endif %};">
-              {{ resumo_dificuldade.M.atual }}
-            </span>
-            <span class="text-muted" style="font-size: 0.85rem;">/ {{ resumo_dificuldade.M.meta }}</span>
-          </td>
-          <td class="text-center font-mono" style="font-size: 1.1rem;">
-            <span style="color: {% if resumo_dificuldade.D.status == 'ok' %}var(--color-danger){% else %}var(--color-warning){% endif %};">
-              {{ resumo_dificuldade.D.atual }}
-            </span>
-            <span class="text-muted" style="font-size: 0.85rem;">/ {{ resumo_dificuldade.D.meta }}</span>
-          </td>
-          <td class="text-right font-mono" style="font-size: 1.25rem;">
-            <span style="color: {% if total_atual == total_meta %}var(--color-success){% else %}var(--color-warning){% endif %};">
-              {{ total_atual }}
-            </span>
-            <span class="text-muted" style="font-size: 0.9rem;">/ {{ total_meta }}</span>
-          </td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-</div>
-
-<!-- Lista de Questões Selecionadas -->
-<div class="card-surface p-4 mb-4">
-  <div class="flex items-center justify-between mb-3">
-    <div>
-      <h3 class="font-bold text-main flex items-center gap-2 mb-1">
-        <i class="bi bi-list-ol" style="color: var(--fae-gold);"></i> Questões Selecionadas ({{ total_atual }} itens)
-      </h3>
-      <p class="text-muted small mb-0">
-        Lista completa das questões sorteadas pelo algoritmo RF07 com priorização por menor uso recente.
-      </p>
-    </div>
-  </div>
-
-  <div class="table-responsive">
-    <table class="saas-table" id="tabela-questoes">
-      <thead>
-        <tr>
-          <th style="width: 50px;">#</th>
-          <th>Enunciado</th>
-          <th style="width: 180px;">Tópico</th>
-          <th style="width: 100px;" class="text-center">Dificuldade</th>
-          <th style="width: 85px;" class="text-center">Tipo</th>
-          <th style="width: 130px;">Origem</th>
-          <th style="width: 75px;" class="text-right">Pts</th>
-          <th style="width: 100px;" class="text-center">Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in itens %}
-        <tr id="item-row-{{ item.pk }}">
-          <td class="font-mono font-bold text-muted">{{ item.numero }}</td>
-          <td>
-            <div class="text-main" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              {{ item.questao.enunciado|truncatechars:100 }}
-            </div>
-            <div class="text-muted small mt-1" style="font-size: 0.7rem;">
-              ID: Q{{ item.questao.pk }}
-            </div>
-          </td>
-          <td class="text-secondary small">
-            {% if item.questao.topico %}
-            {{ item.questao.topico.nome }}
-            {% else %}
-            <span class="text-muted">—</span>
-            {% endif %}
-          </td>
-          <td class="text-center">
-            {% if item.questao.dificuldade == 'F' %}
-            <span class="badge-pill badge-pill-facil small">Fácil</span>
-            {% elif item.questao.dificuldade == 'M' %}
-            <span class="badge-pill badge-pill-medio small">Médio</span>
-            {% elif item.questao.dificuldade == 'D' %}
-            <span class="badge-pill badge-pill-dificil small">Difícil</span>
-            {% endif %}
-          </td>
-          <td class="text-center">
-            {% if item.questao.tipo == 'OBJ' %}
-            <span class="text-muted small"><i class="bi bi-ui-radios"></i> OBJ</span>
-            {% else %}
-            <span class="text-muted small"><i class="bi bi-pencil-square"></i> DIS</span>
-            {% endif %}
-          </td>
-          <td class="text-secondary small">
-            {% if item.questao.origem %}
-            {{ item.questao.origem|truncatechars:20 }}
-            {% else %}
-            <span class="text-muted">—</span>
-            {% endif %}
-          </td>
-          <td class="text-right font-mono font-bold">{{ item.pontuacao }}</td>
-          <td class="text-center">
-            <button type="button" class="btn btn-outline small btn-trocar-questao" data-item-id="{{ item.pk }}" data-item-numero="{{ item.numero }}" data-questao-id="{{ item.questao.pk }}" title="Substituir por outra questão do mesmo tópico e dificuldade" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;">
-              <i class="bi bi-arrow-left-right"></i> Trocar
-            </button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  </section>
+  <details class="exam-panel exam-distribution">
+    <summary><span><i class="bi bi-bar-chart-line" aria-hidden="true"></i> {% if prova.tipo_geracao == 'MANUAL' %}Distribuição das questões{% else %}Comparativo Meta vs. Atual{% endif %}</span><small>Por tópico e dificuldade <i class="bi bi-chevron-down" aria-hidden="true"></i></small></summary>
+    <div class="exam-distribution-body"><p>{% if prova.tipo_geracao == 'MANUAL' %}Resumo das questões escolhidas para esta avaliação.{% else %}Quantidade selecionada / quantidade planejada pela máscara.{% endif %}</p><div class="table-responsive"><table class="saas-table" id="tabela-comparativo"><thead><tr><th scope="col">Tópico</th><th scope="col">Fácil</th><th scope="col">Médio</th><th scope="col">Difícil</th><th scope="col">Total</th></tr></thead><tbody>{% for linha in linhas_comparativo %}<tr><th scope="row">{{ linha.topico_nome }}</th>{% for code, cel in linha.celulas.items %}<td>{{ cel.atual }}{% if prova.tipo_geracao != 'MANUAL' %} / {{ cel.meta }}{% if cel.status != 'ok' %} <span class="exam-divergence" title="Quantidade diferente da meta">Divergente</span>{% endif %}{% endif %}</td>{% endfor %}<td><strong>{{ linha.total_atual }}</strong>{% if prova.tipo_geracao != 'MANUAL' %} / {{ linha.total_meta }}{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+  </details>
+  <div class="exam-review-footer"><a href="{% url 'provas:index' %}" class="exam-text-link"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar às provas salvas</a><span><i class="bi bi-check2-circle" aria-hidden="true"></i> Disponível para acessar depois</span></div>
 </div>
 
 <!-- Modal de Troca Individual de Questão -->
@@ -483,6 +148,14 @@
   align-items: center;
   justify-content: space-between;
   background: #F8FAFC;
+}
+.modal-body-custom {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+#modal-atual-enunciado {
+  max-height: 180px;
+  overflow-y: auto;
 }
 .btn-close-modal {
   background: transparent;

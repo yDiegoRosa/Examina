@@ -6,7 +6,8 @@ app_name = 'provas'
 
 urlpatterns = [
     # Máscaras de Prova (Blueprints)
-    path('', views.mascara_list, name='index'),
+    path('', views.prova_list, name='index'),
+    path('provas/', views.prova_list, name='prova_list'),
     path('mascaras/', views.mascara_list, name='mascara_list'),
     path('mascaras/nova/', views.mascara_create, name='mascara_create'),
     path('mascaras/<int:pk>/', views.mascara_detail, name='mascara_detail'),
