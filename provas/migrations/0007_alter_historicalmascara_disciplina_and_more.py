@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('banco_questoes', '0007_add_origem_numero_questao'),
         ('provas', '0006_provaversao_provaversaoitem'),
@@ -15,11 +14,28 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='historicalmascara',
             name='disciplina',
-            field=models.ForeignKey(blank=True, db_constraint=False, help_text='Opcional. Sem disciplina, a máscara considera questões de todas as disciplinas.', null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='banco_questoes.disciplina', verbose_name='disciplina'),
+            field=models.ForeignKey(
+                blank=True,
+                db_constraint=False,
+                help_text='Opcional. Sem disciplina, a máscara considera questões de todas as disciplinas.',
+                null=True,
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                related_name='+',
+                to='banco_questoes.disciplina',
+                verbose_name='disciplina',
+            ),
         ),
         migrations.AlterField(
             model_name='mascara',
             name='disciplina',
-            field=models.ForeignKey(blank=True, help_text='Opcional. Sem disciplina, a máscara considera questões de todas as disciplinas.', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='mascaras', to='banco_questoes.disciplina', verbose_name='disciplina'),
+            field=models.ForeignKey(
+                blank=True,
+                help_text='Opcional. Sem disciplina, a máscara considera questões de todas as disciplinas.',
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='mascaras',
+                to='banco_questoes.disciplina',
+                verbose_name='disciplina',
+            ),
         ),
     ]

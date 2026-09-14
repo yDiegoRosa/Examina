@@ -352,6 +352,7 @@ class MascaraInterdisciplinarTest(TestCase):
             {self.disciplina_1.pk, self.disciplina_2.pk},
         )
 
+
 class WeasyPrintPDFGenerationTest(TestCase):
     """Testes de compilação de PDF com WeasyPrint e validação de layout."""
 

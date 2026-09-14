@@ -5,6 +5,8 @@ django-simple-history>=3.7.0
 django-taggit>=6.1.0
 mysqlclient>=2.2.0
 Pillow>=10.0.0
+qrcode==8.2
+opencv-python-headless==5.0.0.93
 asgiref
 sqlparse
 tzdata
