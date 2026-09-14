@@ -1,6 +1,11 @@
+from importlib import import_module
+from unittest import skipUnless
+
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.db import OperationalError, connection
+from django.test import TestCase, TransactionTestCase
 from django.urls import resolve, reverse
 
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
@@ -10,6 +15,94 @@ from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, 
 from .presets import preset_enade_initial
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
 from .views import mascara_list
+
+
+@skipUnless(connection.vendor == 'mysql', 'Regressão da estrutura legada específica do MySQL.')
+class RepararSchemaVersoesTest(TransactionTestCase):
+    def test_repara_schema_legado_preservando_dados_e_permite_novas_versoes(self):
+        from provas.models import Prova, ProvaQuestao, ProvaVersao, ProvaVersaoItem
+        from provas.services.version_generator import gerar_versoes_prova
+
+        reparar = import_module('provas.migrations.0008_reparar_schema_versoes').reparar_schema_versoes
+        disciplina = Disciplina.objects.create(nome='Disciplina da regressão de schema')
+        topico = Topico.objects.create(disciplina=disciplina, nome='Tópico de teste')
+        questao = Questao.objects.create(
+            disciplina=disciplina, topico=topico, tipo='OBJ', dificuldade='F', enunciado='Questão preservada'
+        )
+        prova = Prova.objects.create(titulo='Prova preservada', disciplina=disciplina)
+        alternativas = [{'letra': 'A', 'texto': 'Resposta preservada', 'correta': True}]
+        base = ProvaQuestao.objects.create(
+            prova=prova, questao=questao, snapshot_questao={'tipo': 'OBJ', 'alternativas': alternativas}
+        )
+        versao = ProvaVersao.objects.create(prova=prova, identificador='A', numero_versao=1)
+        item = ProvaVersaoItem.objects.create(versao=versao, prova_questao=base, alternativas_embaralhadas=alternativas)
+
+        # Simula o banco observado: 0006 aplicada, mas colunas ainda legadas.
+        with connection.schema_editor() as editor:
+            editor.alter_unique_together(ProvaVersao, ProvaVersao._meta.unique_together, (('prova', 'identificador'),))
+            editor.alter_unique_together(
+                ProvaVersaoItem, ProvaVersaoItem._meta.unique_together, (('versao', 'numero'),)
+            )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'ALTER TABLE provas_provaversao '
+                'CHANGE identificador versao varchar(5) NOT NULL, '
+                'DROP COLUMN atualizado_em, '
+                "ADD COLUMN identificador_qrcode varchar(100) NOT NULL DEFAULT 'qr-preservado'"
+            )
+            cursor.execute(
+                'ALTER TABLE provas_provaversaoitem '
+                'CHANGE alternativas_embaralhadas snapshot_alternativas json NOT NULL, '
+                "ADD COLUMN gabarito_letra varchar(2) NOT NULL DEFAULT 'A', "
+                'ADD COLUMN criado_em datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)'
+            )
+            cursor.execute('ALTER TABLE provas_provaversao ALTER COLUMN identificador_qrcode DROP DEFAULT')
+            cursor.execute(
+                'ALTER TABLE provas_provaversaoitem '
+                'ALTER COLUMN gabarito_letra DROP DEFAULT, ALTER COLUMN criado_em DROP DEFAULT'
+            )
+
+        try:
+            with self.assertRaises(OperationalError):
+                list(prova.versoes.all())
+
+            with connection.schema_editor() as editor:
+                reparar(apps, editor)
+            versao.refresh_from_db()
+            item.refresh_from_db()
+            self.assertEqual(versao.identificador, 'A')
+            self.assertEqual(versao.atualizado_em, versao.criado_em)
+            self.assertEqual(item.alternativas_embaralhadas, alternativas)
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT identificador_qrcode FROM provas_provaversao WHERE id = %s', [versao.pk])
+                self.assertEqual(cursor.fetchone()[0], 'qr-preservado')
+                cursor.execute('SELECT gabarito_letra FROM provas_provaversaoitem WHERE id = %s', [item.pk])
+                self.assertEqual(cursor.fetchone()[0], 'A')
+
+            # Uma segunda execução deve ser inócua, inclusive após DDL parcial.
+            with connection.schema_editor() as editor:
+                reparar(apps, editor)
+            nova_prova = Prova.objects.create(titulo='Prova após reparo', disciplina=disciplina)
+            ProvaQuestao.objects.create(
+                prova=nova_prova, questao=questao, snapshot_questao={'tipo': 'OBJ', 'alternativas': alternativas}
+            )
+            novas = gerar_versoes_prova(nova_prova)
+            self.assertEqual([nova.identificador for nova in novas], ['A', 'B', 'C'])
+            self.assertEqual(novas[0].itens.get().alternativas_embaralhadas[0]['texto'], 'Resposta preservada')
+            self.assertTrue(ProvaVersao.objects.filter(pk=versao.pk).exists())
+            for model in (ProvaVersao, ProvaVersaoItem):
+                with connection.cursor() as cursor:
+                    constraints = connection.introspection.get_constraints(cursor, model._meta.db_table)
+                uniques = {tuple(c['columns']) for c in constraints.values() if c['unique']}
+                for campos in model._meta.unique_together:
+                    self.assertIn(tuple(model._meta.get_field(nome).column for nome in campos), uniques)
+        finally:
+            # Restaura a estrutura para os outros testes, mesmo se uma asserção falhar.
+            with connection.schema_editor() as editor:
+                reparar(apps, editor)
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE provas_provaversao DROP COLUMN identificador_qrcode')
+                cursor.execute('ALTER TABLE provas_provaversaoitem DROP COLUMN gabarito_letra, DROP COLUMN criado_em')
 
 
 class ProvasAppBaseTest(TestCase):
@@ -1886,6 +1979,12 @@ class MontagemManualProvaTest(TestCase):
         prova_criada = Prova.objects.get(titulo='Exame Final Manual')
         self.assertRedirects(response, reverse('provas:prova_revisao', kwargs={'pk': prova_criada.pk}))
         self.assertEqual(prova_criada.itens.count(), 2)
+        versoes = list(prova_criada.versoes.order_by('numero_versao'))
+        self.assertEqual([versao.identificador for versao in versoes], ['A', 'B', 'C'])
+        for versao in versoes:
+            self.assertEqual(versao.itens.count(), 2)
+            for item in versao.itens.all():
+                self.assertTrue(item.alternativas_embaralhadas)
 
     def test_prova_revisao_renderiza_prova_manual(self):
         """Verifica que a tela de revisão exibe perfeitamente avaliações manuais (sem máscara)."""
