@@ -14,6 +14,8 @@ from banco_questoes.models import Disciplina, Questao, Topico
 from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm
 from .models import MascaraProva, Prova, ProvaQuestao
 from .presets import preset_enade_initial
+from .services import fiducial
+from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
 from .services.question_replacer import (
@@ -762,6 +764,89 @@ def pdf_teste_view(request):
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="avaliacao_teste_faeterj.pdf"'
+    return response
+
+
+def _int_param(request, nome, default, minimo, maximo):
+    """Lê e limita um parâmetro inteiro de GET dentro de [minimo, maximo]."""
+    try:
+        valor = int(request.GET.get(nome, default))
+    except (TypeError, ValueError):
+        valor = default
+    return max(minimo, min(maximo, valor))
+
+
+def folha_resposta_demo(request):
+    """
+    Demonstração/validação visual da Folha de Resposta (cartão-resposta / OMR).
+
+    Renderiza a folha com dados sintéticos a partir da geometria de
+    :mod:`provas.services.answer_sheet_layout` (fonte única de coordenadas). Não
+    toca no fluxo real de provas — serve para fechar/validar o layout antes do OMR.
+
+    Parâmetros GET opcionais: ``q`` (nº de questões), ``a`` (alternativas),
+    ``id`` (dígitos da matrícula), ``col`` (colunas), ``versao``.
+    """
+    columns = _int_param(request, 'col', 3, 1, 4)
+    num_questoes = _int_param(request, 'q', 30, 1, max_questoes_por_pagina(columns))
+    num_alternativas = _int_param(request, 'a', 5, 2, 5)
+    id_digits = _int_param(request, 'id', 8, 0, 12)
+    versao_ident = (request.GET.get('versao') or 'A').upper()[:10]
+
+    try:
+        geometry = build_layout(
+            num_questoes=num_questoes,
+            num_alternativas=num_alternativas,
+            id_digits=id_digits,
+            columns=columns,
+        )
+    except ValueError as exc:
+        return HttpResponse(f'Parâmetros inválidos para a folha: {exc}', status=400)
+
+    marcadores_info = fiducial.render_marcadores(geometry)
+    marcadores = [
+        {
+            'corner': m.corner,
+            'left': m.left,
+            'top': m.top,
+            'size': m.size,
+            'tipo': marcadores_info[m.corner]['tipo'],
+            'data_uri': marcadores_info[m.corner]['data_uri'],
+        }
+        for m in geometry.markers
+    ]
+
+    payload = fiducial.montar_payload_qr(
+        prova_id=0,
+        versao=versao_ident,
+        num_questoes=num_questoes,
+        num_alternativas=num_alternativas,
+        schema_version=geometry.schema_version,
+    )
+    try:
+        qr_data_uri = fiducial.gerar_qr_data_uri(payload)
+    except fiducial.FiducialError:
+        qr_data_uri = None
+
+    context = {
+        'geo': geometry,
+        'marcadores': marcadores,
+        'qr_data_uri': qr_data_uri,
+        'instituicao': 'FAETERJ-Rio',
+        'prova_titulo': 'Avaliação Modelo (Demonstração de Layout)',
+        'disciplina_nome': 'Construção de Aplicações Web (CAW)',
+        'versao_ident': versao_ident,
+        'data_aplicacao': '',
+        'instrucoes': [],
+    }
+
+    pdf_bytes = PDFGeneratorService.render_pdf_from_template(
+        'provas/pdf_folha_resposta.html',
+        context=context,
+    )
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = 'inline; filename="folha_resposta_demo.pdf"'
     return response
 
 

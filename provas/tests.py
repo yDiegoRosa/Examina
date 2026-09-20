@@ -5,7 +5,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, connection
-from django.test import TestCase, TransactionTestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.urls import resolve, reverse
 
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
@@ -13,6 +13,16 @@ from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
 from .presets import preset_enade_initial
+from .services.answer_sheet_layout import (
+    MARKER_IDS,
+    MARKER_INSET,
+    PAGE_H,
+    PAGE_W,
+    SCHEMA_VERSION,
+    build_layout,
+    geometry_from_dict,
+    max_questoes_por_pagina,
+)
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
 from .views import prova_list
 
@@ -2403,3 +2413,123 @@ class PresetEnadeTest(TestCase):
         self.assertEqual(form.initial['modalidade'], MascaraProva.Modalidade.MISTA)
         self.assertEqual(form.initial['quantidade_objetivas'], 35)
         self.assertEqual(form.initial['disciplina'], self.disciplina)
+
+
+class FolhaRespostaGeometryTest(SimpleTestCase):
+    """
+    Testes da geometria da folha de resposta (OMR).
+
+    Garantem que o layout é "fixo e conhecido": contagem/rotulagem correta das
+    bolhas, ausência de sobreposição, todos os elementos dentro do quadro dos
+    marcadores e serialização estável (contrato consumido pelo futuro leitor OMR).
+    """
+
+    def _todas_bolhas(self, geo):
+        return list(geo.answer_bubbles) + list(geo.id_bubbles)
+
+    def test_contagem_e_rotulos_das_respostas(self):
+        for nq in (1, 10, 30, 50):
+            geo = build_layout(num_questoes=nq)
+            self.assertEqual(len(geo.answer_bubbles), nq * 5)
+            self.assertEqual({b.question for b in geo.answer_bubbles}, set(range(1, nq + 1)))
+            # Cada questão possui exatamente as alternativas A–E.
+            for q in range(1, nq + 1):
+                letras = sorted(b.option for b in geo.answer_bubbles if b.question == q)
+                self.assertEqual(letras, ['A', 'B', 'C', 'D', 'E'])
+
+    def test_numero_de_alternativas_variavel(self):
+        geo = build_layout(num_questoes=10, num_alternativas=4)
+        self.assertEqual(geo.option_labels, ['A', 'B', 'C', 'D'])
+        self.assertEqual(len(geo.answer_bubbles), 10 * 4)
+
+    def test_matriz_de_matricula(self):
+        geo = build_layout(num_questoes=10, id_digits=8)
+        self.assertEqual(len(geo.id_bubbles), 8 * 10)
+        self.assertEqual({b.digit for b in geo.id_bubbles}, set(range(8)))
+        self.assertEqual({b.value for b in geo.id_bubbles}, set(range(10)))
+
+    def test_sem_matricula_quando_id_digits_zero(self):
+        geo = build_layout(num_questoes=10, id_digits=0)
+        self.assertEqual(geo.id_bubbles, [])
+        self.assertIsNone(geo.id_matrix_title)
+
+    def test_marcadores_nos_quatro_cantos(self):
+        geo = build_layout(num_questoes=10)
+        self.assertEqual(len(geo.markers), 4)
+        self.assertEqual({m.id for m in geo.markers}, set(MARKER_IDS.values()))
+        self.assertEqual({m.corner for m in geo.markers}, {'TL', 'TR', 'BR', 'BL'})
+        cantos = {m.corner: (m.cx, m.cy) for m in geo.markers}
+        self.assertEqual(cantos['TL'], (MARKER_INSET, MARKER_INSET))
+        self.assertEqual(cantos['TR'], (PAGE_W - MARKER_INSET, MARKER_INSET))
+        self.assertEqual(cantos['BR'], (PAGE_W - MARKER_INSET, PAGE_H - MARKER_INSET))
+        self.assertEqual(cantos['BL'], (MARKER_INSET, PAGE_H - MARKER_INSET))
+
+    def test_bolhas_dentro_do_quadro_dos_marcadores(self):
+        geo = build_layout(num_questoes=50, id_digits=8)
+        for b in self._todas_bolhas(geo):
+            self.assertGreaterEqual(b.cx - b.r, MARKER_INSET)
+            self.assertLessEqual(b.cx + b.r, PAGE_W - MARKER_INSET)
+            self.assertGreaterEqual(b.cy - b.r, MARKER_INSET)
+            self.assertLessEqual(b.cy + b.r, PAGE_H - MARKER_INSET)
+
+    def test_qr_dentro_da_pagina(self):
+        geo = build_layout(num_questoes=10)
+        self.assertGreaterEqual(geo.qr.x, 0)
+        self.assertGreaterEqual(geo.qr.y, 0)
+        self.assertLessEqual(geo.qr.x + geo.qr.w, PAGE_W)
+        self.assertLessEqual(geo.qr.y + geo.qr.h, PAGE_H)
+
+    def test_bolhas_nao_se_sobrepoem(self):
+        import math
+
+        geo = build_layout(num_questoes=50, id_digits=8)
+        bolhas = self._todas_bolhas(geo)
+        for i in range(len(bolhas)):
+            a = bolhas[i]
+            for j in range(i + 1, len(bolhas)):
+                b = bolhas[j]
+                dist = math.hypot(a.cx - b.cx, a.cy - b.cy)
+                self.assertGreaterEqual(
+                    dist,
+                    a.r + b.r,
+                    msg=f'Sobreposição entre {a} e {b} (dist={dist:.2f}).',
+                )
+
+    def test_serializacao_roundtrip_preserva_geometria(self):
+        geo = build_layout(num_questoes=50, num_alternativas=5, id_digits=8, columns=3)
+        data = geo.to_dict()
+        rt = geometry_from_dict(data)
+
+        self.assertEqual(rt['schema_version'], SCHEMA_VERSION)
+        self.assertEqual(
+            [m.to_dict() for m in rt['markers']],
+            [m.to_dict() for m in geo.markers],
+        )
+        self.assertEqual(rt['qr'].to_dict(), geo.qr.to_dict())
+        self.assertEqual(
+            [b.to_dict() for b in rt['answer_bubbles']],
+            [b.to_dict() for b in geo.answer_bubbles],
+        )
+        self.assertEqual(
+            [b.to_dict() for b in rt['id_bubbles']],
+            [b.to_dict() for b in geo.id_bubbles],
+        )
+
+    def test_capacidade_excedida_levanta_valueerror(self):
+        capacidade = max_questoes_por_pagina(3)
+        # No limite: ok. Acima do limite: erro.
+        build_layout(num_questoes=capacidade, columns=3)
+        with self.assertRaises(ValueError):
+            build_layout(num_questoes=capacidade + 1, columns=3)
+
+    def test_parametros_invalidos_levantam_valueerror(self):
+        with self.assertRaises(ValueError):
+            build_layout(num_questoes=0)
+        with self.assertRaises(ValueError):
+            build_layout(num_questoes=10, num_alternativas=1)
+        with self.assertRaises(ValueError):
+            build_layout(num_questoes=10, num_alternativas=6)
+        with self.assertRaises(ValueError):
+            build_layout(num_questoes=10, columns=0)
+        with self.assertRaises(ValueError):
+            build_layout(num_questoes=10, columns=5)
