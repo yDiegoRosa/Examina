@@ -1,11 +1,16 @@
+import logging
+import tempfile
 from importlib import import_module
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import skipUnless
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.contrib.staticfiles import finders
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, connection
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import resolve, reverse
 
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
@@ -13,7 +18,7 @@ from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
 from .presets import preset_enade_initial
-from .services.pdf_generator import PDFGenerationError, PDFGeneratorService
+from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
 from .views import prova_list
 
 
@@ -585,6 +590,59 @@ class WeasyPrintPDFGenerationTest(TestCase):
         self.assertIn('inline; filename="avaliacao_teste_faeterj.pdf"', response['Content-Disposition'])
         self.assertTrue(response.content.startswith(b'%PDF-'))
         self.assertTrue(len(response.content) > 1000)
+
+    def test_resolve_static_media_url_maps_static_to_local_file(self):
+        """A URL raiz-relativa de {% static %} é reescrita para o CSS local no disco."""
+        resolvido = resolve_static_media_url('file:///static/provas/css/print_prova.css')
+
+        caminho_css = finders.find('provas/css/print_prova.css')
+        self.assertIsNotNone(caminho_css, 'print_prova.css deveria ser encontrado pelos finders.')
+        self.assertEqual(resolvido, Path(caminho_css).as_uri())
+        self.assertIn('@page', Path(caminho_css).read_text(encoding='utf-8'))
+
+    def test_resolve_static_media_url_maps_media_to_media_root(self):
+        """A URL raiz-relativa de mídia (FieldFile.url) é reescrita para MEDIA_ROOT."""
+        with tempfile.TemporaryDirectory() as tmp:
+            arquivo = Path(tmp) / 'questoes' / 'figura.png'
+            arquivo.parent.mkdir(parents=True)
+            arquivo.write_bytes(b'\x89PNG\r\n')
+            with override_settings(MEDIA_ROOT=tmp):
+                resolvido = resolve_static_media_url('file:///media/questoes/figura.png')
+            self.assertEqual(resolvido, arquivo.as_uri())
+
+    def test_resolve_static_media_url_passes_through_external_urls(self):
+        """URLs externas/data não são interceptadas e seguem para o fetcher padrão."""
+        for url in ('https://cdn.example.com/app.css', 'data:text/css,body{color:red}'):
+            self.assertEqual(resolve_static_media_url(url), url)
+
+    def test_prova_completa_pdf_loads_static_stylesheet(self):
+        """Regressão: o PDF da prova completa carrega o CSS estático (não sai sem estilo)."""
+        context = {
+            'prova': SimpleNamespace(numero_caderno=1, pk=1, titulo='Avaliação de Regressão'),
+            'itens_render': [],
+            'total_questoes': 0,
+            'incluir_capa': False,
+            'incluir_gabarito': False,
+        }
+
+        registros: list[str] = []
+        handler = logging.Handler()
+        handler.emit = lambda record: registros.append(record.getMessage())
+        logger_wp = logging.getLogger('weasyprint')
+        nivel_original = logger_wp.level
+        logger_wp.addHandler(handler)
+        logger_wp.setLevel(logging.WARNING)
+        try:
+            pdf_bytes = PDFGeneratorService.render_pdf_from_template('provas/pdf_prova_completa.html', context)
+        finally:
+            logger_wp.removeHandler(handler)
+            logger_wp.setLevel(nivel_original)
+
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+        self.assertFalse(
+            any('Failed to load' in msg and 'print_prova.css' in msg for msg in registros),
+            msg=f'WeasyPrint não carregou o CSS estático do PDF: {registros}',
+        )
 
 
 class MascaraListPaginationTest(TestCase):
