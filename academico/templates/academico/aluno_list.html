@@ -1,0 +1,127 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Alunos — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4" aria-label="Navegação acadêmica">
+  <a href="{% url 'academico:aluno_list' %}" class="btn btn-primary" aria-current="page">Alunos</a>
+  <a href="{% url 'academico:turma_list' %}" class="btn btn-outline">Turmas</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-people-fill"></i> Acadêmico • Cadastro de Alunos</span>
+    </div>
+    <h1 class="mb-1">Alunos</h1>
+    <p class="text-secondary" style="max-width: 620px;">
+      Cadastro e manutenção dos alunos da instituição. A matrícula é o identificador único usado na correção por leitura óptica.
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'academico:aluno_create' %}" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-plus-circle-fill"></i> Novo Aluno
+    </a>
+  </div>
+</div>
+
+<!-- Métricas Rápidas -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-people-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Total de Alunos</div>
+      <div class="stat-num-unified">{{ metricas.total }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-success"><i class="bi bi-check-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Ativos</div>
+      <div class="stat-num-unified text-success">{{ metricas.ativos }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-warning"><i class="bi bi-pause-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Inativos</div>
+      <div class="stat-num-unified">{{ metricas.inativos }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card-surface p-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-3">
+    <input type="text" name="q" value="{{ busca }}" class="form-input flex-1" style="min-width: 220px;"
+           placeholder="Buscar por nome ou matrícula…">
+    <select name="status" class="form-select" onchange="this.form.submit()">
+      <option value="">Todos os status</option>
+      <option value="ativo" {% if status_selecionado == 'ativo' %}selected{% endif %}>Somente ativos</option>
+      <option value="inativo" {% if status_selecionado == 'inativo' %}selected{% endif %}>Somente inativos</option>
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
+    {% if busca or status_selecionado %}
+    <a href="{% url 'academico:aluno_list' %}" class="btn btn-outline"><i class="bi bi-x-lg"></i> Limpar</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Tabela -->
+<div class="card-surface">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 70px;">ID</th>
+          <th>Nome</th>
+          <th style="width: 200px;">Matrícula</th>
+          <th style="width: 110px;">Status</th>
+          <th style="width: 120px;" class="text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for aluno in alunos %}
+        <tr>
+          <td><span class="font-bold text-muted font-mono">#{{ aluno.pk }}</span></td>
+          <td><span class="font-bold text-main">{{ aluno.nome }}</span></td>
+          <td><span class="font-mono">{{ aluno.matricula }}</span></td>
+          <td>
+            {% if aluno.ativo %}
+            <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Ativo</span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Inativo</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-1">
+              <a href="{% url 'academico:aluno_update' pk=aluno.pk %}" class="btn-table-action" title="Editar aluno">
+                <i class="bi bi-pencil-square"></i>
+              </a>
+              <form method="post" action="{% url 'academico:aluno_toggle_ativo' pk=aluno.pk %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-table-action" title="{% if aluno.ativo %}Inativar{% else %}Ativar{% endif %}">
+                  <i class="bi {% if aluno.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-person-x"></i></div>
+            <h4 class="font-bold text-main">Nenhum aluno encontrado</h4>
+            <p class="text-muted mb-3">Cadastre o primeiro aluno da instituição.</p>
+            <a href="{% url 'academico:aluno_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Novo Aluno</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj %}
+  {% include "banco_questoes/includes/pagination.html" %}
+  {% endif %}
+</div>
+{% endblock %}

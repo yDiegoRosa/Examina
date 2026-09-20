@@ -45,6 +45,11 @@
               <i class="bi bi-file-earmark-ruled-fill"></i> Provas
             </a>
           </li>
+          <li>
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'academico' %}active{% endif %}" href="{% url 'academico:aluno_list' %}">
+              <i class="bi bi-people-fill"></i> Acadêmico
+            </a>
+          </li>
           {% if perms.banco_questoes.add_questao %}
           <li>
             <a class="nav-item-link {% if request.resolver_match.url_name == 'questao_create' %}active{% endif %}" href="{% url 'banco_questoes:questao_create' %}">
