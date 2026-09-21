@@ -14,7 +14,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (mobileToggle && navLinks) {
     mobileToggle.addEventListener('click', function () {
-      navLinks.classList.toggle('open');
+      const isOpen = navLinks.classList.toggle('open');
+      mobileToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.1 Alternância de Tema (Claro/Escuro), persistida em localStorage
+  // -------------------------------------------------------------------------
+  const themeToggle = document.querySelector('.theme-toggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', function () {
+      const atual = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      const proximo = atual === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', proximo);
+      try {
+        localStorage.setItem('examina-theme', proximo);
+      } catch (e) {
+        /* localStorage indisponível: aplica só nesta sessão */
+      }
     });
   }
 
