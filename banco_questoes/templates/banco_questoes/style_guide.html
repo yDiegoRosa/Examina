@@ -1,0 +1,119 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Design System — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-palette-fill"></i> Design System • Kit de Componentes</span>
+    </div>
+    <h1 class="mb-1">Design System do Examina</h1>
+    <p class="text-secondary" style="max-width: 640px;">
+      Referência viva dos componentes e tokens. Use o botão de tema na barra superior para
+      conferir claro/escuro. Baseie novas telas nestes padrões.
+    </p>
+  </div>
+</div>
+
+<!-- Paleta / Tokens -->
+<div class="card-surface p-4 mb-4">
+  <h3 class="font-bold text-main mb-3"><i class="bi bi-droplet-half"></i> Cores semânticas</h3>
+  <div class="grid grid-cols-4 gap-3">
+    <div><div style="height: 48px; border-radius: 10px; background: var(--fae-blue-primary);"></div><div class="small text-muted mt-1">primary</div></div>
+    <div><div style="height: 48px; border-radius: 10px; background: var(--fae-gold);"></div><div class="small text-muted mt-1">gold</div></div>
+    <div><div style="height: 48px; border-radius: 10px; background: var(--color-success);"></div><div class="small text-muted mt-1">success</div></div>
+    <div><div style="height: 48px; border-radius: 10px; background: var(--color-danger);"></div><div class="small text-muted mt-1">danger</div></div>
+  </div>
+  <div class="mt-3 flex flex-wrap gap-3">
+    <span class="text-main font-bold">text-main</span>
+    <span class="text-secondary font-bold">text-secondary</span>
+    <span class="text-muted font-bold">text-muted</span>
+    <span class="text-dim font-bold">text-dim</span>
+  </div>
+</div>
+
+<!-- Botões -->
+<div class="card-surface p-4 mb-4">
+  <h3 class="font-bold text-main mb-3"><i class="bi bi-hand-index-thumb"></i> Botões</h3>
+  <div class="flex flex-wrap gap-2 items-center">
+    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Primary</button>
+    <button class="btn btn-gold"><i class="bi bi-star-fill"></i> Gold</button>
+    <button class="btn btn-outline"><i class="bi bi-arrow-left"></i> Outline</button>
+    <button class="btn btn-sm btn-sm-success"><i class="bi bi-check"></i> Sucesso</button>
+    <button class="btn btn-sm btn-sm-danger"><i class="bi bi-x"></i> Perigo</button>
+    <button class="btn-table-action" title="Ação" aria-label="Ação de exemplo"><i class="bi bi-pencil-square"></i></button>
+  </div>
+</div>
+
+<!-- Badges -->
+<div class="card-surface p-4 mb-4">
+  <h3 class="font-bold text-main mb-3"><i class="bi bi-tags-fill"></i> Badges (pills)</h3>
+  <div class="flex flex-wrap gap-2">
+    <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Ativo</span>
+    <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Inativo</span>
+    <span class="badge-pill badge-pill-obj">Objetiva</span>
+    <span class="badge-pill badge-pill-dis">Discursiva</span>
+    <span class="badge-pill badge-pill-facil">Fácil</span>
+    <span class="badge-pill badge-pill-medio">Médio</span>
+    <span class="badge-pill badge-pill-dificil">Difícil</span>
+    <span class="badge-pill badge-pill-warning">Atenção</span>
+  </div>
+</div>
+
+<!-- Stat cards -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-people-fill"></i></div>
+    <div><div class="stat-label-unified">Total</div><div class="stat-num-unified">128</div></div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-success"><i class="bi bi-check-circle-fill"></i></div>
+    <div><div class="stat-label-unified">Ativos</div><div class="stat-num-unified text-success">112</div></div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-warning"><i class="bi bi-pause-circle-fill"></i></div>
+    <div><div class="stat-label-unified">Pendentes</div><div class="stat-num-unified">16</div></div>
+  </div>
+</div>
+
+<!-- Formulário -->
+<div class="card-surface p-4 mb-4">
+  <h3 class="font-bold text-main mb-3"><i class="bi bi-input-cursor-text"></i> Formulário</h3>
+  <div class="grid grid-cols-2 gap-3">
+    <div>
+      <label class="form-label" for="sg-input">Campo de texto</label>
+      <input id="sg-input" type="text" class="form-input" placeholder="Digite algo…">
+    </div>
+    <div>
+      <label class="form-label" for="sg-select">Seleção</label>
+      <select id="sg-select" class="form-select"><option>Opção A</option><option>Opção B</option></select>
+    </div>
+  </div>
+  <div class="mt-3">
+    <label class="form-label" for="sg-ta">Área de texto</label>
+    <textarea id="sg-ta" class="form-textarea" rows="2" placeholder="Observações…"></textarea>
+  </div>
+</div>
+
+<!-- Alertas -->
+<div class="card-surface p-4 mb-4">
+  <h3 class="font-bold text-main mb-3"><i class="bi bi-bell-fill"></i> Alertas</h3>
+  <div class="alert-toast alert-toast-success mb-2"><span class="font-bold">Operação concluída com sucesso.</span></div>
+  <div class="alert-toast alert-toast-danger mb-2"><span class="font-bold">Ocorreu um erro ao processar.</span></div>
+  <div class="alert-toast alert-toast-info"><span class="font-bold">Informação contextual para o usuário.</span></div>
+</div>
+
+<!-- Tabela -->
+<div class="card-surface mb-4">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead><tr><th>ID</th><th>Nome</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="font-mono">#01</td><td class="font-bold text-main">Exemplo A</td><td><span class="badge-pill badge-pill-active">Ativo</span></td></tr>
+        <tr><td class="font-mono">#02</td><td class="font-bold text-main">Exemplo B</td><td><span class="badge-pill badge-pill-inactive">Inativo</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

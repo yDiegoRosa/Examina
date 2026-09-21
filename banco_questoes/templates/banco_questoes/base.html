@@ -4,6 +4,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# Define o tema (claro/escuro) antes da pintura para evitar flash (FOUC). #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('examina-theme');
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { /* localStorage indisponível: mantém o tema padrão */ }
+    })();
+  </script>
+  <meta name="theme-color" content="#061729">
   <title>{% block title %}Examina — Plataforma de Gestão Pedagógica{% endblock %}</title>
 
   <!-- Google Fonts: Plus Jakarta Sans -->
@@ -34,7 +47,7 @@
           </div>
         </a>
 
-        <ul class="nav-links">
+        <ul class="nav-links" id="primary-nav">
           <li>
             <a class="nav-item-link {% if request.resolver_match.app_name == 'banco_questoes' %}active{% endif %}" href="{% url 'banco_questoes:questao_list' %}">
               <i class="bi bi-grid-fill"></i> Acervo de Questões
@@ -65,6 +78,10 @@
         </ul>
 
         <div class="flex items-center gap-3">
+          <button type="button" class="theme-toggle" aria-label="Alternar tema claro ou escuro" title="Alternar tema">
+            <i class="bi bi-moon-stars-fill icon-moon" aria-hidden="true"></i>
+            <i class="bi bi-sun-fill icon-sun" aria-hidden="true"></i>
+          </button>
           {% if user.is_authenticated %}
           <div class="user-capsule">
             <i class="bi bi-person-fill-check text-warning" style="color: var(--fae-gold);"></i>
@@ -81,8 +98,8 @@
             <i class="bi bi-box-arrow-in-right"></i> Entrar
           </a>
           {% endif %}
-          <button class="mobile-toggle" aria-label="Abrir Menu">
-            <i class="bi bi-list"></i>
+          <button class="mobile-toggle" aria-label="Abrir menu de navegação" aria-expanded="false" aria-controls="primary-nav">
+            <i class="bi bi-list" aria-hidden="true"></i>
           </button>
         </div>
       </nav>
@@ -92,7 +109,7 @@
   <!-- Conteúdo Principal -->
   <main class="container my-4 flex-grow">
     {% if messages %}
-    <div class="messages-container mb-4">
+    <div class="messages-container mb-4" role="status" aria-live="polite">
       {% for msg in messages %}
       <div class="alert-toast {% if msg.tags == 'success' %}alert-toast-success{% elif msg.tags == 'danger' or msg.tags == 'error' %}alert-toast-danger{% else %}alert-toast-info{% endif %}">
         <div class="flex items-center gap-3">
@@ -123,6 +140,8 @@
           <span class="text-muted">• Plataforma Institucional de Avaliações</span>
         </div>
         <div class="flex items-center gap-2">
+          <a href="{% url 'banco_questoes:style_guide' %}" class="text-muted small">Design System</a>
+          <span class="text-muted">•</span>
           <span class="badge-pill badge-pill-inactive">FAETERJ-Rio / FAETEC</span>
           <span class="text-muted small">© 2026</span>
         </div>

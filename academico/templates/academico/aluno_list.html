@@ -100,8 +100,10 @@
               </a>
               <form method="post" action="{% url 'academico:aluno_toggle_ativo' pk=aluno.pk %}" style="display: inline;">
                 {% csrf_token %}
-                <button type="submit" class="btn-table-action" title="{% if aluno.ativo %}Inativar{% else %}Ativar{% endif %}">
-                  <i class="bi {% if aluno.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}"></i>
+                <button type="submit" class="btn-table-action"
+                        title="{% if aluno.ativo %}Inativar{% else %}Ativar{% endif %}"
+                        aria-label="{% if aluno.ativo %}Inativar aluno{% else %}Ativar aluno{% endif %} {{ aluno.nome }}">
+                  <i class="bi {% if aluno.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}" aria-hidden="true"></i>
                 </button>
               </form>
             </div>
