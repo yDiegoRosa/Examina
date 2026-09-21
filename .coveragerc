@@ -3,6 +3,7 @@ source =
     Examina
     banco_questoes
     provas
+    academico
 omit =
     */migrations/*
     */tests/*
