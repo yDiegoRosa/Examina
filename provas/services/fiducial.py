@@ -133,6 +133,16 @@ def montar_payload_qr(
     return f'EXM1|prova={prova_id}|versao={versao}|nq={num_questoes}|na={num_alternativas}|geo={schema_version}'
 
 
+def montar_payload_folha(qr_token) -> str:
+    """
+    Monta o payload do QR de uma folha nominal (RF10) a partir do seu token único.
+
+    Formato: ``EXM1F|<uuid>``. O leitor OMR resolve a ``FolhaResposta`` por esse
+    token para obter aluno, versão e gabarito.
+    """
+    return f'EXM1F|{qr_token}'
+
+
 def render_marcadores(geometry: SheetGeometry, size_px: int = 240) -> dict[str, dict]:
     """
     Produz o conteúdo visual dos 4 marcadores da geometria informada.

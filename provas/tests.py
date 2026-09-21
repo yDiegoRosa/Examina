@@ -19,13 +19,16 @@ from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import (
+    FolhaResposta,
     Mascara,
     MascaraCriterioDificuldade,
     MascaraCriterioTopico,
     MascaraProva,
     Prova,
     ProvaAplicacao,
+    ProvaQuestao,
     ProvaVersao,
+    ProvaVersaoItem,
 )
 from .presets import preset_enade_initial
 from .services.answer_sheet_layout import (
@@ -37,6 +40,11 @@ from .services.answer_sheet_layout import (
     build_layout,
     geometry_from_dict,
     max_questoes_por_pagina,
+)
+from .services.folha_service import (
+    contar_questoes_objetivas,
+    gerar_folhas_da_aplicacao,
+    render_folha_pdf,
 )
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
 from .services.version_assigner import atribuir_versoes
@@ -2673,3 +2681,91 @@ class AtribuicaoVersaoServiceTest(TestCase):
         self._matricular('Ana', 'A1')
         with self.assertRaises(ValueError):
             atribuir_versoes(self.aplicacao)
+
+
+class FolhaRespostaTest(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='coord_f', password='segredo123')  # noqa: S106
+        self.disciplina = Disciplina.objects.create(nome='Disc Folha')
+        self.topico = Topico.objects.create(disciplina=self.disciplina, nome='Top Folha')
+        self.questao = Questao.objects.create(
+            disciplina=self.disciplina, topico=self.topico, tipo='OBJ', dificuldade='F', enunciado='Q obj'
+        )
+        self.prova = Prova.objects.create(titulo='Prova Folha', disciplina=self.disciplina)
+        self.pq = ProvaQuestao.objects.create(
+            prova=self.prova, questao=self.questao, numero=1, ordem=1, snapshot_questao={'tipo': 'OBJ'}
+        )
+        self.versoes = []
+        for i, ident in enumerate(['A', 'B'], start=1):
+            v = ProvaVersao.objects.create(prova=self.prova, identificador=ident, numero_versao=i)
+            ProvaVersaoItem.objects.create(
+                versao=v,
+                prova_questao=self.pq,
+                numero=1,
+                ordem=1,
+                alternativas_embaralhadas=[{'letra': 'A', 'correta': True}],
+            )
+            self.versoes.append(v)
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.ana = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.bruno = Aluno.objects.create(nome='Bruno', matricula='B1')
+        Matricula.objects.create(aluno=self.ana, turma=self.turma)
+        Matricula.objects.create(aluno=self.bruno, turma=self.turma)
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+
+    def test_qr_token_unico_e_status_default(self):
+        f1 = FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=self.ana, prova_versao=self.versoes[0])
+        f2 = FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.bruno, prova_versao=self.versoes[1]
+        )
+        self.assertIsNotNone(f1.qr_token)
+        self.assertNotEqual(f1.qr_token, f2.qr_token)
+        self.assertEqual(f1.status, FolhaResposta.Status.GERADA)
+
+    def test_unique_aplicacao_aluno(self):
+        FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=self.ana, prova_versao=self.versoes[0])
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=self.ana, prova_versao=self.versoes[1])
+
+    def test_contar_questoes_objetivas(self):
+        self.assertEqual(contar_questoes_objetivas(self.versoes[0]), 1)
+
+    def test_gerar_folhas_auto_atribui_e_idempotente(self):
+        folhas = gerar_folhas_da_aplicacao(self.aplicacao)
+        self.assertEqual(len(folhas), 2)
+        self.assertEqual(FolhaResposta.objects.filter(prova_aplicacao=self.aplicacao).count(), 2)
+        # cada folha usa a versão atribuída ao aluno
+        for folha in folhas:
+            atrib = self.aplicacao.atribuicoes.get(aluno=folha.aluno)
+            self.assertEqual(folha.prova_versao_id, atrib.versao_id)
+        # idempotente: rodar de novo mantém a contagem e os tokens
+        tokens = {f.aluno_id: f.qr_token for f in folhas}
+        folhas2 = gerar_folhas_da_aplicacao(self.aplicacao)
+        self.assertEqual(len(folhas2), 2)
+        self.assertEqual(FolhaResposta.objects.filter(prova_aplicacao=self.aplicacao).count(), 2)
+        for f in folhas2:
+            self.assertEqual(f.qr_token, tokens[f.aluno_id])
+
+    def test_render_folha_pdf_gera_bytes(self):
+        folhas = gerar_folhas_da_aplicacao(self.aplicacao)
+        pdf = render_folha_pdf(folhas[0])
+        self.assertTrue(pdf.startswith(b'%PDF'))
+
+    def test_export_zip_uma_folha_por_aluno(self):
+        import io
+        import zipfile
+
+        self.client.login(username='coord_f', password='segredo123')  # noqa: S106
+        url = reverse('provas:aplicacao_folhas_zip', args=[self.aplicacao.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/zip')
+        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+            self.assertEqual(len(zf.namelist()), 2)
+
+    def test_export_zip_login_obrigatorio(self):
+        url = reverse('provas:aplicacao_folhas_zip', args=[self.aplicacao.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)

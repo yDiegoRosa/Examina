@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from banco_questoes.models import Disciplina, Questao, Topico
 
 from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm
-from .models import MascaraProva, Prova, ProvaQuestao
+from .models import MascaraProva, Prova, ProvaAplicacao, ProvaQuestao
 from .presets import preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
@@ -847,6 +847,63 @@ def folha_resposta_demo(request):
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="folha_resposta_demo.pdf"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# RF10 — Exportação de folhas-resposta nominais (uma por aluno) em ZIP
+# ---------------------------------------------------------------------------
+@login_required
+def aplicacao_folhas_zip(request, pk):
+    """
+    Gera e entrega em ZIP uma folha-resposta nominal (PDF) por aluno matriculado da
+    turma da aplicação — cada folha com nome/matrícula e o QR do seu ``qr_token``.
+
+    Se a aplicação ainda não tiver versões atribuídas, o round-robin é executado
+    automaticamente antes de gerar as folhas.
+    """
+    import io
+    import zipfile
+
+    from django.utils.text import slugify
+
+    from .services.folha_service import gerar_folhas_da_aplicacao, render_folha_pdf
+
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+
+    try:
+        folhas = gerar_folhas_da_aplicacao(aplicacao)
+    except ValueError as exc:
+        return HttpResponse(
+            f'Não foi possível gerar as folhas: {exc}',
+            status=400,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    if not folhas:
+        return HttpResponse(
+            'Nenhum aluno matriculado (ativo) nesta turma para gerar folhas.',
+            status=400,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for folha in folhas:
+            try:
+                pdf_bytes = render_folha_pdf(folha)
+            except ValueError as exc:  # versão sem questões objetivas
+                logger.warning('Folha pk=%s ignorada na exportação: %s', folha.pk, exc)
+                continue
+            slug = slugify(folha.aluno.nome) or 'aluno'
+            matricula = slugify(folha.aluno.matricula) or str(folha.aluno.pk)
+            nome_arquivo = f'{matricula}_{slug}_versao_{folha.prova_versao.identificador}.pdf'
+            zf.writestr(nome_arquivo, pdf_bytes)
+
+    zip_buffer.seek(0)
+    filename = f'folhas_aplicacao_{aplicacao.pk}.zip'
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
 

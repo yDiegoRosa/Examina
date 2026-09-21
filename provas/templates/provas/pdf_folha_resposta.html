@@ -100,14 +100,14 @@
          style="left: {{ geo.id_fields_rect.x }}mm; top: {{ geo.id_fields_rect.y }}mm; width: {{ geo.id_fields_rect.w }}mm; height: {{ geo.id_fields_rect.h }}mm;">
       <div class="fr-field">
         <span class="fr-field-label">Nome:</span>
-        <span class="fr-field-line" style="width: 120mm;">&nbsp;</span>
+        <span class="fr-field-line" style="width: 120mm;">{% if aluno_nome %}<strong>{{ aluno_nome }}</strong>{% else %}&nbsp;{% endif %}</span>
       </div>
       <div class="fr-field">
-        <span class="fr-field-label">Turma:</span>
-        <span class="fr-field-line" style="width: 45mm;">&nbsp;</span>
+        <span class="fr-field-label">Matrícula:</span>
+        <span class="fr-field-line" style="width: 45mm;">{% if aluno_matricula %}<strong>{{ aluno_matricula }}</strong>{% else %}&nbsp;{% endif %}</span>
         &nbsp;&nbsp;
         <span class="fr-field-label">Data:</span>
-        <span class="fr-field-line" style="width: 40mm;">&nbsp;</span>
+        <span class="fr-field-line" style="width: 40mm;">{% if data_aplicacao %}{{ data_aplicacao }}{% else %}&nbsp;{% endif %}</span>
       </div>
     </div>
 

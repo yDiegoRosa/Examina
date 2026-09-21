@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -716,6 +717,60 @@ class AtribuicaoVersao(models.Model):
 
     def __str__(self):
         return f'{self.aluno} → Versão {self.versao.identificador} (#{self.sequencia})'
+
+
+class FolhaResposta(models.Model):
+    """
+    Folha-resposta física, nominal, de um aluno numa aplicação de prova (RF10).
+
+    Vincula o aluno a uma versão específica e carrega um ``qr_token`` único, impresso
+    como QR na folha. O leitor óptico (OMR) resolve a folha por esse token para saber
+    de quem é e qual gabarito aplicar.
+    """
+
+    class Status(models.TextChoices):
+        GERADA = 'GERADA', 'Gerada'
+        IMPRESSA = 'IMPRESSA', 'Impressa'
+        LIDA = 'LIDA', 'Lida (corrigida)'
+        ANULADA = 'ANULADA', 'Anulada'
+
+    prova_aplicacao = models.ForeignKey(
+        ProvaAplicacao,
+        on_delete=models.CASCADE,
+        related_name='folhas',
+        verbose_name='aplicação de prova',
+    )
+    aluno = models.ForeignKey(
+        'academico.Aluno',
+        on_delete=models.PROTECT,
+        related_name='folhas_resposta',
+        verbose_name='aluno',
+    )
+    prova_versao = models.ForeignKey(
+        ProvaVersao,
+        on_delete=models.PROTECT,
+        related_name='folhas',
+        verbose_name='versão',
+    )
+    qr_token = models.UUIDField('token do QR', default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(
+        'status',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.GERADA,
+    )
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['prova_aplicacao', 'aluno__nome']
+        unique_together = [('prova_aplicacao', 'aluno')]
+        verbose_name = 'folha de resposta'
+        verbose_name_plural = 'folhas de resposta'
+
+    def __str__(self):
+        return f'Folha de {self.aluno} — Versão {self.prova_versao.identificador}'
 
 
 # Aliases para retrocompatibilidade contínua

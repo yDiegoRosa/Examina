@@ -1,7 +1,10 @@
 from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 
 from .models import (
     AtribuicaoVersao,
+    FolhaResposta,
     Mascara,
     MascaraCriterioDificuldade,
     MascaraCriterioTopico,
@@ -85,11 +88,23 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
     autocomplete_fields = ['prova', 'turma']
     date_hierarchy = 'data_aplicacao'
     inlines = [AtribuicaoVersaoInline]
-    actions = ['acao_atribuir_versoes']
+    actions = ['acao_atribuir_versoes', 'acao_exportar_folhas']
 
     @admin.display(description='Atribuições')
     def total_atribuicoes(self, obj):
         return obj.atribuicoes.count()
+
+    @admin.action(description='Exportar folhas-resposta nominais (ZIP)')
+    def acao_exportar_folhas(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                'Selecione exatamente uma aplicação para exportar as folhas.',
+                level=messages.WARNING,
+            )
+            return None
+        aplicacao = queryset.first()
+        return HttpResponseRedirect(reverse('provas:aplicacao_folhas_zip', args=[aplicacao.pk]))
 
     @admin.action(description='Atribuir versões (round-robin)')
     def acao_atribuir_versoes(self, request, queryset):
@@ -116,3 +131,13 @@ class AtribuicaoVersaoAdmin(admin.ModelAdmin):
     list_filter = ['versao__identificador', 'aplicacao__turma__periodo']
     search_fields = ['aluno__nome', 'aluno__matricula', 'aplicacao__prova__titulo']
     autocomplete_fields = ['aplicacao', 'aluno']
+
+
+@admin.register(FolhaResposta)
+class FolhaRespostaAdmin(admin.ModelAdmin):
+    list_display = ['aluno', 'prova_aplicacao', 'prova_versao', 'status', 'qr_token']
+    list_filter = ['status', 'prova_versao__identificador', 'prova_aplicacao__turma__periodo']
+    search_fields = ['aluno__nome', 'aluno__matricula', 'qr_token']
+    autocomplete_fields = ['prova_aplicacao', 'aluno']
+    readonly_fields = ['qr_token', 'criado_em', 'atualizado_em']
+    list_select_related = ['aluno', 'prova_aplicacao', 'prova_versao']
