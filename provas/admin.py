@@ -1,12 +1,15 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from .models import (
+    AtribuicaoVersao,
     Mascara,
     MascaraCriterioDificuldade,
     MascaraCriterioTopico,
     Prova,
+    ProvaAplicacao,
     ProvaQuestao,
 )
+from .services.version_assigner import atribuir_versoes
 
 
 class MascaraCriterioDificuldadeInline(admin.TabularInline):
@@ -64,3 +67,52 @@ class ProvaAdmin(admin.ModelAdmin):
     list_filter = ['mascara__disciplina', 'criado_em']
     search_fields = ['titulo', 'mascara__titulo']
     inlines = [ProvaQuestaoInline]
+
+
+class AtribuicaoVersaoInline(admin.TabularInline):
+    model = AtribuicaoVersao
+    extra = 0
+    can_delete = False
+    readonly_fields = ['sequencia', 'aluno', 'versao', 'criado_em']
+    ordering = ['sequencia']
+
+
+@admin.register(ProvaAplicacao)
+class ProvaAplicacaoAdmin(admin.ModelAdmin):
+    list_display = ['prova', 'turma', 'data_aplicacao', 'total_atribuicoes', 'criado_em']
+    list_filter = ['data_aplicacao', 'turma__periodo']
+    search_fields = ['prova__titulo', 'turma__nome', 'turma__periodo']
+    autocomplete_fields = ['prova', 'turma']
+    date_hierarchy = 'data_aplicacao'
+    inlines = [AtribuicaoVersaoInline]
+    actions = ['acao_atribuir_versoes']
+
+    @admin.display(description='Atribuições')
+    def total_atribuicoes(self, obj):
+        return obj.atribuicoes.count()
+
+    @admin.action(description='Atribuir versões (round-robin)')
+    def acao_atribuir_versoes(self, request, queryset):
+        total_ok = 0
+        for aplicacao in queryset:
+            try:
+                atribuicoes = atribuir_versoes(aplicacao)
+            except ValueError as exc:
+                self.message_user(request, f'{aplicacao}: {exc}', level=messages.ERROR)
+                continue
+            total_ok += 1
+            self.message_user(
+                request,
+                f'{aplicacao}: {len(atribuicoes)} aluno(s) receberam versão.',
+                level=messages.SUCCESS,
+            )
+        if total_ok == 0 and not queryset:
+            self.message_user(request, 'Nenhuma aplicação selecionada.', level=messages.WARNING)
+
+
+@admin.register(AtribuicaoVersao)
+class AtribuicaoVersaoAdmin(admin.ModelAdmin):
+    list_display = ['aplicacao', 'sequencia', 'aluno', 'versao']
+    list_filter = ['versao__identificador', 'aplicacao__turma__periodo']
+    search_fields = ['aluno__nome', 'aluno__matricula', 'aplicacao__prova__titulo']
+    autocomplete_fields = ['aplicacao', 'aluno']

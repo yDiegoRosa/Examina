@@ -5,10 +5,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .forms import AlunoForm, TurmaForm
-from .models import Aluno, Turma
+from .models import Aluno, Matricula, Turma
 
 
 def _paginar(request, queryset, por_pagina=10):
@@ -202,3 +203,71 @@ def turma_toggle_ativo(request, pk):
     estado = 'ativada' if turma.ativo else 'inativada'
     messages.success(request, f'Turma "{turma}" {estado}.')
     return redirect('academico:turma_list')
+
+
+# ---------------------------------------------------------------------------
+# Tela de Matrícula (vínculo Aluno × Turma), preservando histórico
+# ---------------------------------------------------------------------------
+@login_required
+def turma_matriculas(request, pk):
+    """
+    Gerencia o elenco de uma turma: mostra as matrículas (com situação) e os alunos
+    ativos disponíveis para matricular. Desmatricular é *soft* (preserva o histórico).
+    """
+    turma = get_object_or_404(Turma, pk=pk)
+    matriculas = turma.matriculas.select_related('aluno').order_by('aluno__nome')
+    matriculados_ids = turma.matriculas.filter(situacao=Matricula.Situacao.MATRICULADO).values_list(
+        'aluno_id', flat=True
+    )
+    alunos_disponiveis = Aluno.objects.filter(ativo=True).exclude(pk__in=matriculados_ids).order_by('nome')
+
+    return render(
+        request,
+        'academico/turma_matriculas.html',
+        {
+            'turma': turma,
+            'matriculas': matriculas,
+            'alunos_disponiveis': alunos_disponiveis,
+        },
+    )
+
+
+@require_POST
+@login_required
+def turma_matricular(request, pk):
+    """Matricula (ou reativa) os alunos selecionados na turma."""
+    turma = get_object_or_404(Turma, pk=pk)
+    ids = request.POST.getlist('alunos')
+    alunos = Aluno.objects.filter(pk__in=ids, ativo=True)
+
+    total = 0
+    for aluno in alunos:
+        Matricula.objects.update_or_create(
+            aluno=aluno,
+            turma=turma,
+            defaults={
+                'situacao': Matricula.Situacao.MATRICULADO,
+                'data_matricula': timezone.localdate(),
+                'data_encerramento': None,
+            },
+        )
+        total += 1
+
+    if total:
+        messages.success(request, f'{total} aluno(s) matriculado(s) na turma "{turma}".')
+    else:
+        messages.info(request, 'Nenhum aluno selecionado para matrícula.')
+    return redirect('academico:turma_matriculas', pk=turma.pk)
+
+
+@require_POST
+@login_required
+def turma_desmatricular(request, pk):
+    """Desmatricula (soft) um aluno: situação CANCELADO + data de encerramento; a linha permanece."""
+    turma = get_object_or_404(Turma, pk=pk)
+    matricula = get_object_or_404(Matricula, pk=request.POST.get('matricula'), turma=turma)
+    matricula.situacao = Matricula.Situacao.CANCELADO
+    matricula.data_encerramento = timezone.localdate()
+    matricula.save(update_fields=['situacao', 'data_encerramento', 'atualizado_em'])
+    messages.success(request, f'{matricula.aluno.nome} foi desmatriculado(a) da turma "{turma}".')
+    return redirect('academico:turma_matriculas', pk=turma.pk)

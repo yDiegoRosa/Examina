@@ -95,6 +95,9 @@
           </td>
           <td class="text-right">
             <div class="flex items-center justify-end gap-1">
+              <a href="{% url 'academico:turma_matriculas' pk=turma.pk %}" class="btn-table-action" title="Gerenciar matrículas">
+                <i class="bi bi-person-check"></i>
+              </a>
               <a href="{% url 'academico:turma_update' pk=turma.pk %}" class="btn-table-action" title="Editar turma">
                 <i class="bi bi-pencil-square"></i>
               </a>

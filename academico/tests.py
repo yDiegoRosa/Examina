@@ -150,3 +150,61 @@ class TurmaCrudViewTest(TestCase):
         self.assertRedirects(resp, reverse('academico:turma_list'))
         turma.refresh_from_db()
         self.assertFalse(turma.ativo)
+
+
+class TurmaMatriculaViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='coord3', password='segredo123')  # noqa: S106
+        self.client.login(username='coord3', password='segredo123')  # noqa: S106
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.ana = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.bruno = Aluno.objects.create(nome='Bruno', matricula='B1')
+
+    def test_login_obrigatorio(self):
+        self.client.logout()
+        resp = self.client.get(reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_pagina_lista_e_exclui_matriculados_dos_disponiveis(self):
+        Matricula.objects.create(aluno=self.ana, turma=self.turma)
+        resp = self.client.get(reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertEqual(resp.status_code, 200)
+        disponiveis = list(resp.context['alunos_disponiveis'])
+        self.assertIn(self.bruno, disponiveis)
+        self.assertNotIn(self.ana, disponiveis)  # já matriculada
+
+    def test_matricular_multiplos(self):
+        resp = self.client.post(
+            reverse('academico:turma_matricular', args=[self.turma.pk]),
+            {'alunos': [self.ana.pk, self.bruno.pk]},
+        )
+        self.assertRedirects(resp, reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertEqual(
+            Matricula.objects.filter(turma=self.turma, situacao=Matricula.Situacao.MATRICULADO).count(),
+            2,
+        )
+
+    def test_desmatricular_e_soft_e_preserva_linha(self):
+        m = Matricula.objects.create(aluno=self.ana, turma=self.turma)
+        resp = self.client.post(
+            reverse('academico:turma_desmatricular', args=[self.turma.pk]),
+            {'matricula': m.pk},
+        )
+        self.assertRedirects(resp, reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        m.refresh_from_db()
+        self.assertEqual(m.situacao, Matricula.Situacao.CANCELADO)
+        self.assertIsNotNone(m.data_encerramento)
+        # A linha permanece (histórico preservado).
+        self.assertTrue(Matricula.objects.filter(pk=m.pk).exists())
+
+    def test_rematricular_reativa_a_mesma_linha(self):
+        m = Matricula.objects.create(aluno=self.ana, turma=self.turma, situacao=Matricula.Situacao.CANCELADO)
+        self.client.post(
+            reverse('academico:turma_matricular', args=[self.turma.pk]),
+            {'alunos': [self.ana.pk]},
+        )
+        # Sem violar unique (aluno, turma): a mesma linha é reativada.
+        self.assertEqual(Matricula.objects.filter(aluno=self.ana, turma=self.turma).count(), 1)
+        m.refresh_from_db()
+        self.assertEqual(m.situacao, Matricula.Situacao.MATRICULADO)
+        self.assertIsNone(m.data_encerramento)

@@ -1,5 +1,6 @@
 import logging
 import tempfile
+from datetime import date
 from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,16 +10,36 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
 from django.core.exceptions import ValidationError
-from django.db import OperationalError, connection
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.db import IntegrityError, OperationalError, connection, transaction
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.urls import resolve, reverse
 
+from academico.models import Aluno, Matricula, Turma
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
-from .models import Mascara, MascaraCriterioDificuldade, MascaraCriterioTopico, MascaraProva
+from .models import (
+    Mascara,
+    MascaraCriterioDificuldade,
+    MascaraCriterioTopico,
+    MascaraProva,
+    Prova,
+    ProvaAplicacao,
+    ProvaVersao,
+)
 from .presets import preset_enade_initial
+from .services.answer_sheet_layout import (
+    MARKER_IDS,
+    MARKER_INSET,
+    PAGE_H,
+    PAGE_W,
+    SCHEMA_VERSION,
+    build_layout,
+    geometry_from_dict,
+    max_questoes_por_pagina,
+)
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
+from .services.version_assigner import atribuir_versoes
 from .views import prova_list
 
 
@@ -2581,3 +2602,74 @@ class FolhaRespostaGeometryTest(SimpleTestCase):
             build_layout(num_questoes=10, columns=0)
         with self.assertRaises(ValueError):
             build_layout(num_questoes=10, columns=5)
+
+
+class ProvaAplicacaoModelTest(TestCase):
+    def setUp(self):
+        self.prova = Prova.objects.create(titulo='Prova de Teste')
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+
+    def test_str_e_unicidade(self):
+        ap = ProvaAplicacao.objects.create(prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10))
+        self.assertIn('MAC Noite', str(ap))
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ProvaAplicacao.objects.create(prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10))
+
+
+class AtribuicaoVersaoServiceTest(TestCase):
+    def setUp(self):
+        self.prova = Prova.objects.create(titulo='Prova RF')
+        self.versoes = [
+            ProvaVersao.objects.create(prova=self.prova, identificador=ident, numero_versao=i)
+            for i, ident in enumerate(['A', 'B', 'C'], start=1)
+        ]
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+
+    def _matricular(self, nome, matricula, situacao=None, ativo=True):
+        aluno = Aluno.objects.create(nome=nome, matricula=matricula, ativo=ativo)
+        Matricula.objects.create(
+            aluno=aluno,
+            turma=self.turma,
+            situacao=situacao or Matricula.Situacao.MATRICULADO,
+        )
+        return aluno
+
+    def test_round_robin_distribui_e_evita_vizinhos_iguais(self):
+        # 7 alunos, nomes em ordem controlada (A..G) para checar adjacência.
+        for i, letra in enumerate('ABCDEFG'):
+            self._matricular(f'{letra} Aluno', f'M{i:02d}')
+
+        atribuicoes = atribuir_versoes(self.aplicacao)
+        self.assertEqual(len(atribuicoes), 7)
+
+        # Ordenadas por sequência; nenhum par adjacente com a mesma versão.
+        ordenadas = sorted(atribuicoes, key=lambda a: a.sequencia)
+        letras = [a.versao.identificador for a in ordenadas]
+        self.assertEqual(letras[:3], ['A', 'B', 'C'])  # round-robin
+        for anterior, atual in zip(letras, letras[1:], strict=False):
+            self.assertNotEqual(anterior, atual)
+
+    def test_ignora_nao_matriculados_e_inativos(self):
+        self._matricular('Ativo Um', 'A1')
+        self._matricular('Trancado', 'T1', situacao=Matricula.Situacao.TRANCADO)
+        self._matricular('Inativo', 'I1', ativo=False)
+
+        atribuicoes = atribuir_versoes(self.aplicacao)
+        self.assertEqual(len(atribuicoes), 1)
+        self.assertEqual(atribuicoes[0].aluno.nome, 'Ativo Um')
+
+    def test_idempotente(self):
+        self._matricular('Ana', 'A1')
+        self._matricular('Bruno', 'B1')
+        atribuir_versoes(self.aplicacao)
+        atribuir_versoes(self.aplicacao)
+        self.assertEqual(self.aplicacao.atribuicoes.count(), 2)
+
+    def test_sem_versoes_levanta_valueerror(self):
+        self.prova.versoes.all().delete()
+        self._matricular('Ana', 'A1')
+        with self.assertRaises(ValueError):
+            atribuir_versoes(self.aplicacao)
