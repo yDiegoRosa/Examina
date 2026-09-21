@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('academico', '0001_initial'),
         ('provas', '0009_provaaplicacao_atribuicaoversao'),
@@ -18,13 +17,53 @@ class Migration(migrations.Migration):
             name='FolhaResposta',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('qr_token', models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='token do QR')),
-                ('status', models.CharField(choices=[('GERADA', 'Gerada'), ('IMPRESSA', 'Impressa'), ('LIDA', 'Lida (corrigida)'), ('ANULADA', 'Anulada')], default='GERADA', max_length=20, verbose_name='status')),
+                (
+                    'qr_token',
+                    models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='token do QR'),
+                ),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[
+                            ('GERADA', 'Gerada'),
+                            ('IMPRESSA', 'Impressa'),
+                            ('LIDA', 'Lida (corrigida)'),
+                            ('ANULADA', 'Anulada'),
+                        ],
+                        default='GERADA',
+                        max_length=20,
+                        verbose_name='status',
+                    ),
+                ),
                 ('criado_em', models.DateTimeField(auto_now_add=True)),
                 ('atualizado_em', models.DateTimeField(auto_now=True)),
-                ('aluno', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='folhas_resposta', to='academico.aluno', verbose_name='aluno')),
-                ('prova_aplicacao', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='folhas', to='provas.provaaplicacao', verbose_name='aplicação de prova')),
-                ('prova_versao', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='folhas', to='provas.provaversao', verbose_name='versão')),
+                (
+                    'aluno',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='folhas_resposta',
+                        to='academico.aluno',
+                        verbose_name='aluno',
+                    ),
+                ),
+                (
+                    'prova_aplicacao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='folhas',
+                        to='provas.provaaplicacao',
+                        verbose_name='aplicação de prova',
+                    ),
+                ),
+                (
+                    'prova_versao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='folhas',
+                        to='provas.provaversao',
+                        verbose_name='versão',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'folha de resposta',

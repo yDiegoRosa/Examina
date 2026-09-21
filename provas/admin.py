@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from .models import (
     AtribuicaoVersao,
+    FolhaDigitalizada,
     FolhaResposta,
     Mascara,
     MascaraCriterioDificuldade,
@@ -88,7 +89,7 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
     autocomplete_fields = ['prova', 'turma']
     date_hierarchy = 'data_aplicacao'
     inlines = [AtribuicaoVersaoInline]
-    actions = ['acao_atribuir_versoes', 'acao_exportar_folhas']
+    actions = ['acao_atribuir_versoes', 'acao_exportar_folhas', 'acao_upload_folhas']
 
     @admin.display(description='Atribuições')
     def total_atribuicoes(self, obj):
@@ -105,6 +106,18 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
             return None
         aplicacao = queryset.first()
         return HttpResponseRedirect(reverse('provas:aplicacao_folhas_zip', args=[aplicacao.pk]))
+
+    @admin.action(description='Enviar folhas escaneadas (upload em lote)')
+    def acao_upload_folhas(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                'Selecione exatamente uma aplicação para enviar as folhas.',
+                level=messages.WARNING,
+            )
+            return None
+        aplicacao = queryset.first()
+        return HttpResponseRedirect(reverse('provas:aplicacao_upload_folhas', args=[aplicacao.pk]))
 
     @admin.action(description='Atribuir versões (round-robin)')
     def acao_atribuir_versoes(self, request, queryset):
@@ -141,3 +154,13 @@ class FolhaRespostaAdmin(admin.ModelAdmin):
     autocomplete_fields = ['prova_aplicacao', 'aluno']
     readonly_fields = ['qr_token', 'criado_em', 'atualizado_em']
     list_select_related = ['aluno', 'prova_aplicacao', 'prova_versao']
+
+
+@admin.register(FolhaDigitalizada)
+class FolhaDigitalizadaAdmin(admin.ModelAdmin):
+    list_display = ['id', 'prova_aplicacao', 'status', 'folha_resposta', 'enviado_por', 'criado_em']
+    list_filter = ['status', 'prova_aplicacao__turma__periodo']
+    search_fields = ['prova_aplicacao__prova__titulo', 'folha_resposta__aluno__nome']
+    raw_id_fields = ['prova_aplicacao', 'folha_resposta', 'enviado_por']
+    readonly_fields = ['criado_em', 'atualizado_em']
+    list_select_related = ['prova_aplicacao', 'folha_resposta', 'enviado_por']

@@ -23,6 +23,7 @@ urlpatterns = [
     path('provas/<int:pk>/gerar-versoes/', views.prova_gerar_versoes_view, name='prova_gerar_versoes'),
     path('provas/<int:pk>/pacote-zip/', views.prova_pacote_zip, name='prova_pacote_zip'),
     path('aplicacoes/<int:pk>/folhas-zip/', views.aplicacao_folhas_zip, name='aplicacao_folhas_zip'),
+    path('aplicacoes/<int:pk>/upload-folhas/', views.aplicacao_upload_folhas, name='aplicacao_upload_folhas'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),
     path('itens/<int:item_pk>/substituir/', views.item_substituir_questao, name='item_substituir_questao'),
     # AJAX / APIs

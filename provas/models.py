@@ -773,6 +773,62 @@ class FolhaResposta(models.Model):
         return f'Folha de {self.aluno} — Versão {self.prova_versao.identificador}'
 
 
+class FolhaDigitalizada(models.Model):
+    """
+    Imagem de uma folha-resposta escaneada/fotografada, enviada em lote para uma
+    aplicação de prova — fila de entrada do leitor óptico (OMR).
+
+    A ``folha_resposta`` fica nula até o OMR ler o QR e resolver de quem é a folha.
+    """
+
+    class Status(models.TextChoices):
+        PENDENTE = 'PENDENTE', 'Pendente'
+        PROCESSADA = 'PROCESSADA', 'Processada'
+        ERRO = 'ERRO', 'Erro'
+
+    prova_aplicacao = models.ForeignKey(
+        ProvaAplicacao,
+        on_delete=models.CASCADE,
+        related_name='digitalizacoes',
+        verbose_name='aplicação de prova',
+    )
+    imagem = models.ImageField('imagem da folha', upload_to='folhas_digitalizadas/%Y/%m/')
+    status = models.CharField(
+        'status',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    folha_resposta = models.ForeignKey(
+        FolhaResposta,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='digitalizacoes',
+        verbose_name='folha-resposta identificada',
+    )
+    mensagem = models.TextField('mensagem do processamento', blank=True)
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='folhas_enviadas',
+        verbose_name='enviado por',
+    )
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+        verbose_name = 'folha digitalizada'
+        verbose_name_plural = 'folhas digitalizadas'
+
+    def __str__(self):
+        return f'Digitalização #{self.pk} — {self.prova_aplicacao} [{self.get_status_display()}]'
+
+
 # Aliases para retrocompatibilidade contínua
 MascaraProva = Mascara
 MascaraTopico = MascaraCriterioTopico

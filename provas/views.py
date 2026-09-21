@@ -11,8 +11,8 @@ from django.views.decorators.http import require_POST
 
 from banco_questoes.models import Disciplina, Questao, Topico
 
-from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm
-from .models import MascaraProva, Prova, ProvaAplicacao, ProvaQuestao
+from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm, UploadFolhasForm
+from .models import FolhaDigitalizada, MascaraProva, Prova, ProvaAplicacao, ProvaQuestao
 from .presets import preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
@@ -905,6 +905,49 @@ def aplicacao_folhas_zip(request, pk):
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+# ---------------------------------------------------------------------------
+# Upload em lote de folhas escaneadas (fila de entrada do OMR)
+# ---------------------------------------------------------------------------
+@login_required
+def aplicacao_upload_folhas(request, pk):
+    """
+    Recebe o upload em lote de imagens (fotos de celular ou digitalizações) de folhas
+    de uma aplicação, criando uma ``FolhaDigitalizada`` PENDENTE por imagem para o
+    processamento posterior pelo leitor óptico (OMR). Não faz OMR agora.
+    """
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+
+    if request.method == 'POST':
+        form = UploadFolhasForm(request.POST, request.FILES)
+        if form.is_valid():
+            imagens = form.cleaned_data['imagens']
+            for imagem in imagens:
+                FolhaDigitalizada.objects.create(
+                    prova_aplicacao=aplicacao,
+                    imagem=imagem,
+                    enviado_por=request.user,
+                )
+            messages.success(
+                request,
+                f'{len(imagens)} imagem(ns) enviada(s) para processamento (OMR).',
+            )
+            return redirect('provas:aplicacao_upload_folhas', pk=aplicacao.pk)
+    else:
+        form = UploadFolhasForm()
+
+    digitalizacoes = aplicacao.digitalizacoes.order_by('-criado_em')
+    return render(
+        request,
+        'provas/aplicacao_upload_folhas.html',
+        {
+            'aplicacao': aplicacao,
+            'form': form,
+            'digitalizacoes': digitalizacoes,
+            'total': digitalizacoes.count(),
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

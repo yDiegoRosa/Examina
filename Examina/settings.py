@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'academico.apps.AcademicoConfig',
     'banco_questoes',
     'provas.apps.ProvasConfig',
+    'desempenho.apps.DesempenhoConfig',
 ]
 
 # django-taggit

@@ -1,24 +1,32 @@
 import logging
 import tempfile
+import uuid
 from datetime import date
 from importlib import import_module
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import skipUnless
 
+import cv2
+import numpy as np
+import qrcode
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, OperationalError, connection, transaction
 from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.urls import resolve, reverse
+from PIL import Image
 
 from academico.models import Aluno, Matricula, Turma
 from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import (
+    FolhaDigitalizada,
     FolhaResposta,
     Mascara,
     MascaraCriterioDificuldade,
@@ -45,6 +53,15 @@ from .services.folha_service import (
     contar_questoes_objetivas,
     gerar_folhas_da_aplicacao,
     render_folha_pdf,
+)
+from .services.omr import (
+    PX_POR_MM,
+    OmrError,
+    corrigir_perspectiva,
+    decodificar_qr,
+    extrair_qr_token,
+    identificar_folha,
+    localizar_folha,
 )
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
 from .services.version_assigner import atribuir_versoes
@@ -2769,3 +2786,144 @@ class FolhaRespostaTest(TestCase):
         url = reverse('provas:aplicacao_folhas_zip', args=[self.aplicacao.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)
+
+
+def _imagem_png(nome='folha.png'):
+    """Gera um arquivo PNG válido em memória para testes de upload."""
+    buffer = BytesIO()
+    Image.new('RGB', (12, 12), 'white').save(buffer, format='PNG')
+    return SimpleUploadedFile(nome, buffer.getvalue(), content_type='image/png')
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class UploadFolhasViewTest(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='coord_up', password='segredo123')  # noqa: S106
+        self.prova = Prova.objects.create(titulo='Prova Upload')
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.url = reverse('provas:aplicacao_upload_folhas', args=[self.aplicacao.pk])
+
+    def test_login_obrigatorio(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 302)
+
+    def test_get_ok(self):
+        self.client.login(username='coord_up', password='segredo123')  # noqa: S106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_upload_multiplas_imagens(self):
+        self.client.login(username='coord_up', password='segredo123')  # noqa: S106
+        resp = self.client.post(
+            self.url,
+            {'imagens': [_imagem_png('f1.png'), _imagem_png('f2.png')]},
+        )
+        self.assertRedirects(resp, self.url)
+        self.assertEqual(FolhaDigitalizada.objects.filter(prova_aplicacao=self.aplicacao).count(), 2)
+        d = FolhaDigitalizada.objects.filter(prova_aplicacao=self.aplicacao).first()
+        self.assertEqual(d.status, FolhaDigitalizada.Status.PENDENTE)
+        self.assertEqual(d.enviado_por, self.user)
+
+    def test_rejeita_arquivo_nao_imagem(self):
+        self.client.login(username='coord_up', password='segredo123')  # noqa: S106
+        arquivo = SimpleUploadedFile('nota.txt', b'isto nao e imagem', content_type='text/plain')
+        resp = self.client.post(self.url, {'imagens': [arquivo]})
+        self.assertEqual(resp.status_code, 200)  # reexibe o form com erro
+        self.assertEqual(FolhaDigitalizada.objects.count(), 0)
+
+
+class FolhaDigitalizadaModelTest(TestCase):
+    def test_status_default_pendente(self):
+        prova = Prova.objects.create(titulo='P')
+        turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        aplicacao = ProvaAplicacao.objects.create(prova=prova, turma=turma, data_aplicacao=date(2026, 11, 10))
+        d = FolhaDigitalizada(prova_aplicacao=aplicacao)
+        self.assertEqual(d.status, FolhaDigitalizada.Status.PENDENTE)
+
+
+def _canvas_omr(payload, px=PX_POR_MM):
+    """Gera uma imagem sintética de folha: 4 marcadores ArUco + QR nas posições da geometria."""
+    geo = build_layout(num_questoes=10)
+    largura = int(round(PAGE_W * px))
+    altura = int(round(PAGE_H * px))
+    canvas = np.full((altura, largura, 3), 255, np.uint8)
+
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    for m in geo.markers:
+        size_px = int(round(m.size * px))
+        marcador = cv2.cvtColor(cv2.aruco.generateImageMarker(dictionary, m.id, size_px), cv2.COLOR_GRAY2BGR)
+        x0 = int(round(m.left * px))
+        y0 = int(round(m.top * px))
+        canvas[y0 : y0 + size_px, x0 : x0 + size_px] = marcador
+
+    qr = qrcode.QRCode(border=1, box_size=10)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    pil = qr.make_image(fill_color='black', back_color='white').convert('RGB')
+    qr_arr = np.array(pil)[:, :, ::-1].copy()  # RGB -> BGR
+    qsize = int(round(geo.qr.w * px))
+    qr_arr = cv2.resize(qr_arr, (qsize, qsize), interpolation=cv2.INTER_NEAREST)
+    qx = int(round(geo.qr.x * px))
+    qy = int(round(geo.qr.y * px))
+    canvas[qy : qy + qsize, qx : qx + qsize] = qr_arr
+    return canvas
+
+
+class OmrReaderTest(TestCase):
+    def setUp(self):
+        disc = Disciplina.objects.create(nome='Disc OMR')
+        topico = Topico.objects.create(disciplina=disc, nome='Top OMR')
+        questao = Questao.objects.create(disciplina=disc, topico=topico, tipo='OBJ', dificuldade='F', enunciado='Q')
+        self.prova = Prova.objects.create(titulo='Prova OMR', disciplina=disc)
+        self.pq = ProvaQuestao.objects.create(
+            prova=self.prova, questao=questao, numero=1, ordem=1, snapshot_questao={'tipo': 'OBJ'}
+        )
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.aluno = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.folha = FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+        )
+        self.payload = f'EXM1F|{self.folha.qr_token}'
+
+    def test_extrair_qr_token(self):
+        self.assertEqual(extrair_qr_token(self.payload), str(self.folha.qr_token))
+        self.assertIsNone(extrair_qr_token('lixo'))
+        self.assertIsNone(extrair_qr_token('EXM1F|nao-e-uuid'))
+        self.assertIsNone(extrair_qr_token(''))
+
+    def test_localizar_folha_inexistente(self):
+        self.assertIsNone(localizar_folha(str(uuid.uuid4())))
+
+    def test_decodificar_e_identificar(self):
+        canvas = _canvas_omr(self.payload)
+        self.assertEqual(decodificar_qr(canvas), self.payload)
+        self.assertEqual(identificar_folha(canvas), self.folha)
+
+    def test_corrigir_perspectiva_tamanho_e_qr(self):
+        canvas = _canvas_omr(self.payload)
+        corrigida = corrigir_perspectiva(canvas)
+        self.assertEqual(corrigida.shape[0], int(round(PAGE_H * PX_POR_MM)))
+        self.assertEqual(corrigida.shape[1], int(round(PAGE_W * PX_POR_MM)))
+        self.assertEqual(decodificar_qr(corrigida), self.payload)
+
+    def test_corrigir_perspectiva_de_foto_torta(self):
+        canvas = _canvas_omr(self.payload)
+        h, w = canvas.shape[:2]
+        origem = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
+        destino = np.float32([[w * 0.04, h * 0.03], [w * 0.98, h * 0.01], [w * 0.99, h * 0.98], [w * 0.02, h * 0.97]])
+        matriz = cv2.getPerspectiveTransform(origem, destino)
+        torta = cv2.warpPerspective(canvas, matriz, (w, h), borderValue=(255, 255, 255))
+        corrigida = corrigir_perspectiva(torta)
+        self.assertEqual(identificar_folha(corrigida), self.folha)
+
+    def test_marcadores_faltando_levanta_erro(self):
+        branco = np.full((int(PAGE_H * PX_POR_MM), int(PAGE_W * PX_POR_MM), 3), 255, np.uint8)
+        with self.assertRaises(OmrError):
+            corrigir_perspectiva(branco)

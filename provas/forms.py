@@ -1,9 +1,63 @@
 from django import forms
+from django.conf import settings
 from django.forms import inlineformset_factory
 
 from banco_questoes.models import Disciplina, Topico
 
 from .models import Mascara, MascaraCriterioTopico
+
+
+class _MultipleFileInput(forms.ClearableFileInput):
+    """Input de arquivo que aceita múltiplos arquivos."""
+
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.ImageField):
+    """
+    Campo de upload de **múltiplas** imagens.
+
+    Valida cada arquivo como imagem real (via Pillow, herdado de ``ImageField``) e
+    limita o tamanho de cada uma a ``settings.IMAGE_UPLOAD_MAX_SIZE_MB`` (padrão 10 MB).
+    Retorna sempre uma lista de arquivos.
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault(
+            'widget',
+            _MultipleFileInput(
+                attrs={
+                    'class': 'form-input form-file-input',
+                    'accept': 'image/*',
+                    'multiple': True,
+                    'capture': 'environment',
+                },
+            ),
+        )
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        if not data:
+            if self.required:
+                raise forms.ValidationError('Envie pelo menos uma imagem.')
+            return []
+
+        arquivos = data if isinstance(data, (list, tuple)) else [data]
+        single_clean = super().clean
+        limpos = [single_clean(arquivo, initial) for arquivo in arquivos]
+
+        max_mb = getattr(settings, 'IMAGE_UPLOAD_MAX_SIZE_MB', 10)
+        limite = max_mb * 1024 * 1024
+        for arquivo in limpos:
+            if arquivo and arquivo.size > limite:
+                raise forms.ValidationError(f'Cada imagem deve ter no máximo {max_mb} MB.')
+        return limpos
+
+
+class UploadFolhasForm(forms.Form):
+    """Upload em lote de folhas escaneadas/fotografadas de uma aplicação."""
+
+    imagens = MultipleImageField(label='Imagens das folhas (fotos do celular ou digitalizações)')
 
 
 class MascaraForm(forms.ModelForm):
