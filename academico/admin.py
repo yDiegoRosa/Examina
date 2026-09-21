@@ -7,17 +7,19 @@ from .models import Aluno, Matricula, Turma
 
 @admin.register(Aluno)
 class AlunoAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'matricula', 'ativo')
+    list_display = ('nome', 'matricula', 'ativo', 'criado_em')
     list_filter = ('ativo',)
     search_fields = ('nome', 'matricula')
+    ordering = ('nome',)
     readonly_fields = ('criado_em', 'atualizado_em')
 
 
 @admin.register(Turma)
 class TurmaAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'periodo', 'ativo')
-    list_filter = ('periodo', 'ativo')
+    list_display = ('periodo', 'nome', 'ativo', 'criado_em')
+    list_filter = ('ativo', 'periodo')
     search_fields = ('nome', 'periodo')
+    ordering = ('-periodo', 'nome')
     readonly_fields = ('criado_em', 'atualizado_em')
 
     def get_readonly_fields(self, request, obj=None):
@@ -29,13 +31,11 @@ class TurmaAdmin(admin.ModelAdmin):
 
 @admin.register(Matricula)
 class MatriculaAdmin(admin.ModelAdmin):
-    list_display = ('aluno', 'turma', 'ativo')
-    list_filter = ('ativo', 'turma__periodo')
-    search_fields = (
-        'aluno__nome',
-        'aluno__matricula',
-        'turma__nome',
-    )
+    list_display = ('aluno', 'turma', 'situacao', 'data_matricula', 'data_encerramento')
+    list_filter = ('situacao', 'turma__periodo')
+    search_fields = ('aluno__nome', 'aluno__matricula', 'turma__nome')
+    autocomplete_fields = ('aluno', 'turma')
+    date_hierarchy = 'data_matricula'
     list_select_related = ('aluno', 'turma')
     readonly_fields = ('criado_em', 'atualizado_em')
 

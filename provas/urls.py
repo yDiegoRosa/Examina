@@ -28,4 +28,5 @@ urlpatterns = [
     path('api/topicos-estoque/', views.api_topicos_e_estoque, name='api_topicos_estoque'),
     # Demonstração PDF
     path('pdf-teste/', views.pdf_teste_view, name='pdf_teste'),
+    path('folha-resposta-teste/', views.folha_resposta_demo, name='folha_resposta_demo'),
 ]

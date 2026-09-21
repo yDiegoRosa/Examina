@@ -1,0 +1,130 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Turmas — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4" aria-label="Navegação acadêmica">
+  <a href="{% url 'academico:aluno_list' %}" class="btn btn-outline">Alunos</a>
+  <a href="{% url 'academico:turma_list' %}" class="btn btn-primary" aria-current="page">Turmas</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-collection-fill"></i> Acadêmico • Cadastro de Turmas</span>
+    </div>
+    <h1 class="mb-1">Turmas</h1>
+    <p class="text-secondary" style="max-width: 620px;">
+      Cadastro e manutenção das turmas por período letivo (ex.: 2026.2 — MAC Noite).
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'academico:turma_create' %}" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-plus-circle-fill"></i> Nova Turma
+    </a>
+  </div>
+</div>
+
+<!-- Métricas Rápidas -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-collection-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Total de Turmas</div>
+      <div class="stat-num-unified">{{ metricas.total }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-success"><i class="bi bi-check-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Ativas</div>
+      <div class="stat-num-unified text-success">{{ metricas.ativas }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-warning"><i class="bi bi-pause-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Inativas</div>
+      <div class="stat-num-unified">{{ metricas.inativas }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card-surface p-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-3">
+    <input type="text" name="q" value="{{ busca }}" class="form-input flex-1" style="min-width: 220px;"
+           placeholder="Buscar por nome ou período…">
+    <select name="status" class="form-select" onchange="this.form.submit()">
+      <option value="">Todos os status</option>
+      <option value="ativo" {% if status_selecionado == 'ativo' %}selected{% endif %}>Somente ativas</option>
+      <option value="inativo" {% if status_selecionado == 'inativo' %}selected{% endif %}>Somente inativas</option>
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
+    {% if busca or status_selecionado %}
+    <a href="{% url 'academico:turma_list' %}" class="btn btn-outline"><i class="bi bi-x-lg"></i> Limpar</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Tabela -->
+<div class="card-surface">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 70px;">ID</th>
+          <th style="width: 140px;">Período</th>
+          <th>Nome da Turma</th>
+          <th style="width: 110px;">Status</th>
+          <th style="width: 120px;" class="text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for turma in turmas %}
+        <tr>
+          <td><span class="font-bold text-muted font-mono">#{{ turma.pk }}</span></td>
+          <td><span class="font-bold font-mono" style="color: var(--fae-blue-primary);">{{ turma.periodo }}</span></td>
+          <td><span class="font-bold text-main">{{ turma.nome }}</span></td>
+          <td>
+            {% if turma.ativo %}
+            <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Ativa</span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Inativa</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-1">
+              <a href="{% url 'academico:turma_matriculas' pk=turma.pk %}" class="btn-table-action" title="Gerenciar matrículas">
+                <i class="bi bi-person-check"></i>
+              </a>
+              <a href="{% url 'academico:turma_update' pk=turma.pk %}" class="btn-table-action" title="Editar turma">
+                <i class="bi bi-pencil-square"></i>
+              </a>
+              <form method="post" action="{% url 'academico:turma_toggle_ativo' pk=turma.pk %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-table-action" title="{% if turma.ativo %}Inativar{% else %}Ativar{% endif %}">
+                  <i class="bi {% if turma.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-folder-x"></i></div>
+            <h4 class="font-bold text-main">Nenhuma turma encontrada</h4>
+            <p class="text-muted mb-3">Cadastre a primeira turma do período.</p>
+            <a href="{% url 'academico:turma_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Nova Turma</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj %}
+  {% include "banco_questoes/includes/pagination.html" %}
+  {% endif %}
+</div>
+{% endblock %}

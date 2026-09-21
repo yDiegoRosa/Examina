@@ -638,6 +638,86 @@ class ProvaVersaoItem(models.Model):
         return self.prova_questao.pontuacao
 
 
+# ---------------------------------------------------------------------------
+# ProvaAplicacao e AtribuicaoVersao (vínculo Prova × Turma + versão por aluno)
+# ---------------------------------------------------------------------------
+class ProvaAplicacao(models.Model):
+    """
+    Aplicação de uma prova a uma turma numa data específica (o "evento" de avaliação).
+
+    É a base para a atribuição de versões por aluno e, futuramente, para a
+    folha-resposta individual com QR (RF10).
+    """
+
+    prova = models.ForeignKey(
+        Prova,
+        on_delete=models.PROTECT,
+        related_name='aplicacoes',
+        verbose_name='prova',
+    )
+    turma = models.ForeignKey(
+        'academico.Turma',
+        on_delete=models.PROTECT,
+        related_name='aplicacoes',
+        verbose_name='turma',
+    )
+    data_aplicacao = models.DateField('data de aplicação')
+    observacao = models.TextField('observação', blank=True)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-data_aplicacao', 'turma__nome']
+        unique_together = [('prova', 'turma', 'data_aplicacao')]
+        verbose_name = 'aplicação de prova'
+        verbose_name_plural = 'aplicações de prova'
+
+    def __str__(self):
+        return f'{self.prova.titulo} — {self.turma} ({self.data_aplicacao})'
+
+
+class AtribuicaoVersao(models.Model):
+    """
+    Versão (caderno A/B/C…) atribuída a um aluno numa aplicação de prova.
+
+    Gerada por round-robin (ver ``provas.services.version_assigner``) de modo que
+    alunos adjacentes na lista não recebam a mesma versão.
+    """
+
+    aplicacao = models.ForeignKey(
+        ProvaAplicacao,
+        on_delete=models.CASCADE,
+        related_name='atribuicoes',
+        verbose_name='aplicação',
+    )
+    aluno = models.ForeignKey(
+        'academico.Aluno',
+        on_delete=models.PROTECT,
+        related_name='atribuicoes_versao',
+        verbose_name='aluno',
+    )
+    versao = models.ForeignKey(
+        ProvaVersao,
+        on_delete=models.PROTECT,
+        related_name='atribuicoes',
+        verbose_name='versão',
+    )
+    sequencia = models.PositiveIntegerField('sequência (ordem do round-robin)', default=1)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['aplicacao', 'sequencia']
+        unique_together = [('aplicacao', 'aluno')]
+        verbose_name = 'atribuição de versão'
+        verbose_name_plural = 'atribuições de versão'
+
+    def __str__(self):
+        return f'{self.aluno} → Versão {self.versao.identificador} (#{self.sequencia})'
+
+
 # Aliases para retrocompatibilidade contínua
 MascaraProva = Mascara
 MascaraTopico = MascaraCriterioTopico

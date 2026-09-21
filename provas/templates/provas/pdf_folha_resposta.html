@@ -1,0 +1,156 @@
+{% load l10n %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Folha de Resposta — {{ prova_titulo }} — Versão {{ versao_ident }} — FAETERJ-Rio</title>
+  {% comment %}
+    CSS embutido de propósito: coordenadas em mm dependem de @page{margin:0} e do
+    posicionamento absoluto. O WeasyPrint (base_url=BASE_DIR) não resolve /static/,
+    então a folha é autocontida para garantir geometria determinística no OMR.
+  {% endcomment %}
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #111827; background: #ffffff; }
+
+    /* Página física A4 como contexto de posicionamento absoluto (mm = borda da folha). */
+    .fr-page { position: relative; width: 210mm; height: 297mm; overflow: hidden; }
+
+    /* Marcadores fiduciais (cantos). */
+    .fr-marker { position: absolute; background: #ffffff; }
+    .fr-marker img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+    .fr-marker.fr-marker-quadrado { background: #000000; }  /* fallback sem ArUco */
+
+    /* Cabeçalho institucional. */
+    .fr-header { position: absolute; overflow: hidden; }
+    .fr-inst { font-size: 11pt; font-weight: bold; color: #002b49; text-transform: uppercase; letter-spacing: 0.3pt; }
+    .fr-title { font-size: 10pt; font-weight: bold; color: #111827; margin-top: 1mm; }
+    .fr-sub { font-size: 8pt; color: #475569; margin-top: 0.6mm; }
+
+    /* QR Code. */
+    .fr-qr { position: absolute; border: 0.3mm solid #cbd5e1; background: #ffffff; padding: 0.6mm; }
+    .fr-qr img { display: block; width: 100%; height: 100%; }
+
+    /* Campos manuscritos (nome / turma / data). */
+    .fr-fields { position: absolute; border: 0.3mm solid #94a3b8; border-radius: 1mm; padding: 2mm 3mm; font-size: 9pt; color: #1e293b; }
+    .fr-fields .fr-field { margin-bottom: 3mm; }
+    .fr-fields .fr-field:last-child { margin-bottom: 0; }
+    .fr-fields .fr-field-label { font-weight: bold; color: #002b49; }
+    .fr-fields .fr-field-line { display: inline-block; border-bottom: 0.25mm solid #64748b; }
+
+    /* Bloco de matrícula (matriz de bolhas). */
+    .fr-idtitle { position: absolute; font-size: 7.5pt; font-weight: bold; color: #002b49; letter-spacing: 0.3pt; transform: translateY(-50%); }
+    .fr-idlabel { position: absolute; font-size: 6pt; color: #475569; transform: translate(-50%, -50%); }
+
+    /* Caixa de instruções. */
+    .fr-instr { position: absolute; border: 0.3mm dashed #cbd5e1; border-radius: 1mm; padding: 2mm 3mm; font-size: 7.5pt; color: #334155; overflow: hidden; }
+    .fr-instr .fr-instr-title { font-weight: bold; color: #002b49; margin-bottom: 1mm; font-size: 8pt; }
+    .fr-instr ul { margin: 0; padding-left: 4mm; }
+    .fr-instr li { margin-bottom: 0.8mm; line-height: 1.25; }
+
+    /* Grade de respostas: números das questões. */
+    .fr-qnum { position: absolute; font-size: 7pt; font-weight: bold; color: #111827; transform: translate(-50%, -50%); white-space: nowrap; }
+
+    /* Bolhas (resposta e matrícula). */
+    .fr-bubble { position: absolute; display: flex; align-items: center; justify-content: center; border: 0.3mm solid #334155; border-radius: 50%; color: #b8bfc9; text-align: center; overflow: hidden; }
+    .fr-bubble-ans { font-size: 5pt; line-height: 1; }
+    .fr-bubble-id { font-size: 4.2pt; line-height: 1; }
+  </style>
+</head>
+<body>
+  {% comment %}
+    Folha de Resposta (Cartão-Resposta / OMR). TODAS as posições vêm de
+    provas.services.answer_sheet_layout (mm, fonte única). Não posicionar nada
+    "no olho": alterar a geometria só naquele módulo. O bloco localize off garante
+    ponto decimal (não vírgula pt-BR) nas coordenadas em mm.
+  {% endcomment %}
+  {% localize off %}
+  <div class="fr-page">
+
+    {# --- Marcadores fiduciais (cantos de referência) --------------------- #}
+    {% for m in marcadores %}
+    <div class="fr-marker {% if m.tipo == 'quadrado' %}fr-marker-quadrado{% endif %}"
+         style="left: {{ m.left }}mm; top: {{ m.top }}mm; width: {{ m.size }}mm; height: {{ m.size }}mm;">
+      {% if m.data_uri %}<img src="{{ m.data_uri }}" alt="marcador {{ m.corner }}">{% endif %}
+    </div>
+    {% endfor %}
+
+    {# --- Cabeçalho institucional ----------------------------------------- #}
+    <div class="fr-header"
+         style="left: {{ geo.header_rect.x }}mm; top: {{ geo.header_rect.y }}mm; width: {{ geo.header_rect.w }}mm; height: {{ geo.header_rect.h }}mm;">
+      <div class="fr-inst">{{ instituicao|default:"FAETERJ-Rio" }}</div>
+      <div class="fr-title">FOLHA DE RESPOSTA — {{ prova_titulo }}</div>
+      <div class="fr-sub">
+        {{ disciplina_nome|default:"—" }} &nbsp;•&nbsp; Versão {{ versao_ident }}
+        {% if data_aplicacao %}&nbsp;•&nbsp; {{ data_aplicacao }}{% endif %}
+      </div>
+    </div>
+
+    {# --- QR Code (identificação prova/versão para o OMR) ----------------- #}
+    <div class="fr-qr"
+         style="left: {{ geo.qr.x }}mm; top: {{ geo.qr.y }}mm; width: {{ geo.qr.w }}mm; height: {{ geo.qr.h }}mm;">
+      {% if qr_data_uri %}<img src="{{ qr_data_uri }}" alt="QR de identificação">{% endif %}
+    </div>
+
+    {# --- Campos manuscritos (nome / turma / data) ------------------------ #}
+    <div class="fr-fields"
+         style="left: {{ geo.id_fields_rect.x }}mm; top: {{ geo.id_fields_rect.y }}mm; width: {{ geo.id_fields_rect.w }}mm; height: {{ geo.id_fields_rect.h }}mm;">
+      <div class="fr-field">
+        <span class="fr-field-label">Nome:</span>
+        <span class="fr-field-line" style="width: 120mm;">&nbsp;</span>
+      </div>
+      <div class="fr-field">
+        <span class="fr-field-label">Turma:</span>
+        <span class="fr-field-line" style="width: 45mm;">&nbsp;</span>
+        &nbsp;&nbsp;
+        <span class="fr-field-label">Data:</span>
+        <span class="fr-field-line" style="width: 40mm;">&nbsp;</span>
+      </div>
+    </div>
+
+    {# --- Bloco de matrícula (matriz de bolhas 0–9) ----------------------- #}
+    {% if geo.id_matrix_title %}
+    <div class="fr-idtitle" style="left: {{ geo.id_matrix_title.x }}mm; top: {{ geo.id_matrix_title.y }}mm;">
+      {{ geo.id_matrix_title.text }}
+    </div>
+    {% endif %}
+    {% for lb in geo.id_value_labels %}
+    <div class="fr-idlabel" style="left: {{ lb.x }}mm; top: {{ lb.y }}mm;">{{ lb.text }}</div>
+    {% endfor %}
+    {% for b in geo.id_bubbles %}
+    <div class="fr-bubble fr-bubble-id"
+         style="left: {{ b.left }}mm; top: {{ b.top }}mm; width: {{ b.diameter }}mm; height: {{ b.diameter }}mm;">{{ b.value }}</div>
+    {% endfor %}
+
+    {# --- Caixa de instruções -------------------------------------------- #}
+    <div class="fr-instr"
+         style="left: {{ geo.instrucoes_rect.x }}mm; top: {{ geo.instrucoes_rect.y }}mm; width: {{ geo.instrucoes_rect.w }}mm; height: {{ geo.instrucoes_rect.h }}mm;">
+      <div class="fr-instr-title">Instruções de Preenchimento</div>
+      <ul>
+        {% for i in instrucoes %}
+        <li>{{ i }}</li>
+        {% empty %}
+        <li>Use caneta esferográfica <strong>preta ou azul</strong>.</li>
+        <li>Preencha <strong>totalmente</strong> a bolha da alternativa escolhida.</li>
+        <li>Marque <strong>apenas uma</strong> alternativa por questão.</li>
+        <li>Não rasure, dobre ou amasse esta folha.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    {# --- Grade de respostas: números e bolhas ---------------------------- #}
+    {% for lb in geo.question_labels %}
+    <div class="fr-qnum" style="left: {{ lb.x }}mm; top: {{ lb.y }}mm;">{{ lb.text }}</div>
+    {% endfor %}
+    {% for b in geo.answer_bubbles %}
+    <div class="fr-bubble fr-bubble-ans"
+         style="left: {{ b.left }}mm; top: {{ b.top }}mm; width: {{ b.diameter }}mm; height: {{ b.diameter }}mm;">{{ b.option }}</div>
+    {% endfor %}
+
+  </div>
+  {% endlocalize %}
+</body>
+</html>

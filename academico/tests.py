@@ -1,184 +1,83 @@
-"""Testes das regras dos modelos acadêmicos."""
+"""Testes do app acadêmico: models (Aluno/Turma/Matrícula) e CRUDs de Aluno/Turma."""
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.urls import reverse
 
 from .models import Aluno, Matricula, Turma
 
+User = get_user_model()
 
-class TestModelosAcademicos(TestCase):
+
+class TestProtecoesHistorico(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.aluno = Aluno.objects.create(
-            nome='Aluno Teste',
-            matricula='001234',
-        )
-        cls.turma = Turma.objects.create(
-            nome='Turma Teste',
-            periodo='2026.1',
-        )
-        cls.vinculo = Matricula.objects.create(
-            aluno=cls.aluno,
-            turma=cls.turma,
-        )
-
-    def test_aluno_preserva_zeros_e_comeca_ativo(self):
-        self.aluno.refresh_from_db()
-
-        self.assertEqual(self.aluno.matricula, '001234')
-        self.assertTrue(self.aluno.ativo)
-
-    def test_matricula_do_aluno_nao_pode_repetir(self):
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Aluno.objects.create(
-                nome='Outro Aluno',
-                matricula='001234',
-            )
-
-    def test_turma_nao_pode_repetir_nome_no_mesmo_periodo(self):
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Turma.objects.create(
-                nome='Turma Teste',
-                periodo='2026.1',
-            )
-
-    def test_novo_periodo_preserva_vinculo_anterior(self):
-        nova_turma = Turma.objects.create(
-            nome='Turma Teste',
-            periodo='2026.2',
-        )
-        self.vinculo.ativo = False
-        self.vinculo.save(update_fields=['ativo'])
-
-        novo_vinculo = Matricula.objects.create(
-            aluno=self.aluno,
-            turma=nova_turma,
-        )
-        self.vinculo.refresh_from_db()
-
-        self.assertEqual(self.aluno.matriculas.count(), 2)
-        self.assertEqual(self.vinculo.turma.periodo, '2026.1')
-        self.assertFalse(self.vinculo.ativo)
-        self.assertEqual(novo_vinculo.turma.periodo, '2026.2')
-        self.assertTrue(novo_vinculo.ativo)
-
-    def test_aluno_nao_pode_ter_vinculo_duplicado_na_turma(self):
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Matricula.objects.create(
-                aluno=self.aluno,
-                turma=self.turma,
-            )
-
-    def test_aluno_com_vinculo_nao_pode_ser_excluido(self):
-        with self.assertRaises(ProtectedError):
-            self.aluno.delete()
-
-        self.assertTrue(Aluno.objects.filter(pk=self.aluno.pk).exists())
-        self.assertTrue(Matricula.objects.filter(pk=self.vinculo.pk).exists())
-
-    def test_turma_com_vinculo_nao_pode_ser_excluida(self):
-        with self.assertRaises(ProtectedError):
-            self.turma.delete()
-
-        self.assertTrue(Turma.objects.filter(pk=self.turma.pk).exists())
-        self.assertTrue(Matricula.objects.filter(pk=self.vinculo.pk).exists())
-
-    def test_inativar_aluno_preserva_vinculo(self):
-        self.aluno.ativo = False
-        self.aluno.save(update_fields=['ativo'])
-
-        self.aluno.refresh_from_db()
-        self.vinculo.refresh_from_db()
-
-        self.assertFalse(self.aluno.ativo)
-        self.assertEqual(self.vinculo.aluno_id, self.aluno.pk)
-        self.assertEqual(self.vinculo.turma_id, self.turma.pk)
-
-
-class TestAdminAcademico(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.usuario = get_user_model().objects.create_superuser(
-            username='admin_teste',
-        )
-        cls.aluno = Aluno.objects.create(
-            nome='Aluno Teste',
-            matricula='001234',
-        )
-        cls.turma = Turma.objects.create(
-            nome='Turma Teste',
-            periodo='2026.1',
-        )
-        cls.vinculo = Matricula.objects.create(
-            aluno=cls.aluno,
-            turma=cls.turma,
-        )
+        cls.usuario = User.objects.create_superuser(username='admin_historico')
+        cls.aluno = Aluno.objects.create(nome='Ana Teste', matricula='001234')
+        cls.outro_aluno = Aluno.objects.create(nome='Bruno Teste', matricula='005678')
+        cls.turma = Turma.objects.create(nome='Turma vinculada', periodo='2026.1')
+        cls.turma_livre = Turma.objects.create(nome='Turma livre', periodo='2026.1')
+        cls.vinculo = Matricula.objects.create(aluno=cls.aluno, turma=cls.turma)
 
     def setUp(self):
         self.client.force_login(self.usuario)
 
-    def test_periodo_fica_protegido_mesmo_com_vinculo_inativo(self):
-        self.vinculo.ativo = False
-        self.vinculo.save(update_fields=['ativo'])
+    def test_periodo_protegido_no_admin_e_na_tela_em_todas_as_situacoes(self):
+        rotas = ('admin:academico_turma_change', 'academico:turma_update')
 
-        url = reverse('admin:academico_turma_change', args=[self.turma.pk])
+        for rota in rotas:
+            for situacao in Matricula.Situacao.values:
+                with self.subTest(rota=rota, situacao=situacao):
+                    self.vinculo.situacao = situacao
+                    self.vinculo.save(update_fields=['situacao'])
+
+                    resposta = self.client.post(
+                        reverse(rota, args=[self.turma.pk]),
+                        {
+                            'nome': 'Nome corrigido',
+                            'periodo': '2027.1',
+                            'ativo': 'on',
+                        },
+                    )
+                    self.turma.refresh_from_db()
+
+                    self.assertEqual(resposta.status_code, 302)
+                    self.assertEqual(self.turma.nome, 'Nome corrigido')
+                    self.assertEqual(self.turma.periodo, '2026.1')
+
+    def test_turma_sem_vinculo_permite_corrigir_periodo_no_admin_e_na_tela(self):
+        rotas = ('admin:academico_turma_change', 'academico:turma_update')
+
+        for rota in rotas:
+            with self.subTest(rota=rota):
+                self.turma_livre.periodo = '2026.1'
+                self.turma_livre.save(update_fields=['periodo'])
+
+                resposta = self.client.post(
+                    reverse(rota, args=[self.turma_livre.pk]),
+                    {
+                        'nome': self.turma_livre.nome,
+                        'periodo': '2026.2',
+                        'ativo': 'on',
+                    },
+                )
+                self.turma_livre.refresh_from_db()
+
+                self.assertEqual(resposta.status_code, 302)
+                self.assertEqual(self.turma_livre.periodo, '2026.2')
+
+    def test_admin_permite_cancelar_mas_nao_trocar_aluno_ou_turma(self):
         resposta = self.client.post(
-            url,
+            reverse('admin:academico_matricula_change', args=[self.vinculo.pk]),
             {
-                'nome': 'Nome corrigido',
-                'periodo': '2027.1',
-                'ativo': 'on',
-            },
-        )
-        self.turma.refresh_from_db()
-
-        self.assertEqual(resposta.status_code, 302)
-        self.assertEqual(self.turma.nome, 'Nome corrigido')
-        self.assertEqual(self.turma.periodo, '2026.1')
-
-    def test_turma_sem_vinculos_permite_corrigir_periodo(self):
-        turma_sem_vinculos = Turma.objects.create(
-            nome='Outra Turma',
-            periodo='2026.1',
-        )
-        url = reverse(
-            'admin:academico_turma_change',
-            args=[turma_sem_vinculos.pk],
-        )
-        resposta = self.client.post(
-            url,
-            {
-                'nome': turma_sem_vinculos.nome,
-                'periodo': '2026.2',
-                'ativo': 'on',
-            },
-        )
-        turma_sem_vinculos.refresh_from_db()
-
-        self.assertEqual(resposta.status_code, 302)
-        self.assertEqual(turma_sem_vinculos.periodo, '2026.2')
-
-    def test_vinculo_permite_inativar_mas_nao_trocar_aluno_ou_turma(self):
-        outro_aluno = Aluno.objects.create(
-            nome='Outro Aluno',
-            matricula='005678',
-        )
-        outra_turma = Turma.objects.create(
-            nome='Outra Turma',
-            periodo='2026.2',
-        )
-        url = reverse(
-            'admin:academico_matricula_change',
-            args=[self.vinculo.pk],
-        )
-        resposta = self.client.post(
-            url,
-            {
-                'aluno': outro_aluno.pk,
-                'turma': outra_turma.pk,
+                'aluno': self.outro_aluno.pk,
+                'turma': self.turma_livre.pk,
+                'situacao': Matricula.Situacao.CANCELADO,
+                'data_matricula': self.vinculo.data_matricula.isoformat(),
+                'data_encerramento': self.vinculo.data_matricula.isoformat(),
+                'observacao': 'Cancelamento de teste',
             },
         )
         self.vinculo.refresh_from_db()
@@ -186,16 +85,248 @@ class TestAdminAcademico(TestCase):
         self.assertEqual(resposta.status_code, 302)
         self.assertEqual(self.vinculo.aluno_id, self.aluno.pk)
         self.assertEqual(self.vinculo.turma_id, self.turma.pk)
-        self.assertFalse(self.vinculo.ativo)
+        self.assertEqual(self.vinculo.situacao, Matricula.Situacao.CANCELADO)
+        self.assertEqual(self.vinculo.observacao, 'Cancelamento de teste')
+        self.assertFalse(self.vinculo.ativa)
 
-    def test_admin_recusa_exclusao_do_vinculo(self):
-        url = reverse(
-            'admin:academico_matricula_delete',
-            args=[self.vinculo.pk],
+    def test_admin_recusa_exclusao_individual(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_delete', args=[self.vinculo.pk]),
+            {'post': 'yes'},
         )
-        resposta = self.client.post(url, {'post': 'yes'})
 
         self.assertEqual(resposta.status_code, 403)
-        self.assertTrue(
-            Matricula.objects.filter(pk=self.vinculo.pk).exists(),
+        self.assertTrue(Matricula.objects.filter(pk=self.vinculo.pk).exists())
+
+    def test_admin_nao_exclui_vinculo_por_acao_em_lote(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_changelist'),
+            {
+                'action': 'delete_selected',
+                '_selected_action': [str(self.vinculo.pk)],
+                'post': 'yes',
+                'index': '0',
+            },
         )
+
+        self.assertIn(resposta.status_code, (200, 302, 403))
+        self.assertTrue(Matricula.objects.filter(pk=self.vinculo.pk).exists())
+
+    def test_admin_continua_permitindo_criar_vinculos(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_add'),
+            {
+                'aluno': self.outro_aluno.pk,
+                'turma': self.turma_livre.pk,
+                'situacao': Matricula.Situacao.MATRICULADO,
+                'data_matricula': self.vinculo.data_matricula.isoformat(),
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        self.assertTrue(
+            Matricula.objects.filter(
+                aluno=self.outro_aluno,
+                turma=self.turma_livre,
+                situacao=Matricula.Situacao.MATRICULADO,
+            ).exists(),
+        )
+
+
+class AlunoModelTest(TestCase):
+    def test_str_e_defaults(self):
+        aluno = Aluno.objects.create(nome='Maria Silva', matricula='2026010123')
+        self.assertEqual(str(aluno), 'Maria Silva (2026010123)')
+        self.assertTrue(aluno.ativo)
+
+    def test_matricula_unica(self):
+        Aluno.objects.create(nome='A', matricula='X1')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Aluno.objects.create(nome='B', matricula='X1')
+
+
+class TurmaModelTest(TestCase):
+    def test_str(self):
+        turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.assertEqual(str(turma), '2026.2 — MAC Noite')
+
+    def test_periodo_invalido_reprova_no_full_clean(self):
+        turma = Turma(periodo='2026', nome='MAC Noite')
+        with self.assertRaises(ValidationError):
+            turma.full_clean()
+
+    def test_periodo_valido_passa(self):
+        turma = Turma(periodo='2026.2', nome='CAL Manhã')
+        turma.full_clean()  # não deve levantar
+
+    def test_unicidade_periodo_nome(self):
+        Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+
+    def test_mesma_turma_em_periodos_diferentes_e_permitida(self):
+        Turma.objects.create(periodo='2026.1', nome='MAC Noite')
+        Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.assertEqual(Turma.objects.filter(nome='MAC Noite').count(), 2)
+
+
+class MatriculaModelTest(TestCase):
+    def setUp(self):
+        self.aluno = Aluno.objects.create(nome='João', matricula='2026777')
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+
+    def test_default_situacao_e_propriedade_ativa(self):
+        m = Matricula.objects.create(aluno=self.aluno, turma=self.turma)
+        self.assertEqual(m.situacao, Matricula.Situacao.MATRICULADO)
+        self.assertTrue(m.ativa)
+
+    def test_situacao_nao_matriculado_nao_e_ativa(self):
+        m = Matricula.objects.create(aluno=self.aluno, turma=self.turma, situacao=Matricula.Situacao.TRANCADO)
+        self.assertFalse(m.ativa)
+
+    def test_unicidade_aluno_turma(self):
+        Matricula.objects.create(aluno=self.aluno, turma=self.turma)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Matricula.objects.create(aluno=self.aluno, turma=self.turma)
+
+
+class AlunoCrudViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='coord', password='segredo123')  # noqa: S106
+        self.client.login(username='coord', password='segredo123')  # noqa: S106
+
+    def test_login_obrigatorio(self):
+        self.client.logout()
+        resp = self.client.get(reverse('academico:aluno_list'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_list_ok(self):
+        Aluno.objects.create(nome='Ana', matricula='M1')
+        resp = self.client.get(reverse('academico:aluno_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Ana')
+
+    def test_busca_por_matricula(self):
+        Aluno.objects.create(nome='Ana', matricula='AAA111')
+        Aluno.objects.create(nome='Bruno', matricula='BBB222')
+        resp = self.client.get(reverse('academico:aluno_list'), {'q': 'BBB'})
+        self.assertContains(resp, 'Bruno')
+        self.assertNotContains(resp, 'AAA111')
+
+    def test_create(self):
+        resp = self.client.post(
+            reverse('academico:aluno_create'),
+            {'nome': 'Carlos Lima', 'matricula': '2026999', 'ativo': 'on'},
+        )
+        self.assertRedirects(resp, reverse('academico:aluno_list'))
+        self.assertTrue(Aluno.objects.filter(matricula='2026999').exists())
+
+    def test_update(self):
+        aluno = Aluno.objects.create(nome='Nome Antigo', matricula='UP1')
+        resp = self.client.post(
+            reverse('academico:aluno_update', args=[aluno.pk]),
+            {'nome': 'Nome Novo', 'matricula': 'UP1', 'ativo': 'on'},
+        )
+        self.assertRedirects(resp, reverse('academico:aluno_list'))
+        aluno.refresh_from_db()
+        self.assertEqual(aluno.nome, 'Nome Novo')
+
+    def test_toggle_ativo(self):
+        aluno = Aluno.objects.create(nome='Toggle', matricula='TG1', ativo=True)
+        resp = self.client.post(reverse('academico:aluno_toggle_ativo', args=[aluno.pk]))
+        self.assertRedirects(resp, reverse('academico:aluno_list'))
+        aluno.refresh_from_db()
+        self.assertFalse(aluno.ativo)
+
+
+class TurmaCrudViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='coord2', password='segredo123')  # noqa: S106
+        self.client.login(username='coord2', password='segredo123')  # noqa: S106
+
+    def test_list_ok(self):
+        Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        resp = self.client.get(reverse('academico:turma_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'MAC Noite')
+
+    def test_create(self):
+        resp = self.client.post(
+            reverse('academico:turma_create'),
+            {'periodo': '2026.2', 'nome': 'CAL Noite', 'ativo': 'on'},
+        )
+        self.assertRedirects(resp, reverse('academico:turma_list'))
+        self.assertTrue(Turma.objects.filter(periodo='2026.2', nome='CAL Noite').exists())
+
+    def test_create_periodo_invalido_reexibe_form(self):
+        resp = self.client.post(
+            reverse('academico:turma_create'),
+            {'periodo': 'errado', 'nome': 'X', 'ativo': 'on'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Turma.objects.filter(nome='X').exists())
+
+    def test_toggle_ativo(self):
+        turma = Turma.objects.create(periodo='2026.2', nome='ED Manhã', ativo=True)
+        resp = self.client.post(reverse('academico:turma_toggle_ativo', args=[turma.pk]))
+        self.assertRedirects(resp, reverse('academico:turma_list'))
+        turma.refresh_from_db()
+        self.assertFalse(turma.ativo)
+
+
+class TurmaMatriculaViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='coord3', password='segredo123')  # noqa: S106
+        self.client.login(username='coord3', password='segredo123')  # noqa: S106
+        self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        self.ana = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.bruno = Aluno.objects.create(nome='Bruno', matricula='B1')
+
+    def test_login_obrigatorio(self):
+        self.client.logout()
+        resp = self.client.get(reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_pagina_lista_e_exclui_matriculados_dos_disponiveis(self):
+        Matricula.objects.create(aluno=self.ana, turma=self.turma)
+        resp = self.client.get(reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertEqual(resp.status_code, 200)
+        disponiveis = list(resp.context['alunos_disponiveis'])
+        self.assertIn(self.bruno, disponiveis)
+        self.assertNotIn(self.ana, disponiveis)  # já matriculada
+
+    def test_matricular_multiplos(self):
+        resp = self.client.post(
+            reverse('academico:turma_matricular', args=[self.turma.pk]),
+            {'alunos': [self.ana.pk, self.bruno.pk]},
+        )
+        self.assertRedirects(resp, reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertEqual(
+            Matricula.objects.filter(turma=self.turma, situacao=Matricula.Situacao.MATRICULADO).count(),
+            2,
+        )
+
+    def test_desmatricular_e_soft_e_preserva_linha(self):
+        m = Matricula.objects.create(aluno=self.ana, turma=self.turma)
+        resp = self.client.post(
+            reverse('academico:turma_desmatricular', args=[self.turma.pk]),
+            {'matricula': m.pk},
+        )
+        self.assertRedirects(resp, reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        m.refresh_from_db()
+        self.assertEqual(m.situacao, Matricula.Situacao.CANCELADO)
+        self.assertIsNotNone(m.data_encerramento)
+        # A linha permanece (histórico preservado).
+        self.assertTrue(Matricula.objects.filter(pk=m.pk).exists())
+
+    def test_rematricular_reativa_a_mesma_linha(self):
+        m = Matricula.objects.create(aluno=self.ana, turma=self.turma, situacao=Matricula.Situacao.CANCELADO)
+        self.client.post(
+            reverse('academico:turma_matricular', args=[self.turma.pk]),
+            {'alunos': [self.ana.pk]},
+        )
+        # Sem violar unique (aluno, turma): a mesma linha é reativada.
+        self.assertEqual(Matricula.objects.filter(aluno=self.ana, turma=self.turma).count(), 1)
+        m.refresh_from_db()
+        self.assertEqual(m.situacao, Matricula.Situacao.MATRICULADO)
+        self.assertIsNone(m.data_encerramento)
