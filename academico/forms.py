@@ -36,6 +36,15 @@ class AlunoForm(forms.ModelForm):
 class TurmaForm(forms.ModelForm):
     """Formulário de criação/edição de Turma."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.matriculas.exists():
+            self.fields['periodo'].disabled = True
+            self.fields['periodo'].help_text = (
+                'O período não pode ser alterado porque esta turma já possui '
+                'matrículas. Para outro período, cadastre uma nova turma.'
+            )
+
     class Meta:
         model = Turma
         fields = ['periodo', 'nome', 'ativo']

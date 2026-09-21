@@ -11,6 +11,128 @@ from .models import Aluno, Matricula, Turma
 User = get_user_model()
 
 
+class TestProtecoesHistorico(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.usuario = User.objects.create_superuser(username='admin_historico')
+        cls.aluno = Aluno.objects.create(nome='Ana Teste', matricula='001234')
+        cls.outro_aluno = Aluno.objects.create(nome='Bruno Teste', matricula='005678')
+        cls.turma = Turma.objects.create(nome='Turma vinculada', periodo='2026.1')
+        cls.turma_livre = Turma.objects.create(nome='Turma livre', periodo='2026.1')
+        cls.vinculo = Matricula.objects.create(aluno=cls.aluno, turma=cls.turma)
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+
+    def test_periodo_protegido_no_admin_e_na_tela_em_todas_as_situacoes(self):
+        rotas = ('admin:academico_turma_change', 'academico:turma_update')
+
+        for rota in rotas:
+            for situacao in Matricula.Situacao.values:
+                with self.subTest(rota=rota, situacao=situacao):
+                    self.vinculo.situacao = situacao
+                    self.vinculo.save(update_fields=['situacao'])
+
+                    resposta = self.client.post(
+                        reverse(rota, args=[self.turma.pk]),
+                        {
+                            'nome': 'Nome corrigido',
+                            'periodo': '2027.1',
+                            'ativo': 'on',
+                        },
+                    )
+                    self.turma.refresh_from_db()
+
+                    self.assertEqual(resposta.status_code, 302)
+                    self.assertEqual(self.turma.nome, 'Nome corrigido')
+                    self.assertEqual(self.turma.periodo, '2026.1')
+
+    def test_turma_sem_vinculo_permite_corrigir_periodo_no_admin_e_na_tela(self):
+        rotas = ('admin:academico_turma_change', 'academico:turma_update')
+
+        for rota in rotas:
+            with self.subTest(rota=rota):
+                self.turma_livre.periodo = '2026.1'
+                self.turma_livre.save(update_fields=['periodo'])
+
+                resposta = self.client.post(
+                    reverse(rota, args=[self.turma_livre.pk]),
+                    {
+                        'nome': self.turma_livre.nome,
+                        'periodo': '2026.2',
+                        'ativo': 'on',
+                    },
+                )
+                self.turma_livre.refresh_from_db()
+
+                self.assertEqual(resposta.status_code, 302)
+                self.assertEqual(self.turma_livre.periodo, '2026.2')
+
+    def test_admin_permite_cancelar_mas_nao_trocar_aluno_ou_turma(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_change', args=[self.vinculo.pk]),
+            {
+                'aluno': self.outro_aluno.pk,
+                'turma': self.turma_livre.pk,
+                'situacao': Matricula.Situacao.CANCELADO,
+                'data_matricula': self.vinculo.data_matricula.isoformat(),
+                'data_encerramento': self.vinculo.data_matricula.isoformat(),
+                'observacao': 'Cancelamento de teste',
+            },
+        )
+        self.vinculo.refresh_from_db()
+
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(self.vinculo.aluno_id, self.aluno.pk)
+        self.assertEqual(self.vinculo.turma_id, self.turma.pk)
+        self.assertEqual(self.vinculo.situacao, Matricula.Situacao.CANCELADO)
+        self.assertEqual(self.vinculo.observacao, 'Cancelamento de teste')
+        self.assertFalse(self.vinculo.ativa)
+
+    def test_admin_recusa_exclusao_individual(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_delete', args=[self.vinculo.pk]),
+            {'post': 'yes'},
+        )
+
+        self.assertEqual(resposta.status_code, 403)
+        self.assertTrue(Matricula.objects.filter(pk=self.vinculo.pk).exists())
+
+    def test_admin_nao_exclui_vinculo_por_acao_em_lote(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_changelist'),
+            {
+                'action': 'delete_selected',
+                '_selected_action': [str(self.vinculo.pk)],
+                'post': 'yes',
+                'index': '0',
+            },
+        )
+
+        self.assertIn(resposta.status_code, (200, 302, 403))
+        self.assertTrue(Matricula.objects.filter(pk=self.vinculo.pk).exists())
+
+    def test_admin_continua_permitindo_criar_vinculos(self):
+        resposta = self.client.post(
+            reverse('admin:academico_matricula_add'),
+            {
+                'aluno': self.outro_aluno.pk,
+                'turma': self.turma_livre.pk,
+                'situacao': Matricula.Situacao.MATRICULADO,
+                'data_matricula': self.vinculo.data_matricula.isoformat(),
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        self.assertTrue(
+            Matricula.objects.filter(
+                aluno=self.outro_aluno,
+                turma=self.turma_livre,
+                situacao=Matricula.Situacao.MATRICULADO,
+            ).exists(),
+        )
+
+
 class AlunoModelTest(TestCase):
     def test_str_e_defaults(self):
         aluno = Aluno.objects.create(nome='Maria Silva', matricula='2026010123')

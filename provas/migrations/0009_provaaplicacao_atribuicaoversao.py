@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('academico', '0001_initial'),
         ('provas', '0008_reparar_schema_versoes'),
@@ -20,8 +19,24 @@ class Migration(migrations.Migration):
                 ('observacao', models.TextField(blank=True, verbose_name='observação')),
                 ('criado_em', models.DateTimeField(auto_now_add=True)),
                 ('atualizado_em', models.DateTimeField(auto_now=True)),
-                ('prova', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='aplicacoes', to='provas.prova', verbose_name='prova')),
-                ('turma', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='aplicacoes', to='academico.turma', verbose_name='turma')),
+                (
+                    'prova',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='aplicacoes',
+                        to='provas.prova',
+                        verbose_name='prova',
+                    ),
+                ),
+                (
+                    'turma',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='aplicacoes',
+                        to='academico.turma',
+                        verbose_name='turma',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'aplicação de prova',
@@ -37,9 +52,33 @@ class Migration(migrations.Migration):
                 ('sequencia', models.PositiveIntegerField(default=1, verbose_name='sequência (ordem do round-robin)')),
                 ('criado_em', models.DateTimeField(auto_now_add=True)),
                 ('atualizado_em', models.DateTimeField(auto_now=True)),
-                ('aluno', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='atribuicoes_versao', to='academico.aluno', verbose_name='aluno')),
-                ('versao', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='atribuicoes', to='provas.provaversao', verbose_name='versão')),
-                ('aplicacao', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='atribuicoes', to='provas.provaaplicacao', verbose_name='aplicação')),
+                (
+                    'aluno',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='atribuicoes_versao',
+                        to='academico.aluno',
+                        verbose_name='aluno',
+                    ),
+                ),
+                (
+                    'versao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='atribuicoes',
+                        to='provas.provaversao',
+                        verbose_name='versão',
+                    ),
+                ),
+                (
+                    'aplicacao',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='atribuicoes',
+                        to='provas.provaaplicacao',
+                        verbose_name='aplicação',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'atribuição de versão',
