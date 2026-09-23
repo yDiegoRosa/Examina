@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import contextlib
 import uuid as uuid_lib
+from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import cv2
@@ -26,10 +28,21 @@ from .answer_sheet_layout import MARKER_IDS, MARKER_INSET, PAGE_H, PAGE_W
 if TYPE_CHECKING:
     from provas.models import FolhaResposta
 
+    from .answer_sheet_layout import Bubble
+
 # Resolução da imagem canônica após o deskew (10 px/mm ≈ 254 DPI).
 PX_POR_MM = 10
 ARUCO_DICT = 'DICT_4X4_50'
 PREFIXO_TOKEN = 'EXM1F'
+
+# --- Amostragem de bolhas (leitura das marcações) --------------------------
+# Fração do raio efetivamente amostrada (evita o anel impresso da bolha).
+INNER_R_FRAC = 0.62
+# Fração mínima de pixels escuros no disco para considerar a bolha marcada.
+MIN_FILL = 0.35
+# Se a 2ª bolha mais preenchida alcançar AMBIG_RATIO × a 1ª (e >= MIN_FILL),
+# a questão é considerada ambígua (mais de uma marcação).
+AMBIG_RATIO = 0.80
 
 
 class OmrError(Exception):
@@ -179,3 +192,95 @@ def corrigir_perspectiva(fonte, px_por_mm: int = PX_POR_MM) -> np.ndarray:
     largura = int(round(PAGE_W * px_por_mm))
     altura = int(round(PAGE_H * px_por_mm))
     return cv2.warpPerspective(imagem, matriz, (largura, altura), borderValue=(255, 255, 255))
+
+
+# ---------------------------------------------------------------------------
+# 3. Amostragem das bolhas → resposta marcada por questão
+# ---------------------------------------------------------------------------
+@dataclass
+class LeituraQuestao:
+    """Resultado da leitura óptica de uma questão objetiva."""
+
+    questao: int  # número da questão na folha (1-based)
+    marcada: str | None  # letra marcada ('A'…'E') ou None (branco/ambígua)
+    status: str  # 'ok' | 'branco' | 'ambigua'
+    preenchimentos: dict[str, float] = field(default_factory=dict)  # fração por opção
+
+
+def _fracao_preenchida(binaria: np.ndarray, cx_px: float, cy_px: float, r_px: float) -> float:
+    """Fração de pixels escuros dentro do disco (cx, cy, r) na imagem binária (escuro=255)."""
+    altura, largura = binaria.shape
+    x0 = max(0, int(cx_px - r_px))
+    x1 = min(largura, int(cx_px + r_px) + 1)
+    y0 = max(0, int(cy_px - r_px))
+    y1 = min(altura, int(cy_px + r_px) + 1)
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+
+    recorte = binaria[y0:y1, x0:x1]
+    ys, xs = np.ogrid[y0:y1, x0:x1]
+    disco = (xs - cx_px) ** 2 + (ys - cy_px) ** 2 <= r_px**2
+    total = int(disco.sum())
+    if total == 0:
+        return 0.0
+    escuros = int(((recorte > 0) & disco).sum())
+    return escuros / total
+
+
+def ler_respostas(
+    imagem_canonica: np.ndarray,
+    answer_bubbles: list[Bubble],
+    px_por_mm: int = PX_POR_MM,
+) -> dict[int, LeituraQuestao]:
+    """
+    Amostra as bolhas de resposta na imagem canônica e determina a alternativa marcada.
+
+    Para cada bolha, mede a fração de pixels escuros num disco interno (``INNER_R_FRAC``
+    do raio, evitando o anel impresso). Por questão, a alternativa mais preenchida é a
+    marcada, desde que ultrapasse ``MIN_FILL`` e não haja empate com a segunda
+    (``AMBIG_RATIO``). Caso contrário, a questão é ``'branco'`` ou ``'ambigua'``.
+
+    Args:
+        imagem_canonica: imagem A4 já corrigida (saída de :func:`corrigir_perspectiva`).
+        answer_bubbles: bolhas de resposta da geometria (``group='resposta'``), em mm.
+        px_por_mm: escala mm→pixel da imagem canônica.
+
+    Returns:
+        Dicionário ``{numero_questao: LeituraQuestao}``.
+    """
+    cinza = cv2.cvtColor(imagem_canonica, cv2.COLOR_BGR2GRAY) if imagem_canonica.ndim == 3 else imagem_canonica
+    _, binaria = cv2.threshold(cinza, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    por_questao: dict[int, list[Bubble]] = defaultdict(list)
+    for bolha in answer_bubbles:
+        if bolha.group == 'resposta' and bolha.question is not None:
+            por_questao[bolha.question].append(bolha)
+
+    resultado: dict[int, LeituraQuestao] = {}
+    for questao, bolhas in por_questao.items():
+        preenchimentos: dict[str, float] = {}
+        for bolha in bolhas:
+            r_px = bolha.r * px_por_mm * INNER_R_FRAC
+            preenchimentos[bolha.option] = _fracao_preenchida(
+                binaria, bolha.cx * px_por_mm, bolha.cy * px_por_mm, r_px
+            )
+
+        ordenadas = sorted(preenchimentos.items(), key=lambda kv: kv[1], reverse=True)
+        melhor_letra, melhor = ordenadas[0]
+        segundo = ordenadas[1][1] if len(ordenadas) > 1 else 0.0
+
+        if melhor < MIN_FILL:
+            status, marcada = 'branco', None
+        elif segundo >= AMBIG_RATIO * melhor and segundo >= MIN_FILL:
+            status, marcada = 'ambigua', None
+        else:
+            status, marcada = 'ok', melhor_letra
+
+        resultado[questao] = LeituraQuestao(
+            questao=questao,
+            marcada=marcada,
+            status=status,
+            preenchimentos=preenchimentos,
+        )
+
+    return resultado
