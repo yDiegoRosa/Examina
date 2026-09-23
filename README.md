@@ -117,10 +117,4 @@ python manage.py runserver
 | Fase 3 — Correção automática | Módulo 3 (QR Code + leitura óptica) |
 | Fase 4 — Refinamento | Psicometria avançada, versões múltiplas de prova |
 
-
-## Equipe
-
-- Diego
-- *(demais integrantes)*
-
 Projeto conduzido sob orientação da supervisão acadêmica/institucional.
