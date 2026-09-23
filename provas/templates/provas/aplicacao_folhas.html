@@ -10,6 +10,9 @@
   <a href="{% url 'provas:aplicacao_revisao_manual' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-clipboard-check"></i> Revisão manual
   </a>
+  <a href="{% url 'desempenho:dashboard' %}?aplicacao={{ aplicacao.pk }}" class="btn btn-outline">
+    <i class="bi bi-graph-up-arrow"></i> Ver desempenho
+  </a>
 </div>
 
 <div class="hero-card mb-4">

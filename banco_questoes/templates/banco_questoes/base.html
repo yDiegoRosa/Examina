@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
   <!-- Design System Vanilla CSS (Zero Bootstrap) -->
-  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20260921.1">
+  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20260923.1">
 
   {% block extra_css %}{% endblock %}
 </head>
@@ -50,7 +50,7 @@
         <ul class="nav-links" id="primary-nav">
           <li>
             <a class="nav-item-link {% if request.resolver_match.app_name == 'banco_questoes' %}active{% endif %}" href="{% url 'banco_questoes:questao_list' %}">
-              <i class="bi bi-grid-fill"></i> Acervo de Questões
+              <i class="bi bi-grid-fill"></i> Acervo
             </a>
           </li>
           <li>
@@ -63,15 +63,15 @@
               <i class="bi bi-people-fill"></i> Acadêmico
             </a>
           </li>
-          {% if perms.banco_questoes.add_questao %}
           <li>
-            <a class="nav-item-link {% if request.resolver_match.url_name == 'questao_create' %}active{% endif %}" href="{% url 'banco_questoes:questao_create' %}">
-              <i class="bi bi-plus-circle-fill"></i> Nova Questão
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'desempenho' %}active{% endif %}" href="{% url 'desempenho:dashboard' %}">
+              <i class="bi bi-graph-up-arrow"></i> Desempenho
             </a>
           </li>
+          {% if perms.banco_questoes.add_questao %}
           <li>
             <a class="nav-item-link {% if request.resolver_match.url_name == 'questao_import' %}active{% endif %}" href="{% url 'banco_questoes:questao_import' %}">
-              <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar (Excel/CSV)
+              <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar
             </a>
           </li>
           {% endif %}
@@ -148,7 +148,7 @@
   </footer>
 
   <!-- Scripts Vanilla JS Puro -->
-  <script src="{% static 'banco_questoes/js/main.js' %}?v=20260921.1"></script>
+  <script src="{% static 'banco_questoes/js/main.js' %}?v=20260923.1"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

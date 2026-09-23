@@ -1,0 +1,209 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Fragilidades & Forças — Examina{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-graph-up-arrow"></i> Módulo 4 • Análise de desempenho</span>
+    </div>
+    <h1 class="mb-1">Fragilidades &amp; Forças da turma</h1>
+    <p class="text-secondary" style="max-width: 680px;">
+      Taxa de erro por tópico e por nível de dificuldade, a partir das questões corrigidas
+      (objetivas via OMR/manual e discursivas por nota de corte). Maior taxa = maior fragilidade.
+    </p>
+  </div>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="card-surface p-3 mb-4">
+  <div class="grid grid-cols-12 gap-3 items-end">
+    <div class="col-span-3">
+      <label class="form-label" for="f_turma">Turma</label>
+      <select id="f_turma" name="turma" class="form-select">
+        <option value="">Todas</option>
+        {% for t in turmas %}
+        <option value="{{ t.pk }}" {% if filtro_turma == t.pk|stringformat:'s' %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-span-4">
+      <label class="form-label" for="f_aplic">Prova / aplicação</label>
+      <select id="f_aplic" name="aplicacao" class="form-select">
+        <option value="">Todas</option>
+        {% for a in aplicacoes %}
+        <option value="{{ a.pk }}" {% if filtro_aplicacao == a.pk|stringformat:'s' %}selected{% endif %}>{{ a.prova.titulo }} — {{ a.turma }} ({{ a.data_aplicacao|date:'d/m/Y' }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-span-2">
+      <label class="form-label" for="f_ini">De</label>
+      <input type="date" id="f_ini" name="data_inicio" class="form-input" value="{{ filtro_data_inicio }}">
+    </div>
+    <div class="col-span-2">
+      <label class="form-label" for="f_fim">Até</label>
+      <input type="date" id="f_fim" name="data_fim" class="form-input" value="{{ filtro_data_fim }}">
+    </div>
+    <div class="col-span-1 flex gap-2">
+      <button type="submit" class="btn btn-primary" title="Aplicar filtros"><i class="bi bi-funnel-fill"></i></button>
+      <a href="{% url 'desempenho:dashboard' %}" class="btn btn-outline" title="Limpar filtros"><i class="bi bi-x-lg"></i></a>
+    </div>
+  </div>
+  <div class="small text-muted mt-2">A prova/aplicação, quando selecionada, tem precedência sobre turma e período.</div>
+</form>
+
+<!-- Tiles de resumo -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-clipboard-data"></i></div>
+    <div>
+      <div class="stat-label-unified">Questões corrigidas</div>
+      <div class="stat-num-unified">{{ total_registros }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-exclamation-octagon"></i></div>
+    <div>
+      <div class="stat-label-unified">Taxa média de erro</div>
+      <div class="stat-num-unified">{{ taxa_media_pct }}%</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-diagram-3"></i></div>
+    <div>
+      <div class="stat-label-unified">Tópicos avaliados</div>
+      <div class="stat-num-unified">{{ n_topicos }}</div>
+    </div>
+  </div>
+</div>
+
+{% if total_registros %}
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-7 card-surface p-3">
+    <h3 class="font-bold text-main mb-2"><i class="bi bi-bar-chart-steps"></i> Taxa de erro por tópico (maiores)</h3>
+    <div style="position: relative; height: 360px;"><canvas id="chartTopico"></canvas></div>
+  </div>
+  <div class="col-span-5 card-surface p-3">
+    <h3 class="font-bold text-main mb-2"><i class="bi bi-sliders"></i> Taxa de erro por dificuldade</h3>
+    <div style="position: relative; height: 360px;"><canvas id="chartDificuldade"></canvas></div>
+  </div>
+</div>
+
+<!-- Tabela completa (fragilidades no topo, forças embaixo) -->
+<div class="card-surface">
+  <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
+    <h3 class="font-bold text-main mb-0"><i class="bi bi-table"></i> Detalhamento por tópico</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th>Tópico</th>
+          <th>Disciplina</th>
+          <th style="width: 90px; text-align:center;">Total</th>
+          <th style="width: 90px; text-align:center;">Acertos</th>
+          <th style="width: 90px; text-align:center;">Erros</th>
+          <th style="width: 130px; text-align:center;">Taxa de erro</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in por_topico %}
+        <tr>
+          <td class="font-bold text-main">{{ l.topico }}</td>
+          <td class="small text-muted">{{ l.disciplina|default:"—" }}</td>
+          <td style="text-align:center;">{{ l.total }}</td>
+          <td style="text-align:center;">{{ l.acertos }}</td>
+          <td style="text-align:center;">{{ l.erros }}</td>
+          <td style="text-align:center;">
+            {% widthratio l.taxa_erro 1 100 as pct %}
+            {% if l.taxa_erro >= 0.5 %}
+            <span class="badge-pill badge-pill-danger">{{ pct }}%</span>
+            {% elif l.taxa_erro >= 0.25 %}
+            <span class="badge-pill badge-pill-inactive">{{ pct }}%</span>
+            {% else %}
+            <span class="badge-pill badge-pill-active">{{ pct }}%</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card-surface p-5 text-center">
+  <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-inbox"></i></div>
+  <p class="text-muted mb-0">Nenhuma questão corrigida encontrada para os filtros selecionados.</p>
+  <p class="text-muted small mb-0">Corrija folhas (OMR) ou lance notas para ver a análise aqui.</p>
+</div>
+{% endif %}
+
+{{ chart_topico|json_script:"data-topico" }}
+{{ chart_dificuldade|json_script:"data-dificuldade" }}
+{% endblock %}
+
+{% block extra_js %}
+{% if total_registros %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    if (typeof Chart === 'undefined') return;
+    Chart.defaults.color = '#64748B';
+    Chart.defaults.font.family = 'Arial, Helvetica, sans-serif';
+
+    var corPorTaxa = function (v) {
+      return v >= 50 ? '#DC2626' : (v >= 25 ? '#D97706' : '#059669');
+    };
+
+    var dTop = JSON.parse(document.getElementById('data-topico').textContent);
+    var dDif = JSON.parse(document.getElementById('data-dificuldade').textContent);
+
+    var elTop = document.getElementById('chartTopico');
+    if (elTop) {
+      new Chart(elTop, {
+        type: 'bar',
+        data: {
+          labels: dTop.labels,
+          datasets: [{
+            label: 'Taxa de erro (%)',
+            data: dTop.taxas,
+            backgroundColor: dTop.taxas.map(corPorTaxa),
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { min: 0, max: 100, ticks: { callback: function (v) { return v + '%'; } } } },
+        },
+      });
+    }
+
+    var elDif = document.getElementById('chartDificuldade');
+    if (elDif) {
+      new Chart(elDif, {
+        type: 'bar',
+        data: {
+          labels: dDif.labels,
+          datasets: [{
+            label: 'Taxa de erro (%)',
+            data: dDif.taxas,
+            backgroundColor: dDif.taxas.map(corPorTaxa),
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { min: 0, max: 100, ticks: { callback: function (v) { return v + '%'; } } } },
+        },
+      });
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

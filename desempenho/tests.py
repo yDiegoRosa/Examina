@@ -2,8 +2,10 @@
 
 from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.urls import reverse
 
 from academico.models import Aluno, Turma
 from banco_questoes.models import Disciplina, Questao, Topico
@@ -155,3 +157,49 @@ class TaxaErroAnaliseTest(TestCase):
 
         por_topico = {linha['topico']: linha for linha in taxa_erro_por_topico(turma=self.turma)}
         self.assertEqual(por_topico['Tópico A']['total'], 4)  # o registro sem acertou não conta
+
+
+class DashboardFragilidadesViewTest(TestCase):
+    """Dashboard RF13: renderização, contexto e filtros (turma/aplicação/período)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='coord', password='segredo123')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Disc Dash')
+        self.topico = Topico.objects.create(disciplina=self.disc, nome='Redes')
+        self.questao = Questao.objects.create(
+            disciplina=self.disc, topico=self.topico, tipo='OBJ', dificuldade='M', enunciado='Q'
+        )
+        self.prova = Prova.objects.create(titulo='Prova Dash', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.turma = Turma.objects.create(periodo='2026.2', nome='Turma Dash')
+        self.aluno = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.folha = FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+        )
+        Desempenho.objects.create(folha_resposta=self.folha, questao=self.questao, acertou=False)  # errou
+
+    def test_login_obrigatorio(self):
+        resp = self.client.get(reverse('desempenho:dashboard'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_renderiza_com_dados(self):
+        self.client.login(username='coord', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:dashboard'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['total_registros'], 1)
+        self.assertContains(resp, 'Redes')
+        self.assertEqual(resp.context['por_topico'][0]['taxa_erro'], 1.0)
+
+    def test_filtro_por_aplicacao(self):
+        self.client.login(username='coord', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:dashboard'), {'aplicacao': self.aplicacao.pk})
+        self.assertEqual(resp.context['total_registros'], 1)
+
+    def test_filtro_por_periodo_exclui(self):
+        self.client.login(username='coord', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:dashboard'), {'data_inicio': '2027-01-01'})
+        self.assertEqual(resp.context['total_registros'], 0)
+        self.assertContains(resp, 'Nenhuma questão corrigida')

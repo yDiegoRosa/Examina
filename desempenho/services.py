@@ -19,13 +19,20 @@ from .models import Desempenho
 ORDEM_DIFICULDADE = {'F': 0, 'M': 1, 'D': 2}
 
 
-def _base_queryset(turma=None, aplicacao=None):
-    """Desempenhos corrigidos, filtrados por aplicação (se dada) ou por turma."""
+def _base_queryset(turma=None, aplicacao=None, data_inicio=None, data_fim=None):
+    """
+    Desempenhos corrigidos, filtrados por aplicação (se dada; tem precedência) ou por
+    turma e período (intervalo de ``data_aplicacao``).
+    """
     qs = Desempenho.objects.filter(acertou__isnull=False)
     if aplicacao is not None:
         return qs.filter(folha_resposta__prova_aplicacao=aplicacao)
     if turma is not None:
-        return qs.filter(folha_resposta__prova_aplicacao__turma=turma)
+        qs = qs.filter(folha_resposta__prova_aplicacao__turma=turma)
+    if data_inicio is not None:
+        qs = qs.filter(folha_resposta__prova_aplicacao__data_aplicacao__gte=data_inicio)
+    if data_fim is not None:
+        qs = qs.filter(folha_resposta__prova_aplicacao__data_aplicacao__lte=data_fim)
     return qs
 
 
@@ -33,7 +40,7 @@ def _taxa_erro(erros: int, total: int) -> float:
     return round(erros / total, 4) if total else 0.0
 
 
-def taxa_erro_por_topico(turma=None, aplicacao=None) -> list[dict]:
+def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=None) -> list[dict]:
     """
     Taxa de erro agregada por tópico curricular (Desempenho → Questao → Topico).
 
@@ -42,7 +49,7 @@ def taxa_erro_por_topico(turma=None, aplicacao=None) -> list[dict]:
     (fragilidades primeiro). Questões sem tópico são agrupadas como "Sem tópico".
     """
     linhas = (
-        _base_queryset(turma, aplicacao)
+        _base_queryset(turma, aplicacao, data_inicio, data_fim)
         .values('questao__topico', 'questao__topico__nome', 'questao__topico__disciplina__nome')
         .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
         .order_by()
@@ -69,7 +76,7 @@ def taxa_erro_por_topico(turma=None, aplicacao=None) -> list[dict]:
     return resultado
 
 
-def taxa_erro_por_dificuldade(turma=None, aplicacao=None) -> list[dict]:
+def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data_fim=None) -> list[dict]:
     """
     Taxa de erro agregada por nível de dificuldade (``Questao.dificuldade``).
 
@@ -77,7 +84,7 @@ def taxa_erro_por_dificuldade(turma=None, aplicacao=None) -> list[dict]:
     ``acertos``, ``erros``, ``taxa_erro``), na ordem Fácil → Médio → Difícil.
     """
     linhas = (
-        _base_queryset(turma, aplicacao)
+        _base_queryset(turma, aplicacao, data_inicio, data_fim)
         .values('questao__dificuldade')
         .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
         .order_by()
