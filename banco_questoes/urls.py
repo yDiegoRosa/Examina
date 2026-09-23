@@ -15,5 +15,4 @@ urlpatterns = [
     path('questoes/modelo-csv/', views.download_modelo_csv, name='download_modelo_csv'),
     path('questoes/modelo-excel/', views.download_modelo_xlsx, name='download_modelo_xlsx'),
     path('api/topicos/', views.api_topicos_por_disciplina, name='api_topicos_por_disciplina'),
-    path('style-guide/', views.style_guide, name='style_guide'),
 ]
