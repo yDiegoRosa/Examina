@@ -1,0 +1,159 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Psicometria — Índice de facilidade — Examina{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'desempenho:dashboard' %}" class="btn btn-outline">
+    <i class="bi bi-arrow-left"></i> Fragilidades &amp; Forças
+  </a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-clipboard2-pulse"></i> Módulo 4 • Psicometria básica</span>
+    </div>
+    <h1 class="mb-1">Índice de facilidade por questão</h1>
+    <p class="text-secondary" style="max-width: 700px;">
+      Índice de facilidade (p) = proporção de acertos de cada questão em <strong>todas as
+      aplicações</strong> (não uma prova). p alto ⇒ questão fácil; p baixo ⇒ difícil.
+      Índices muito baixos ou muito altos podem indicar itens mal formulados, ambíguos ou triviais.
+    </p>
+  </div>
+</div>
+
+<!-- Filtros + exportação -->
+<form method="get" class="card-surface p-3 mb-4">
+  <div class="grid grid-cols-12 gap-3 items-end">
+    <div class="col-span-3">
+      <label class="form-label" for="f_min">Mín. de respostas</label>
+      <input type="number" id="f_min" name="min_respostas" class="form-input" min="1" step="1" value="{{ min_respostas }}">
+    </div>
+    <div class="col-span-3">
+      <label class="form-label" for="f_baixo">Limite baixo (p ≤)</label>
+      <input type="number" id="f_baixo" name="limite_baixo" class="form-input" min="0" max="1" step="0.05" value="{{ limite_baixo }}">
+    </div>
+    <div class="col-span-3">
+      <label class="form-label" for="f_alto">Limite alto (p ≥)</label>
+      <input type="number" id="f_alto" name="limite_alto" class="form-input" min="0" max="1" step="0.05" value="{{ limite_alto }}">
+    </div>
+    <div class="col-span-3 flex gap-2">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill"></i> Aplicar</button>
+      <a class="btn btn-outline" href="?formato=csv&min_respostas={{ min_respostas }}&limite_baixo={{ limite_baixo }}&limite_alto={{ limite_alto }}" title="Exportar CSV"><i class="bi bi-filetype-csv"></i></a>
+      <a class="btn btn-outline" href="?formato=pdf&min_respostas={{ min_respostas }}&limite_baixo={{ limite_baixo }}&limite_alto={{ limite_alto }}" title="Exportar PDF" target="_blank"><i class="bi bi-file-earmark-pdf"></i></a>
+    </div>
+  </div>
+</form>
+
+<!-- Tiles -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-6 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-question-square"></i></div>
+    <div>
+      <div class="stat-label-unified">Questões analisadas</div>
+      <div class="stat-num-unified">{{ total_questoes }}</div>
+    </div>
+  </div>
+  <div class="col-span-6 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-flag"></i></div>
+    <div>
+      <div class="stat-label-unified">Fora do esperado</div>
+      <div class="stat-num-unified">{{ total_fora }}</div>
+    </div>
+  </div>
+</div>
+
+{% if fora %}
+<div class="card-surface mb-4">
+  <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
+    <h3 class="font-bold text-main mb-0"><i class="bi bi-flag-fill text-warning"></i> Questões fora do esperado (revisão)</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 60px;">#</th>
+          <th>Questão</th>
+          <th style="width: 100px; text-align:center;">Respostas</th>
+          <th style="width: 110px; text-align:center;">Índice (p)</th>
+          <th style="width: 260px;">Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in fora %}
+        <tr>
+          <td class="font-mono text-muted">{{ i.questao_id }}</td>
+          <td class="small">{{ i.enunciado|truncatechars:80 }}</td>
+          <td style="text-align:center;">{{ i.total_respostas }}</td>
+          <td style="text-align:center;">
+            {% widthratio i.indice_facilidade 1 100 as pct %}
+            <span class="badge-pill badge-pill-danger">{{ pct }}%</span>
+          </td>
+          <td class="small">
+            {% if i.motivo == 'muito_dificil' %}
+            <i class="bi bi-arrow-down-circle text-danger"></i>
+            {% else %}
+            <i class="bi bi-arrow-up-circle text-warning"></i>
+            {% endif %}
+            {{ i.motivo_label }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card-surface">
+  <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
+    <h3 class="font-bold text-main mb-0"><i class="bi bi-table"></i> Todas as questões (por índice de facilidade)</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 55px;">#</th>
+          <th>Questão</th>
+          <th>Disciplina</th>
+          <th>Tópico</th>
+          <th style="width: 100px;">Cadastrada</th>
+          <th style="width: 90px; text-align:center;">Respostas</th>
+          <th style="width: 110px; text-align:center;">Índice (p)</th>
+          <th style="width: 100px; text-align:center;">Classe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in itens %}
+        <tr>
+          <td class="font-mono text-muted">{{ i.questao_id }}</td>
+          <td class="small">{{ i.enunciado|truncatechars:70 }}</td>
+          <td class="small text-muted">{{ i.disciplina|default:"—" }}</td>
+          <td class="small text-muted">{{ i.topico }}</td>
+          <td class="small text-muted">{{ i.dificuldade_cadastrada }}</td>
+          <td style="text-align:center;">{{ i.total_respostas }}</td>
+          <td style="text-align:center;">{% widthratio i.indice_facilidade 1 100 as pct %}{{ pct }}%</td>
+          <td style="text-align:center;">
+            {% if i.classe == 'dificil' %}
+            <span class="badge-pill badge-pill-danger">{{ i.classe_label }}</span>
+            {% elif i.classe == 'facil' %}
+            <span class="badge-pill badge-pill-active">{{ i.classe_label }}</span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive">{{ i.classe_label }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-inbox"></i></div>
+            <p class="text-muted mb-0">Nenhuma questão com ao menos {{ min_respostas }} resposta(s) corrigida(s).</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -113,3 +113,96 @@ def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data
 
     resultado.sort(key=lambda r: ORDEM_DIFICULDADE.get(r['dificuldade'], 99))
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# Psicometria básica (RF14): índice de facilidade por questão
+# ---------------------------------------------------------------------------
+# Faixas pedagógicas do índice de facilidade (p): p < 0,30 difícil; > 0,70 fácil.
+FACILIDADE_DIFICIL = 0.30
+FACILIDADE_FACIL = 0.70
+
+
+def _dificuldade_label(codigo: str) -> str:
+    try:
+        return Questao.Dificuldade(codigo).label
+    except ValueError:
+        return codigo or '—'
+
+
+def _classificar_facilidade(indice: float) -> tuple[str, str]:
+    if indice < FACILIDADE_DIFICIL:
+        return 'dificil', 'Difícil'
+    if indice > FACILIDADE_FACIL:
+        return 'facil', 'Fácil'
+    return 'medio', 'Médio'
+
+
+def indice_facilidade_por_questao(min_respostas: int = 1) -> list[dict]:
+    """
+    Índice de facilidade (p) de cada questão = **média global de `acertou`** entre
+    todas as aplicações da questão (não apenas uma prova). p alto ⇒ questão fácil;
+    p baixo ⇒ difícil. Considera só registros corrigidos (`acertou` definido).
+
+    ``min_respostas`` descarta questões com poucas respostas (índice instável).
+
+    Retorna dicts com dados da questão, ``total_respostas``, ``acertos``,
+    ``indice_facilidade`` e a ``classe`` (difícil/médio/fácil), ordenados do menor
+    índice (mais difícil) para o maior.
+    """
+    linhas = (
+        Desempenho.objects.filter(acertou__isnull=False)
+        .values(
+            'questao',
+            'questao__enunciado',
+            'questao__dificuldade',
+            'questao__topico__nome',
+            'questao__disciplina__nome',
+        )
+        .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
+        .filter(total__gte=min_respostas)
+    )
+
+    resultado = []
+    for linha in linhas:
+        total = linha['total']
+        acertos = linha['acertos']
+        indice = round(acertos / total, 4) if total else 0.0
+        classe, classe_label = _classificar_facilidade(indice)
+        resultado.append(
+            {
+                'questao_id': linha['questao'],
+                'enunciado': linha['questao__enunciado'] or '',
+                'disciplina': linha['questao__disciplina__nome'],
+                'topico': linha['questao__topico__nome'] or 'Sem tópico',
+                'dificuldade_cadastrada': _dificuldade_label(linha['questao__dificuldade']),
+                'total_respostas': total,
+                'acertos': acertos,
+                'indice_facilidade': indice,
+                'classe': classe,
+                'classe_label': classe_label,
+            }
+        )
+
+    resultado.sort(key=lambda r: (r['indice_facilidade'], -r['total_respostas']))
+    return resultado
+
+
+def questoes_fora_do_esperado(
+    limite_baixo: float = 0.20,
+    limite_alto: float = 0.90,
+    min_respostas: int = 5,
+) -> list[dict]:
+    """
+    Questões com índice de facilidade **muito baixo** (≤ ``limite_baixo``) ou **muito
+    alto** (≥ ``limite_alto``) — candidatas a revisão (possível item mal formulado,
+    ambíguo ou trivial), não apenas "difícil". Cada item recebe ``motivo``.
+    """
+    fora = []
+    for item in indice_facilidade_por_questao(min_respostas=min_respostas):
+        indice = item['indice_facilidade']
+        if indice <= limite_baixo:
+            fora.append({**item, 'motivo': 'muito_dificil', 'motivo_label': 'Índice muito baixo (quase ninguém acertou)'})
+        elif indice >= limite_alto:
+            fora.append({**item, 'motivo': 'muito_facil', 'motivo_label': 'Índice muito alto (quase todos acertaram)'})
+    return fora

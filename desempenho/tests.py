@@ -12,7 +12,12 @@ from banco_questoes.models import Disciplina, Questao, Topico
 from provas.models import FolhaResposta, Prova, ProvaAplicacao, ProvaVersao
 
 from .models import Desempenho
-from .services import taxa_erro_por_dificuldade, taxa_erro_por_topico
+from .services import (
+    indice_facilidade_por_questao,
+    questoes_fora_do_esperado,
+    taxa_erro_por_dificuldade,
+    taxa_erro_por_topico,
+)
 
 
 class DesempenhoModelTest(TestCase):
@@ -203,3 +208,92 @@ class DashboardFragilidadesViewTest(TestCase):
         resp = self.client.get(reverse('desempenho:dashboard'), {'data_inicio': '2027-01-01'})
         self.assertEqual(resp.context['total_registros'], 0)
         self.assertContains(resp, 'Nenhuma questão corrigida')
+
+
+class PsicometriaTest(TestCase):
+    """RF14: índice de facilidade global por questão, outliers e exportação CSV/PDF."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='coord2', password='segredo123')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Disc Psi')
+        self.prova = Prova.objects.create(titulo='Prova Psi', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.turma = Turma.objects.create(periodo='2026.2', nome='T Psi')
+        self.aplic1 = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.aplic2 = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 20)
+        )
+        self._contador = 0
+
+    def _questao(self, dificuldade='M'):
+        return Questao.objects.create(disciplina=self.disc, tipo='OBJ', dificuldade=dificuldade, enunciado='Q')
+
+    def _resposta(self, questao, aplicacao, acertou):
+        self._contador += 1
+        aluno = Aluno.objects.create(nome=f'Aluno {self._contador}', matricula=f'M{self._contador}')
+        folha = FolhaResposta.objects.create(prova_aplicacao=aplicacao, aluno=aluno, prova_versao=self.versao)
+        Desempenho.objects.create(folha_resposta=folha, questao=questao, acertou=acertou)
+
+    def test_indice_facilidade_global_agrega_aplicacoes(self):
+        q = self._questao()
+        self._resposta(q, self.aplic1, True)
+        self._resposta(q, self.aplic1, True)
+        self._resposta(q, self.aplic2, False)  # aplicação diferente entra no mesmo índice
+        itens = {i['questao_id']: i for i in indice_facilidade_por_questao(min_respostas=1)}
+        self.assertEqual(itens[q.id]['total_respostas'], 3)
+        self.assertEqual(itens[q.id]['acertos'], 2)
+        self.assertAlmostEqual(itens[q.id]['indice_facilidade'], round(2 / 3, 4))
+        self.assertEqual(itens[q.id]['classe'], 'medio')
+
+    def test_min_respostas_filtra(self):
+        q = self._questao()
+        self._resposta(q, self.aplic1, True)  # só 1 resposta
+        ids = {i['questao_id'] for i in indice_facilidade_por_questao(min_respostas=5)}
+        self.assertNotIn(q.id, ids)
+
+    def test_fora_do_esperado(self):
+        q_dificil = self._questao('D')
+        q_facil = self._questao('F')
+        q_medio = self._questao('M')
+        for _ in range(5):
+            self._resposta(q_dificil, self.aplic1, False)  # p = 0.0
+            self._resposta(q_facil, self.aplic1, True)  # p = 1.0
+        for i in range(5):
+            self._resposta(q_medio, self.aplic1, i < 3)  # p = 0.6
+
+        fora = {f['questao_id']: f for f in questoes_fora_do_esperado(min_respostas=5)}
+        self.assertEqual(fora[q_dificil.id]['motivo'], 'muito_dificil')
+        self.assertEqual(fora[q_facil.id]['motivo'], 'muito_facil')
+        self.assertNotIn(q_medio.id, fora)
+
+    def test_view_render(self):
+        q = self._questao()
+        for _ in range(5):
+            self._resposta(q, self.aplic1, True)
+        self.client.login(username='coord2', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:psicometria'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['total_questoes'], 1)
+
+    def test_export_csv(self):
+        q = self._questao()
+        for _ in range(5):
+            self._resposta(q, self.aplic1, True)
+        self.client.login(username='coord2', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:psicometria'), {'formato': 'csv'})
+        self.assertEqual(resp['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('attachment', resp['Content-Disposition'])
+        conteudo = resp.content.decode('utf-8')
+        self.assertIn('Índice de facilidade', conteudo)
+        self.assertIn(str(q.id), conteudo)
+
+    def test_export_pdf(self):
+        q = self._questao()
+        for _ in range(5):
+            self._resposta(q, self.aplic1, True)
+        self.client.login(username='coord2', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:psicometria'), {'formato': 'pdf'})
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertTrue(resp.content.startswith(b'%PDF'))
