@@ -1,0 +1,254 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>{{ prova.titulo }} — {{ identificador_display }} — Simulado ENADE</title>
+  <link rel="stylesheet" href="{% static 'provas/css/print_enade.css' %}">
+</head>
+<body>
+
+  {% if incluir_capa %}
+  <!-- ═══════════════════════════════════════════════════════════
+       CAPA — SIMULADO ENADE (COMPONENTE ESPECÍFICO)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="enade-capa">
+    <div class="enade-capa-header">
+      <div class="enade-capa-topo">
+        <div>
+          <div class="enade-instituicao">FAETERJ-Rio</div>
+          <div class="enade-instituicao-sub">
+            Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+          </div>
+        </div>
+        <div class="enade-badge">Simulado ENADE</div>
+      </div>
+
+      <div class="enade-titulo">Componente Específico</div>
+      <div class="enade-subtitulo">
+        Tecnologia em Análise e Desenvolvimento de Sistemas
+      </div>
+
+      <table class="enade-info-table">
+        <tbody>
+          <tr>
+            <td class="enade-info-label">Curso / Área:</td>
+            <td class="enade-info-value" style="width: 55%;">{{ disciplina_nome|default:"Análise e Desenvolvimento de Sistemas" }}</td>
+            <td class="enade-info-label">Data:</td>
+            <td class="enade-info-value">{{ data_aplicacao|default:"____/____/________" }}</td>
+          </tr>
+          <tr>
+            <td class="enade-info-label">Docente:</td>
+            <td class="enade-info-value">{{ docente_nome|default:"—" }}</td>
+            <td class="enade-info-label">Tempo:</td>
+            <td class="enade-info-value">{% if tempo_minutos %}{{ tempo_minutos }} minutos{% else %}—{% endif %}</td>
+          </tr>
+          <tr>
+            <td class="enade-info-label">Turma / Turno:</td>
+            <td class="enade-info-value">{{ turma|default:"—" }}{% if turno %} • {{ turno }}{% endif %}</td>
+            <td class="enade-info-label">Valor:</td>
+            <td class="enade-info-value">{% if valor_total %}{{ valor_total }} ponto(s){% else %}—{% endif %}</td>
+          </tr>
+          <tr>
+            <td class="enade-info-label">Nº de Questões:</td>
+            <td class="enade-info-value">
+              {{ total_questoes }} ({{ total_objetivas }} objetivas + {{ total_discursivas }} discursivas)
+            </td>
+            <td class="enade-info-label">Caderno:</td>
+            <td class="enade-info-value">{{ identificador_display|default:prova.numero_caderno }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="enade-aluno-box">
+      <div class="enade-aluno-titulo">Identificação do(a) Estudante</div>
+      <table class="enade-aluno-table">
+        <tbody>
+          <tr>
+            <td class="enade-aluno-label">Nome completo:</td>
+            <td class="enade-aluno-field" style="width: 62%;"></td>
+            <td class="enade-aluno-label">Nota:</td>
+            <td class="enade-aluno-field enade-nota-field"></td>
+          </tr>
+          <tr>
+            <td class="enade-aluno-label">Matrícula:</td>
+            <td class="enade-aluno-field"></td>
+            <td class="enade-aluno-label">Assinatura:</td>
+            <td class="enade-aluno-field"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="enade-pesos-titulo">Distribuição das Questões</div>
+    <table class="enade-pesos-table">
+      <thead>
+        <tr>
+          <th>Partes</th>
+          <th class="num">Nº das questões</th>
+          <th class="num">Peso das questões no componente</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Componente Específico — Discursivas</td>
+          <td class="num">{% if total_discursivas %}D1 a D{{ total_discursivas }}{% else %}—{% endif %}</td>
+          <td class="num">15%</td>
+        </tr>
+        <tr>
+          <td>Componente Específico — Objetivas</td>
+          <td class="num">{% if total_objetivas %}1 a {{ total_objetivas }}{% else %}—{% endif %}</td>
+          <td class="num">85%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="enade-instrucoes">
+      <div class="enade-instrucoes-titulo">Instruções aos Estudantes</div>
+      <ol>
+        <li>Confira se este caderno contém as questões discursivas e objetivas do Componente Específico.</li>
+        <li>As questões de múltipla escolha possuem apenas <strong>uma alternativa correta</strong> (A a E).</li>
+        <li>Responda cada questão discursiva no espaço destinado (máximo de 15 linhas); o que ultrapassar será desconsiderado.</li>
+        <li>Use caneta esferográfica de tinta preta; respostas a lápis não dão direito a revisão.</li>
+        <li>É proibido o uso de celular ou dispositivos eletrônicos durante a avaliação.</li>
+        {% if instrucoes_extras %}<li>{{ instrucoes_extras }}</li>{% endif %}
+      </ol>
+    </div>
+
+    <div class="enade-capa-rodape">
+      Documento gerado automaticamente pelo Sistema Examina — FAETERJ-Rio • {{ identificador_display }}
+    </div>
+  </div>
+  <div class="page-break"></div>
+  {% endif %}
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CADERNO — COMPONENTE ESPECÍFICO
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="enade-secao">Componente Específico</div>
+
+  {% if itens_discursivas %}
+  <div class="enade-subsecao">Questões Discursivas</div>
+  {% for item in itens_discursivas %}
+  {% with q=item.questao %}
+  <div class="enade-questao">
+    <div class="enade-questao-titulo">Questão Discursiva {{ forloop.counter|stringformat:"02d" }}</div>
+
+    {% if q.texto_auxiliar %}
+    <div class="enade-texto-apoio">{{ q.texto_auxiliar }}</div>
+    {% endif %}
+
+    {% if q.imagem %}
+    <div class="enade-imagem">
+      <img src="{{ q.imagem.url }}" alt="Figura de apoio">
+    </div>
+    {% endif %}
+
+    <div class="enade-enunciado">{{ q.enunciado|linebreaksbr }}</div>
+
+    {% if item.pontuacao %}
+    <div class="enade-valor">(valor: {{ item.pontuacao }} ponto{{ item.pontuacao|pluralize }})</div>
+    {% endif %}
+
+    <div class="enade-rascunho">
+      <div class="enade-rascunho-label">Espaço de Resposta</div>
+      {% for _ in ""|center:15 %}
+      <div class="enade-linha">
+        <span class="enade-linha-num">{{ forloop.counter|stringformat:"02d" }}</span>
+        <span class="enade-linha-traco"></span>
+      </div>
+      {% endfor %}
+      <div class="enade-area-livre">Área livre</div>
+    </div>
+  </div>
+  {% endwith %}
+  {% endfor %}
+  {% endif %}
+
+  {% if itens_objetivas %}
+  <div class="enade-subsecao">Questões Objetivas</div>
+  {% for item in itens_objetivas %}
+  {% with q=item.questao %}
+  <div class="enade-questao">
+    <div class="enade-questao-titulo">Questão {{ forloop.counter|stringformat:"02d" }}</div>
+
+    {% if q.texto_auxiliar %}
+    <div class="enade-texto-apoio">{{ q.texto_auxiliar }}</div>
+    {% endif %}
+
+    {% if q.imagem %}
+    <div class="enade-imagem">
+      <img src="{{ q.imagem.url }}" alt="Figura de apoio">
+    </div>
+    {% endif %}
+
+    <div class="enade-enunciado">{{ q.enunciado|linebreaksbr }}</div>
+
+    <div class="enade-alternativas">
+      {% for alt in item.alternativas_versao %}
+      <div class="enade-alt">
+        <span class="enade-alt-letra">{{ alt.letra }})</span>
+        <span class="enade-alt-texto">{{ alt.texto }}</span>
+      </div>
+      {% empty %}
+      {% for alt in q.alternativas.all %}
+      <div class="enade-alt">
+        <span class="enade-alt-letra">{{ alt.letra }})</span>
+        <span class="enade-alt-texto">{{ alt.texto }}</span>
+      </div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endwith %}
+  {% endfor %}
+  {% endif %}
+
+  <!-- ═══════════════════════════════════════════════════════════
+       GABARITO E CRITÉRIOS (USO DO DOCENTE)
+       ═══════════════════════════════════════════════════════════ -->
+  {% if incluir_gabarito %}
+  <div class="enade-gabarito">
+    <h2 class="enade-gabarito-title">Gabarito e Critérios — Uso do Docente</h2>
+    <table class="enade-gabarito-table">
+      <thead>
+        <tr>
+          <th style="width: 10%;">Item</th>
+          <th style="width: 12%;">Tipo</th>
+          <th style="width: 15%;">Gabarito</th>
+          <th style="width: 63%;">Resposta esperada / Critérios</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in itens_discursivas %}
+        {% with q=item.questao %}
+        <tr>
+          <td><strong>D{{ forloop.counter|stringformat:"02d" }}</strong></td>
+          <td>Discursiva</td>
+          <td>—</td>
+          <td>{{ q.criterios_correcao|default:"—"|linebreaksbr }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+        {% for item in itens_objetivas %}
+        {% with q=item.questao %}
+        <tr>
+          <td><strong>{{ forloop.counter|stringformat:"02d" }}</strong></td>
+          <td>Objetiva</td>
+          <td>
+            {% for alt in item.alternativas_versao %}{% if alt.correta %}<span class="enade-gabarito-correta">({{ alt.letra }})</span>{% endif %}{% endfor %}
+          </td>
+          <td>
+            {% for alt in item.alternativas_versao %}{% if alt.correta %}{{ alt.texto }}{% endif %}{% endfor %}
+          </td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</body>
+</html>

@@ -221,3 +221,103 @@ def calcular_metas_celulas(
         },
         eh_distribuicao_livre=eh_distribuicao_livre,
     )
+
+
+# ---------------------------------------------------------------------------
+# Plano de Seleção (baldes) — fonte única para seleção e validação de estoque
+# ---------------------------------------------------------------------------
+@dataclass
+class BaldeSelecao:
+    """
+    Unidade de seleção/validação da prova: quantas questões extrair de uma
+    combinação (tópico, dificuldade, tipo).
+
+    ``dificuldade`` pode ser ``None`` para blocos que não aplicam corte por
+    dificuldade (ex.: as poucas discursivas de um simulado misto, para não
+    gerar déficit artificial com contagens muito pequenas).
+    """
+
+    topico_id: int | None
+    topico_nome: str
+    dificuldade: str | None  # 'F' | 'M' | 'D' | None
+    tipo: str  # 'OBJ' | 'DIS'
+    quantidade: int
+
+
+def _baldes_por_dificuldade(
+    quantidade: int,
+    percentual_facil: int,
+    percentual_medio: int,
+    percentual_dificil: int,
+    topicos: list[dict[str, Any]] | None,
+    tipo: str,
+) -> list[BaldeSelecao]:
+    """Distribui ``quantidade`` questões por Tópico × Dificuldade (Maior Resto)."""
+    matriz = calcular_metas_celulas(
+        quantidade_total=quantidade,
+        percentual_facil=percentual_facil,
+        percentual_medio=percentual_medio,
+        percentual_dificil=percentual_dificil,
+        topicos=topicos,
+    )
+    return [
+        BaldeSelecao(c.topico_id, c.topico_nome, c.dificuldade, tipo, c.quantidade)
+        for c in matriz.celulas
+        if c.quantidade > 0
+    ]
+
+
+def _baldes_por_topico(
+    quantidade: int,
+    topicos: list[dict[str, Any]] | None,
+    tipo: str,
+) -> list[BaldeSelecao]:
+    """
+    Distribui ``quantidade`` questões apenas por Tópico (sem corte por
+    dificuldade), reutilizando o Método do Maior Resto via uma dificuldade
+    sintética de 100%. Os baldes resultantes têm ``dificuldade=None``.
+    """
+    matriz = calcular_metas_celulas(
+        quantidade_total=quantidade,
+        percentual_facil=100,
+        percentual_medio=0,
+        percentual_dificil=0,
+        topicos=topicos,
+    )
+    return [
+        BaldeSelecao(c.topico_id, c.topico_nome, None, tipo, c.quantidade)
+        for c in matriz.celulas
+        if c.dificuldade == 'F' and c.quantidade > 0
+    ]
+
+
+def montar_baldes_selecao(
+    *,
+    modalidade: str,
+    quantidade_questoes: int,
+    quantidade_objetivas: int,
+    quantidade_discursivas: int,
+    percentual_facil: int,
+    percentual_medio: int,
+    percentual_dificil: int,
+    topicos: list[dict[str, Any]] | None,
+) -> list[BaldeSelecao]:
+    """
+    Monta o plano de seleção (lista de :class:`BaldeSelecao`) da prova.
+
+    - Modalidades puras (OBJ/DIS): matriz Tópico × Dificuldade sobre o total.
+    - Modalidade MISTA: **dois blocos independentes** — objetivas por
+      Tópico × Dificuldade e discursivas por Tópico (sem corte por dificuldade),
+      garantindo o split ``quantidade_objetivas`` / ``quantidade_discursivas``.
+    """
+    if modalidade == 'MISTA':
+        baldes = _baldes_por_dificuldade(
+            quantidade_objetivas, percentual_facil, percentual_medio, percentual_dificil, topicos, 'OBJ'
+        )
+        baldes += _baldes_por_topico(quantidade_discursivas, topicos, 'DIS')
+        return baldes
+
+    tipo = 'DIS' if modalidade == 'DIS' else 'OBJ'
+    return _baldes_por_dificuldade(
+        quantidade_questoes, percentual_facil, percentual_medio, percentual_dificil, topicos, tipo
+    )

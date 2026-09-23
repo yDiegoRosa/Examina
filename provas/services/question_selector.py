@@ -113,8 +113,9 @@ def selecionar_questoes_por_matriz(
 ) -> list[Questao]:
     """
     Executa a seleção automatizada de questões para compor uma avaliação conforme o RF07,
-    respeitando as quantidades inteiras calculadas na Matriz de Metas (Tópico × Dificuldade)
-    e priorizando itens com menor uso nas últimas 5 gerações.
+    respeitando o plano de seleção da máscara (baldes por Tópico × Dificuldade × Tipo,
+    com split objetivas/discursivas na modalidade MISTA) e priorizando itens com menor
+    uso nas últimas 5 gerações.
 
     Args:
         mascara: Instância de Mascara de Avaliação.
@@ -123,20 +124,21 @@ def selecionar_questoes_por_matriz(
     Returns:
         Lista de instâncias de Questao selecionadas sem duplicatas.
     """
-    matriz = mascara.calcular_matriz_metas()
+    plano = mascara.montar_plano_selecao()
     questoes_selecionadas: list[Questao] = []
     ids_selecionados: set[int] = set()
 
-    for celula in matriz.celulas:
-        qtd_necessaria = celula.quantidade
+    for balde in plano:
+        qtd_necessaria = balde.quantidade
         if qtd_necessaria <= 0:
             continue
 
         candidatas = list(
             consultar_questoes_candidatas_priorizadas(
                 mascara=mascara,
-                topico_id=celula.topico_id,
-                dificuldade=celula.dificuldade,
+                topico_id=balde.topico_id,
+                dificuldade=balde.dificuldade,
+                tipo=balde.tipo,
                 limite_provas_recentes=limite_provas_recentes,
                 excluir_ids=ids_selecionados,
             )[:qtd_necessaria]

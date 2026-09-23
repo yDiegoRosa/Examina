@@ -38,7 +38,7 @@ from .models import (
     ProvaVersao,
     ProvaVersaoItem,
 )
-from .presets import preset_enade_initial
+from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services.answer_sheet_layout import (
     MARKER_IDS,
     MARKER_INSET,
@@ -2461,20 +2461,20 @@ class ProvaVersaoModelAndGenerationTest(TestCase):
 
 
 class PresetEnadeTest(TestCase):
-    """Testes do preset de Simulado ENADE (WS2 Fase 1) — máscara MISTA de 40 questões."""
+    """Testes do preset de Simulado ENADE — Componente Específico (30 = 27 objetivas + 3 discursivas)."""
 
     def setUp(self):
         self.disciplina = Disciplina.objects.create(nome='Análise e Desenvolvimento de Sistemas')
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='coord_enade', password='secret_password')  # noqa: S106
 
-    def test_preset_initial_tem_estrutura_oficial_enade(self):
-        """O preset propõe 40 questões (35 objetivas + 5 discursivas) em modalidade mista."""
+    def test_preset_initial_tem_estrutura_do_componente_especifico(self):
+        """O preset propõe 30 questões (27 objetivas + 3 discursivas) em modalidade mista."""
         initial = preset_enade_initial(self.disciplina)
         self.assertEqual(initial['modalidade'], MascaraProva.Modalidade.MISTA)
-        self.assertEqual(initial['quantidade_questoes'], 40)
-        self.assertEqual(initial['quantidade_objetivas'], 35)
-        self.assertEqual(initial['quantidade_discursivas'], 5)
+        self.assertEqual(initial['quantidade_questoes'], 30)
+        self.assertEqual(initial['quantidade_objetivas'], 27)
+        self.assertEqual(initial['quantidade_discursivas'], 3)
         self.assertTrue(initial['priorizar_enade'])
         self.assertEqual(
             initial['percentual_facil'] + initial['percentual_medio'] + initial['percentual_dificil'],
@@ -2487,7 +2487,8 @@ class PresetEnadeTest(TestCase):
         """Sem disciplina, o preset ainda retorna valores válidos e título genérico."""
         initial = preset_enade_initial()
         self.assertNotIn('disciplina', initial)
-        self.assertEqual(initial['titulo'], 'Simulado ENADE 2026 — ADS')
+        self.assertIn('ENADE', initial['titulo'].upper())
+        self.assertIn('Componente Específico', initial['titulo'])
 
     def test_mascara_montada_pelo_preset_passa_na_validacao(self):
         """Uma máscara construída com os valores do preset deve passar no full_clean()."""
@@ -2497,16 +2498,214 @@ class PresetEnadeTest(TestCase):
         mascara.full_clean()
 
     def test_create_view_com_preset_enade_pre_preenche_formulario(self):
-        """GET em mascara_create?preset=enade retorna o formulário com os valores ENADE."""
+        """GET em mascara_create?preset=enade retorna o formulário com os valores do CE."""
         self.client.login(username='coord_enade', password='secret_password')  # noqa: S106
         url = reverse('provas:mascara_create')
         response = self.client.get(f'{url}?preset=enade&disciplina={self.disciplina.pk}')
         self.assertEqual(response.status_code, 200)
         form = response.context['form']
-        self.assertEqual(form.initial['quantidade_questoes'], 40)
+        self.assertEqual(form.initial['quantidade_questoes'], 30)
         self.assertEqual(form.initial['modalidade'], MascaraProva.Modalidade.MISTA)
-        self.assertEqual(form.initial['quantidade_objetivas'], 35)
+        self.assertEqual(form.initial['quantidade_objetivas'], 27)
         self.assertEqual(form.initial['disciplina'], self.disciplina)
+
+
+class MistaSplitSelecaoTest(TestCase):
+    """Garante que a modalidade MISTA respeita o split objetivas/discursivas na seleção e no estoque."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='doc_mista', password='secret_password')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Algoritmos e Programação')
+        self.mascara = Mascara.objects.create(
+            titulo='AV Mista',
+            disciplina=self.disc,
+            quantidade_questoes=5,
+            modalidade=Mascara.Modalidade.MISTA,
+            quantidade_objetivas=3,
+            quantidade_discursivas=2,
+            percentual_facil=100,
+            percentual_medio=0,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+    def _criar_questoes(self, tipo, quantidade, dificuldade=Questao.Dificuldade.FACIL):
+        for i in range(quantidade):
+            Questao.objects.create(
+                disciplina=self.disc,
+                tipo=tipo,
+                dificuldade=dificuldade,
+                enunciado=f'{tipo} {i}',
+                autor=self.user,
+                ativo=True,
+            )
+
+    def test_plano_selecao_mista_separa_tipos(self):
+        """O plano de seleção soma 3 objetivas + 2 discursivas, sem corte de dificuldade nas discursivas."""
+        plano = self.mascara.montar_plano_selecao()
+        total_obj = sum(b.quantidade for b in plano if b.tipo == Questao.Tipo.OBJETIVA)
+        total_dis = sum(b.quantidade for b in plano if b.tipo == Questao.Tipo.DISCURSIVA)
+        self.assertEqual(total_obj, 3)
+        self.assertEqual(total_dis, 2)
+        baldes_dis = [b for b in plano if b.tipo == Questao.Tipo.DISCURSIVA]
+        self.assertTrue(all(b.dificuldade is None for b in baldes_dis))
+
+    def test_geracao_mista_respeita_split(self):
+        """A prova gerada tem exatamente 3 objetivas e 2 discursivas."""
+        self._criar_questoes(Questao.Tipo.OBJETIVA, 5)
+        self._criar_questoes(Questao.Tipo.DISCURSIVA, 4, dificuldade=Questao.Dificuldade.MEDIO)
+
+        prova = self.mascara.gerar_prova(autor=self.user)
+
+        self.assertEqual(prova.itens.count(), 5)
+        self.assertEqual(prova.itens.filter(questao__tipo=Questao.Tipo.OBJETIVA).count(), 3)
+        self.assertEqual(prova.itens.filter(questao__tipo=Questao.Tipo.DISCURSIVA).count(), 2)
+
+    def test_estoque_mista_bloqueia_por_falta_de_discursivas(self):
+        """Sem discursivas suficientes, a geração é bloqueada mesmo com objetivas de sobra."""
+        from provas.services.stock_validator import EstoqueInsuficienteError
+
+        self._criar_questoes(Questao.Tipo.OBJETIVA, 5)
+        self._criar_questoes(Questao.Tipo.DISCURSIVA, 1, dificuldade=Questao.Dificuldade.MEDIO)
+
+        relatorio = self.mascara.validar_estoque()
+        self.assertFalse(relatorio.esta_valido)
+
+        with self.assertRaises(EstoqueInsuficienteError):
+            self.mascara.gerar_prova(autor=self.user)
+
+
+class SimuladoEnadeAreasTest(TestCase):
+    """Testes do Simulado ENADE distribuído nas 5 áreas do Componente Específico."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='coord_areas', password='secret_password')  # noqa: S106
+
+        # Acervo cobrindo 3 áreas do CE (Banco de Dados, Segurança e Desenvolvimento).
+        acervo = {
+            'Utilização de Banco de Dados e SQL': ['Consultas SQL', 'Junções (JOINs)'],
+            'Segurança da Informação': ['Criptografia'],
+            'Estrutura de Dados': ['Árvores'],
+        }
+        self.topicos = []
+        questoes = []
+        for disc_nome, topicos_nomes in acervo.items():
+            disc = Disciplina.objects.create(nome=disc_nome)
+            for tnome in topicos_nomes:
+                topico = Topico.objects.create(disciplina=disc, nome=tnome)
+                self.topicos.append(topico)
+                for dif in ('F', 'M', 'D'):
+                    for i in range(10):
+                        questoes.append(
+                            Questao(
+                                disciplina=disc,
+                                topico=topico,
+                                tipo=Questao.Tipo.OBJETIVA,
+                                dificuldade=dif,
+                                enunciado=f'{disc_nome}/{tnome} OBJ {dif}{i}',
+                                autor=self.user,
+                                ativo=True,
+                            )
+                        )
+                for i in range(3):
+                    questoes.append(
+                        Questao(
+                            disciplina=disc,
+                            topico=topico,
+                            tipo=Questao.Tipo.DISCURSIVA,
+                            dificuldade='M',
+                            enunciado=f'{disc_nome}/{tnome} DIS {i}',
+                            autor=self.user,
+                            ativo=True,
+                        )
+                    )
+        Questao.objects.bulk_create(questoes)
+
+    def test_distribuicao_topicos_cobre_areas_e_soma_100(self):
+        distribuicao = construir_distribuicao_topicos_enade()
+        self.assertTrue(distribuicao)
+        self.assertEqual(sum(d['percentual'] for d in distribuicao), 100)
+        self.assertTrue(all(d['percentual'] >= 1 for d in distribuicao))
+        # Todos os tópicos com questões nas áreas mapeadas devem ser contemplados.
+        ids_distribuidos = {d['topico_id'] for d in distribuicao}
+        self.assertEqual(ids_distribuidos, {t.pk for t in self.topicos})
+
+    def test_view_mascara_enade_create_persiste_mascara_e_criterios(self):
+        self.client.login(username='coord_areas', password='secret_password')  # noqa: S106
+        url = reverse('provas:mascara_enade_create')
+        response = self.client.post(url)
+
+        mascara = Mascara.objects.filter(priorizar_enade=True).order_by('-pk').first()
+        self.assertIsNotNone(mascara)
+        self.assertRedirects(response, reverse('provas:mascara_detail', kwargs={'pk': mascara.pk}))
+        self.assertEqual(mascara.modalidade, Mascara.Modalidade.MISTA)
+        self.assertEqual(mascara.quantidade_questoes, 30)
+        self.assertEqual(mascara.quantidade_objetivas, 27)
+        self.assertEqual(mascara.quantidade_discursivas, 3)
+        self.assertIsNone(mascara.disciplina)
+        criterios = mascara.topicos_distribuicao.all()
+        self.assertTrue(criterios.exists())
+        self.assertEqual(sum(c.percentual for c in criterios), 100)
+
+    def test_geracao_enade_produz_27_objetivas_e_3_discursivas(self):
+        self.client.login(username='coord_areas', password='secret_password')  # noqa: S106
+        self.client.post(reverse('provas:mascara_enade_create'))
+        mascara = Mascara.objects.filter(priorizar_enade=True).order_by('-pk').first()
+
+        relatorio = mascara.validar_estoque()
+        self.assertTrue(relatorio.esta_valido, relatorio.mensagem_resumo)
+
+        prova = mascara.gerar_prova(autor=self.user)
+        self.assertEqual(prova.itens.count(), 30)
+        self.assertEqual(prova.itens.filter(questao__tipo=Questao.Tipo.OBJETIVA).count(), 27)
+        self.assertEqual(prova.itens.filter(questao__tipo=Questao.Tipo.DISCURSIVA).count(), 3)
+
+    def test_pdf_enade_layout_agrupa_discursivas_antes_das_objetivas(self):
+        from django.template.loader import render_to_string
+
+        def _item(numero, tipo, enunciado):
+            questao = SimpleNamespace(
+                tipo=tipo,
+                enunciado=enunciado,
+                texto_auxiliar='',
+                imagem=None,
+                criterios_correcao='',
+            )
+            return {
+                'numero': numero,
+                'ordem': numero,
+                'pontuacao': 1,
+                'questao': questao,
+                'alternativas_versao': [
+                    {'letra': 'A', 'texto': 'alt a', 'correta': True},
+                    {'letra': 'B', 'texto': 'alt b', 'correta': False},
+                ],
+            }
+
+        discursivas = [_item(1, Questao.Tipo.DISCURSIVA, 'Discursiva de teste')]
+        objetivas = [_item(2, Questao.Tipo.OBJETIVA, 'Objetiva de teste')]
+        contexto = {
+            'prova': SimpleNamespace(titulo='Simulado ENADE', numero_caderno=1, pk=1),
+            'identificador_display': 'Caderno 1',
+            'itens_discursivas': discursivas,
+            'itens_objetivas': objetivas,
+            'total_questoes': 2,
+            'total_objetivas': 1,
+            'total_discursivas': 1,
+            'incluir_capa': True,
+            'incluir_gabarito': False,
+        }
+        html = render_to_string('provas/pdf_prova_enade.html', contexto)
+
+        self.assertIn('Componente Específico', html)
+        self.assertIn('Questão Discursiva 01', html)
+        self.assertIn('Área livre', html)
+        # A discursiva deve aparecer antes da primeira objetiva no caderno.
+        self.assertLess(html.index('Questão Discursiva 01'), html.index('Objetiva de teste'))
+        # Rascunho com 15 linhas numeradas.
+        self.assertIn('>15<', html.replace(' ', '').replace('\n', ''))
 
 
 class FolhaRespostaGeometryTest(SimpleTestCase):

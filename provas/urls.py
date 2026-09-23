@@ -10,6 +10,7 @@ urlpatterns = [
     path('provas/', views.prova_list, name='prova_list'),
     path('mascaras/', views.mascara_list, name='mascara_list'),
     path('mascaras/nova/', views.mascara_create, name='mascara_create'),
+    path('mascaras/nova/enade/', views.mascara_enade_create, name='mascara_enade_create'),
     path('mascaras/<int:pk>/', views.mascara_detail, name='mascara_detail'),
     path('mascaras/<int:pk>/editar/', views.mascara_update, name='mascara_update'),
     path('mascaras/<int:pk>/gerar/', views.mascara_gerar_prova, name='mascara_gerar_prova'),
