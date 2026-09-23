@@ -2,6 +2,7 @@ import logging
 import tempfile
 import uuid
 from datetime import date
+from decimal import Decimal
 from importlib import import_module
 from io import BytesIO
 from pathlib import Path
@@ -49,7 +50,13 @@ from .services.answer_sheet_layout import (
     geometry_from_dict,
     max_questoes_por_pagina,
 )
-from .services.correcao import corrigir_folha_digitalizada, corrigir_questao_manual
+from .services.correcao import (
+    corrigir_folha_digitalizada,
+    corrigir_questao_manual,
+    lancar_nota_discursiva,
+    lancar_objetiva_manual,
+    recalcular_acertou_discursivas,
+)
 from .services.folha_service import (
     contar_questoes_objetivas,
     gerar_folhas_da_aplicacao,
@@ -3418,3 +3425,112 @@ class RevisaoManualTest(TestCase):
         self.assertTrue(
             Desempenho.objects.filter(folha_resposta=self.folha, questao=self.questao, acertou=True).exists()
         )
+
+
+class LancamentoManualTest(TestCase):
+    """Lançamento manual de discursivas (nota/corte) e fallback objetivo sem scan."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='prof', password='segredo123')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Disc Lanc')
+        self.prova = Prova.objects.create(titulo='Prova Lanc', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+
+        self.obj = Questao.objects.create(disciplina=self.disc, tipo='OBJ', dificuldade='F', enunciado='Objetiva')
+        pq_obj = ProvaQuestao.objects.create(
+            prova=self.prova, questao=self.obj, numero=1, ordem=1, snapshot_questao={'tipo': 'OBJ'}
+        )
+        ProvaVersaoItem.objects.create(
+            versao=self.versao,
+            prova_questao=pq_obj,
+            numero=1,
+            ordem=1,
+            alternativas_embaralhadas=[{'letra': letra, 'correta': (letra == 'B')} for letra in ['A', 'B', 'C', 'D', 'E']],
+        )
+
+        self.dis = Questao.objects.create(disciplina=self.disc, tipo='DIS', dificuldade='M', enunciado='Discursiva')
+        pq_dis = ProvaQuestao.objects.create(
+            prova=self.prova, questao=self.dis, numero=2, ordem=2, snapshot_questao={'tipo': 'DIS'}
+        )
+        ProvaVersaoItem.objects.create(
+            versao=self.versao, prova_questao=pq_dis, numero=2, ordem=2, alternativas_embaralhadas=[]
+        )
+
+        self.turma = Turma.objects.create(periodo='2026.2', nome='T Lanc')
+        self.aluno = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.folha = FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+        )
+
+    def test_nota_corte_padrao_seis(self):
+        self.assertEqual(self.aplicacao.nota_corte, Decimal('6.00'))
+
+    def test_lancar_discursiva_acima_do_corte_acertou(self):
+        from desempenho.models import Desempenho
+
+        dsp = lancar_nota_discursiva(self.folha, self.dis, 7, Decimal('6'), usuario=self.user)
+        self.assertEqual(dsp.nota, Decimal('7'))
+        self.assertTrue(dsp.acertou)
+        self.assertEqual(dsp.tipo_correcao, Desempenho.TipoCorrecao.MANUAL)
+
+    def test_lancar_discursiva_abaixo_do_corte_errou(self):
+        dsp = lancar_nota_discursiva(self.folha, self.dis, 4, Decimal('6'), usuario=self.user)
+        self.assertFalse(dsp.acertou)
+
+    def test_nota_fora_do_intervalo_levanta_erro(self):
+        with self.assertRaises(ValueError):
+            lancar_nota_discursiva(self.folha, self.dis, 11, Decimal('6'), usuario=self.user)
+
+    def test_fallback_objetiva_por_gabarito(self):
+        acerto = lancar_objetiva_manual(self.folha, self.obj, 'B', usuario=self.user)
+        self.assertTrue(acerto.acertou)
+        self.assertEqual(acerto.resposta_marcada, 'B')
+        erro = lancar_objetiva_manual(self.folha, self.obj, 'C', usuario=self.user)
+        self.assertFalse(erro.acertou)
+
+    def test_recalcular_ao_mudar_corte(self):
+        dsp = lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)
+        self.assertFalse(dsp.acertou)
+        alterados = recalcular_acertou_discursivas(self.aplicacao, Decimal('5'))
+        self.assertEqual(alterados, 1)
+        dsp.refresh_from_db()
+        self.assertTrue(dsp.acertou)
+
+    def test_view_post_lanca_discursiva_e_objetiva(self):
+        from desempenho.models import Desempenho
+
+        self.client.login(username='prof', password='segredo123')  # noqa: S106
+        url = reverse('provas:folha_lancamento_manual', args=[self.folha.pk])
+        resp = self.client.post(
+            url,
+            {'nota_corte': '6', f'nota_{self.dis.id}': '8', f'resp_{self.obj.id}': 'B'},
+        )
+        self.assertRedirects(resp, url)
+        d_dis = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
+        self.assertEqual(d_dis.nota, Decimal('8'))
+        self.assertTrue(d_dis.acertou)
+        d_obj = Desempenho.objects.get(folha_resposta=self.folha, questao=self.obj)
+        self.assertEqual(d_obj.resposta_marcada, 'B')
+        self.assertTrue(d_obj.acertou)
+
+    def test_view_mudar_corte_recalcula(self):
+        lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)  # errou (corte 6)
+        self.client.login(username='prof', password='segredo123')  # noqa: S106
+        url = reverse('provas:folha_lancamento_manual', args=[self.folha.pk])
+        # muda só o corte para 4 (sem lançar nada): a discursiva deve passar a acertou
+        self.client.post(url, {'nota_corte': '4', f'resp_{self.obj.id}': '__skip__'})
+        self.aplicacao.refresh_from_db()
+        self.assertEqual(self.aplicacao.nota_corte, Decimal('4.00'))
+        from desempenho.models import Desempenho
+
+        d_dis = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
+        self.assertTrue(d_dis.acertou)
+
+    def test_pagina_folhas_lista_aluno(self):
+        self.client.login(username='prof', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Ana')

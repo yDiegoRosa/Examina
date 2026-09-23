@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -1158,6 +1159,131 @@ def digitalizacao_vincular_folha(request, pk):
         messages.warning(request, f'Folha vinculada, mas o reprocessamento falhou: {resultado.mensagem}')
 
     return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
+
+
+# ---------------------------------------------------------------------------
+# Lançamento manual de notas por aluno (discursivas + fallback objetivo)
+# ---------------------------------------------------------------------------
+@login_required
+def aplicacao_folhas(request, pk):
+    """Lista as folhas (alunos) de uma aplicação com atalho para o lançamento manual de notas."""
+    from desempenho.models import Desempenho
+
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+
+    if request.method == 'POST' and request.POST.get('acao') == 'gerar':
+        from .services.folha_service import gerar_folhas_da_aplicacao
+
+        try:
+            folhas = gerar_folhas_da_aplicacao(aplicacao)
+            messages.success(request, f'{len(folhas)} folha(s) gerada(s)/atualizada(s).')
+        except Exception as exc:  # noqa: BLE001
+            messages.error(request, f'Não foi possível gerar as folhas: {exc}')
+        return redirect('provas:aplicacao_folhas', pk=aplicacao.pk)
+
+    folhas = list(aplicacao.folhas.select_related('aluno', 'prova_versao').order_by('aluno__nome'))
+    resumo = {
+        row['folha_resposta_id']: row
+        for row in Desempenho.objects.filter(folha_resposta__prova_aplicacao=aplicacao)
+        .values('folha_resposta_id')
+        .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
+    }
+    linhas = [
+        {
+            'folha': folha,
+            'total': resumo.get(folha.id, {}).get('total', 0),
+            'acertos': resumo.get(folha.id, {}).get('acertos', 0),
+        }
+        for folha in folhas
+    ]
+
+    return render(
+        request,
+        'provas/aplicacao_folhas.html',
+        {'aplicacao': aplicacao, 'linhas': linhas},
+    )
+
+
+@login_required
+def folha_lancamento_manual(request, pk):
+    """
+    Lançamento manual de notas de uma folha (aluno): notas 0–10 de discursivas
+    (``acertou = nota >= corte``) e resposta das objetivas (fallback sem scan).
+    """
+    from .services.correcao import (
+        itens_versao_para_lancamento,
+        lancar_nota_discursiva,
+        lancar_objetiva_manual,
+        recalcular_acertou_discursivas,
+    )
+
+    folha = get_object_or_404(
+        FolhaResposta.objects.select_related('aluno', 'prova_versao', 'prova_aplicacao__prova'),
+        pk=pk,
+    )
+    aplicacao = folha.prova_aplicacao
+
+    if request.method == 'POST':
+        corte = aplicacao.nota_corte
+        corte_raw = (request.POST.get('nota_corte') or '').strip().replace(',', '.')
+        if corte_raw:
+            try:
+                novo_corte = Decimal(corte_raw)
+            except InvalidOperation:
+                novo_corte = None
+            if novo_corte is None or not (Decimal('0') <= novo_corte <= Decimal('10')):
+                messages.error(request, 'Nota de corte inválida (use um valor entre 0 e 10).')
+            else:
+                if novo_corte != aplicacao.nota_corte:
+                    aplicacao.nota_corte = novo_corte
+                    aplicacao.save(update_fields=['nota_corte', 'atualizado_em'])
+                    recalcular_acertou_discursivas(aplicacao, novo_corte)
+                corte = novo_corte
+
+        lancados = 0
+        erros = 0
+        for linha in itens_versao_para_lancamento(folha):
+            questao = linha['questao']
+            if linha['tipo'] == 'OBJ':
+                valor = request.POST.get(f'resp_{questao.id}', '__skip__')
+                if valor == '__skip__':
+                    continue
+                try:
+                    lancar_objetiva_manual(folha, questao, '' if valor == 'BRANCO' else valor, usuario=request.user)
+                    lancados += 1
+                except ValueError:
+                    erros += 1
+            else:
+                bruto = (request.POST.get(f'nota_{questao.id}') or '').strip()
+                if not bruto:
+                    continue
+                try:
+                    lancar_nota_discursiva(folha, questao, bruto, corte, usuario=request.user)
+                    lancados += 1
+                except ValueError:
+                    erros += 1
+
+        if lancados:
+            resumo = f'{lancados} lançamento(s) salvo(s).'
+            if erros:
+                resumo += f' {erros} com erro (valor inválido).'
+            messages.success(request, resumo)
+        elif erros:
+            messages.error(request, f'{erros} lançamento(s) com erro (valor inválido).')
+        else:
+            messages.info(request, 'Nenhum lançamento informado.')
+        return redirect('provas:folha_lancamento_manual', pk=folha.pk)
+
+    return render(
+        request,
+        'provas/folha_lancamento_manual.html',
+        {
+            'folha': folha,
+            'aplicacao': aplicacao,
+            'linhas': itens_versao_para_lancamento(folha),
+            'letras': ['A', 'B', 'C', 'D', 'E'],
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

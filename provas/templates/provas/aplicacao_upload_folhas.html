@@ -7,6 +7,9 @@
   <a href="{% url 'admin:provas_provaaplicacao_changelist' %}" class="btn btn-outline">
     <i class="bi bi-arrow-left"></i> Aplicações
   </a>
+  <a href="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-people-fill"></i> Lançar notas por aluno
+  </a>
 </div>
 
 <div class="hero-card mb-4">

@@ -15,6 +15,7 @@ objetivo da versão.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 from django.db import transaction
@@ -232,3 +233,123 @@ def revincular_e_reprocessar(digitalizacao, folha, usuario=None) -> ResultadoCor
     digitalizacao.mensagem = ''
     digitalizacao.save(update_fields=['folha_resposta', 'status', 'mensagem', 'atualizado_em'])
     return corrigir_folha_digitalizada(digitalizacao, usuario=usuario)
+
+
+# ---------------------------------------------------------------------------
+# Lançamento manual de notas (discursivas) e fallback objetivo sem scan
+# ---------------------------------------------------------------------------
+NOTA_MIN = Decimal('0')
+NOTA_MAX = Decimal('10')
+
+
+def validar_nota(nota) -> Decimal:
+    """Converte e valida uma nota no intervalo [0, 10]. :raises ValueError: se inválida."""
+    try:
+        valor = Decimal(str(nota).replace(',', '.'))
+    except (InvalidOperation, TypeError, AttributeError) as exc:
+        raise ValueError(f'Nota inválida: {nota!r}.') from exc
+    if valor < NOTA_MIN or valor > NOTA_MAX:
+        raise ValueError('A nota deve estar entre 0 e 10.')
+    return valor
+
+
+def itens_versao_para_lancamento(folha) -> list[dict]:
+    """
+    Linhas para a tela de lançamento manual: um dict por item da versão da folha,
+    com o `Desempenho` atual (se houver) e o gabarito (para objetivas).
+    """
+    from desempenho.models import Desempenho
+
+    desempenhos = {
+        d.questao_id: d for d in Desempenho.objects.filter(folha_resposta=folha).select_related('questao')
+    }
+    linhas = []
+    for item in folha.prova_versao.itens.select_related('prova_questao__questao').order_by('ordem'):
+        questao = item.prova_questao.questao
+        snap = item.prova_questao.snapshot_questao or {}
+        tipo = snap.get('tipo') or questao.tipo
+        linhas.append(
+            {
+                'item': item,
+                'questao': questao,
+                'tipo': tipo,
+                'desempenho': desempenhos.get(questao.id),
+                'gabarito': _letra_correta(item) if tipo == 'OBJ' else None,
+            }
+        )
+    return linhas
+
+
+@transaction.atomic
+def lancar_nota_discursiva(folha, questao, nota, corte, usuario=None):
+    """
+    Lança/atualiza a nota (0–10) de uma questão discursiva; define
+    ``acertou = nota >= corte`` (unificação binária p/ os dashboards) e
+    ``tipo_correcao='MANUAL'``.
+    """
+    from desempenho.models import Desempenho
+
+    nota = validar_nota(nota)
+    corte = Decimal(str(corte))
+    desempenho, _ = Desempenho.objects.update_or_create(
+        folha_resposta=folha,
+        questao=questao,
+        defaults={
+            'tipo_correcao': Desempenho.TipoCorrecao.MANUAL,
+            'nota': nota,
+            'acertou': nota >= corte,
+            'resposta_marcada': '',
+            'corrigido_por': usuario,
+            'data_correcao': timezone.now(),
+        },
+    )
+    return desempenho
+
+
+@transaction.atomic
+def lancar_objetiva_manual(folha, questao, resposta, usuario=None):
+    """
+    Lançamento manual da resposta de uma questão objetiva (fallback quando a folha
+    não passou pelo OMR). Grava ``resposta_marcada``, calcula ``acertou`` pelo
+    gabarito da versão e marca ``tipo_correcao='MANUAL'``.
+    """
+    from desempenho.models import Desempenho
+
+    resposta = (resposta or '').strip().upper()
+    if resposta not in LETRAS_VALIDAS:
+        raise ValueError(f'Resposta inválida: {resposta!r}. Use uma letra de A a E ou deixe em branco.')
+
+    item = _item_da_questao(folha, questao)
+    correta = _letra_correta(item) if item else None
+    desempenho, _ = Desempenho.objects.update_or_create(
+        folha_resposta=folha,
+        questao=questao,
+        defaults={
+            'tipo_correcao': Desempenho.TipoCorrecao.MANUAL,
+            'resposta_marcada': resposta,
+            'acertou': bool(resposta) and correta is not None and resposta == correta,
+            'nota': None,
+            'corrigido_por': usuario,
+            'data_correcao': timezone.now(),
+        },
+    )
+    return desempenho
+
+
+@transaction.atomic
+def recalcular_acertou_discursivas(aplicacao, corte) -> int:
+    """
+    Reaplica ``acertou = nota >= corte`` aos `Desempenho` que têm nota lançada
+    (discursivas) da aplicação. Retorna quantos registros mudaram.
+    """
+    from desempenho.models import Desempenho
+
+    corte = Decimal(str(corte))
+    alterados = 0
+    for desempenho in Desempenho.objects.filter(folha_resposta__prova_aplicacao=aplicacao, nota__isnull=False):
+        novo = desempenho.nota >= corte
+        if desempenho.acertou != novo:
+            desempenho.acertou = novo
+            desempenho.save(update_fields=['acertou', 'atualizado_em'])
+            alterados += 1
+    return alterados

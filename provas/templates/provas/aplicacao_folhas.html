@@ -1,0 +1,84 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Folhas / lançamento — {{ aplicacao.turma }} — Examina{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-arrow-left"></i> Upload de folhas
+  </a>
+  <a href="{% url 'provas:aplicacao_revisao_manual' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-clipboard-check"></i> Revisão manual
+  </a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-people-fill"></i> Correção • Lançamento por aluno</span>
+    </div>
+    <h1 class="mb-1">Folhas da aplicação</h1>
+    <p class="text-secondary" style="max-width: 660px;">
+      {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
+      Lance manualmente as notas das discursivas e, quando necessário, as respostas das
+      objetivas (fallback sem escaneamento). Nota de corte atual:
+      <strong>{{ aplicacao.nota_corte }}</strong>.
+    </p>
+  </div>
+</div>
+
+<div class="card-surface">
+  <div class="p-3 flex items-center justify-between" style="border-bottom: 1px solid var(--border-color);">
+    <h3 class="font-bold text-main mb-0"><i class="bi bi-file-earmark-person"></i> Alunos ({{ linhas|length }})</h3>
+    <form method="post" style="margin: 0;">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="gerar">
+      <button type="submit" class="btn btn-outline" title="Gera (idempotente) uma folha por aluno matriculado">
+        <i class="bi bi-arrow-repeat"></i> Gerar/atualizar folhas
+      </button>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th>Aluno</th>
+          <th style="width: 110px;">Versão</th>
+          <th style="width: 130px;">Status</th>
+          <th style="width: 160px;">Corrigidas</th>
+          <th style="width: 150px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in linhas %}
+        <tr>
+          <td class="font-bold text-main">{{ l.folha.aluno.nome }}</td>
+          <td>{{ l.folha.prova_versao.identificador }}</td>
+          <td>
+            {% if l.folha.status == 'LIDA' %}
+            <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Lida</span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive">{{ l.folha.get_status_display }}</span>
+            {% endif %}
+          </td>
+          <td class="small text-muted">{{ l.acertos }} acerto(s) / {{ l.total }} corrigida(s)</td>
+          <td>
+            <a href="{% url 'provas:folha_lancamento_manual' l.folha.pk %}" class="btn btn-primary small">
+              <i class="bi bi-pencil-square"></i> Lançar notas
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-people"></i></div>
+            <p class="text-muted mb-2">Nenhuma folha gerada para esta aplicação.</p>
+            <p class="text-muted small mb-0">Use “Gerar/atualizar folhas” para criar uma folha por aluno matriculado.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
