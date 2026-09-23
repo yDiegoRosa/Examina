@@ -1,0 +1,125 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Revisão manual — {{ aplicacao.turma }} — Examina{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-arrow-left"></i> Upload de folhas
+  </a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-clipboard-check-fill"></i> Correção • Revisão manual</span>
+    </div>
+    <h1 class="mb-1">Fila de revisão manual</h1>
+    <p class="text-secondary" style="max-width: 660px;">
+      {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
+      Trate aqui os casos que a leitura automática (OMR) não resolveu: folhas com erro
+      (QR ilegível / imagem não alinhada) e questões em branco ou com dupla marcação.
+    </p>
+  </div>
+</div>
+
+<!-- Seção A: Digitalizações com erro -->
+<div class="card-surface mb-4">
+  <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
+    <h3 class="font-bold text-main mb-0">
+      <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+      Folhas com erro de leitura ({{ digitalizacoes_erro|length }})
+    </h3>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 70px;">#</th>
+          <th>Arquivo</th>
+          <th>Mensagem</th>
+          <th style="width: 320px;">Vincular folha e reprocessar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in digitalizacoes_erro %}
+        <tr>
+          <td><span class="font-mono text-muted">#{{ d.pk }}</span></td>
+          <td><a href="{{ d.imagem.url }}" target="_blank" rel="noopener" class="font-bold text-main">{{ d.imagem.name }}</a></td>
+          <td class="small text-danger">{{ d.mensagem|default:"—" }}</td>
+          <td>
+            <form method="post" action="{% url 'provas:digitalizacao_vincular_folha' d.pk %}" class="flex items-center gap-2">
+              {% csrf_token %}
+              <select name="folha_id" class="form-select" required style="max-width: 200px;">
+                <option value="">Selecione o aluno…</option>
+                {% for folha in folhas %}
+                <option value="{{ folha.pk }}">{{ folha.aluno.nome }} — Versão {{ folha.prova_versao.identificador }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-primary small"><i class="bi bi-link-45deg"></i> Vincular</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center p-4 text-muted">Nenhuma folha com erro de leitura.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Seção B: Questões inconclusivas -->
+<div class="card-surface">
+  <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
+    <h3 class="font-bold text-main mb-0">
+      <i class="bi bi-question-circle-fill"></i>
+      Questões inconclusivas ({{ inconclusivas|length }})
+    </h3>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 200px;">Aluno</th>
+          <th>Questão</th>
+          <th style="width: 140px;">Situação</th>
+          <th style="width: 320px;">Definir resposta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dsp in inconclusivas %}
+        <tr>
+          <td class="font-bold text-main">{{ dsp.folha_resposta.aluno.nome }}</td>
+          <td class="small">{{ dsp.questao.enunciado|truncatechars:80 }}</td>
+          <td>
+            {% if dsp.resposta_marcada == '*' %}
+            <span class="badge-pill badge-pill-danger"><i class="bi bi-exclamation-diamond-fill"></i> Dupla marcação</span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-dash-circle"></i> Em branco</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="{% url 'provas:desempenho_revisao_manual' dsp.pk %}" class="flex items-center gap-2">
+              {% csrf_token %}
+              <select name="resposta" class="form-select" style="max-width: 160px;">
+                <option value="">Em branco</option>
+                {% for letra in letras %}
+                <option value="{{ letra }}">{{ letra }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-primary small"><i class="bi bi-check2"></i> Salvar</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center p-4 text-muted">Nenhuma questão pendente de revisão.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -15,6 +15,7 @@ from banco_questoes.models import Disciplina, Questao, Topico
 from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm, UploadFolhasForm
 from .models import (
     FolhaDigitalizada,
+    FolhaResposta,
     MascaraCriterioTopico,
     MascaraProva,
     Prova,
@@ -998,7 +999,15 @@ def aplicacao_upload_folhas(request, pk):
     else:
         form = UploadFolhasForm()
 
+    from desempenho.models import Desempenho
+
     digitalizacoes = aplicacao.digitalizacoes.order_by('-criado_em')
+    erros = aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.ERRO).count()
+    inconclusivas = Desempenho.objects.filter(
+        folha_resposta__prova_aplicacao=aplicacao,
+        tipo_correcao=Desempenho.TipoCorrecao.AUTOMATICA,
+        resposta_marcada__in=['', '*'],
+    ).count()
     return render(
         request,
         'provas/aplicacao_upload_folhas.html',
@@ -1007,8 +1016,148 @@ def aplicacao_upload_folhas(request, pk):
             'form': form,
             'digitalizacoes': digitalizacoes,
             'total': digitalizacoes.count(),
+            'pendencias_revisao': erros + inconclusivas,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Correção automática (OMR) das folhas digitalizadas de uma aplicação (RF11)
+# ---------------------------------------------------------------------------
+@require_POST
+@login_required
+def aplicacao_corrigir_folhas(request, pk):
+    """
+    Executa a leitura óptica (OMR) das folhas digitalizadas PENDENTES da aplicação:
+    identifica a folha pelo QR, corrige a perspectiva, lê as bolhas, compara com o
+    gabarito da versão e grava o resultado em ``Desempenho`` (RF11).
+    """
+    from .services.correcao import corrigir_folha_digitalizada
+
+    aplicacao = get_object_or_404(ProvaAplicacao, pk=pk)
+
+    pendentes = list(
+        aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.PENDENTE).order_by('criado_em')
+    )
+    if not pendentes:
+        messages.info(request, 'Não há folhas pendentes para corrigir.')
+        return redirect('provas:aplicacao_upload_folhas', pk=aplicacao.pk)
+
+    processadas = 0
+    erros = 0
+    total_acertos = 0
+    for digitalizacao in pendentes:
+        try:
+            resultado = corrigir_folha_digitalizada(digitalizacao, usuario=request.user)
+        except Exception as exc:  # noqa: BLE001
+            logger.error('Erro inesperado ao corrigir digitalização %s: %s', digitalizacao.pk, exc, exc_info=True)
+            digitalizacao.status = FolhaDigitalizada.Status.ERRO
+            digitalizacao.mensagem = f'Erro inesperado: {exc}'
+            digitalizacao.save(update_fields=['status', 'mensagem', 'atualizado_em'])
+            erros += 1
+            continue
+
+        if resultado.sucesso:
+            processadas += 1
+            total_acertos += resultado.acertos
+        else:
+            erros += 1
+
+    if processadas:
+        resumo = f'{processadas} folha(s) corrigida(s) automaticamente ({total_acertos} acerto(s) no total).'
+        if erros:
+            resumo += f' {erros} com erro — verifique a coluna Resultado.'
+        messages.success(request, resumo)
+    else:
+        messages.warning(request, f'Nenhuma folha corrigida. {erros} com erro — verifique a coluna Resultado.')
+
+    return redirect('provas:aplicacao_upload_folhas', pk=aplicacao.pk)
+
+
+# ---------------------------------------------------------------------------
+# Fila de revisão manual de falhas do OMR
+# ---------------------------------------------------------------------------
+@login_required
+def aplicacao_revisao_manual(request, pk):
+    """
+    Lista os casos que a leitura automática não resolveu, para correção manual:
+    digitalizações com erro (QR ilegível / deskew) e questões inconclusivas
+    (em branco ou dupla marcação) ainda com ``tipo_correcao='AUTOMATICA'``.
+    """
+    from desempenho.models import Desempenho
+
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+
+    digitalizacoes_erro = aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.ERRO).order_by('-criado_em')
+    inconclusivas = (
+        Desempenho.objects.filter(
+            folha_resposta__prova_aplicacao=aplicacao,
+            tipo_correcao=Desempenho.TipoCorrecao.AUTOMATICA,
+            resposta_marcada__in=['', '*'],
+        )
+        .select_related('folha_resposta__aluno', 'questao')
+        .order_by('folha_resposta__aluno__nome', 'questao_id')
+    )
+    folhas = aplicacao.folhas.select_related('aluno').order_by('aluno__nome')
+
+    return render(
+        request,
+        'provas/aplicacao_revisao_manual.html',
+        {
+            'aplicacao': aplicacao,
+            'digitalizacoes_erro': digitalizacoes_erro,
+            'inconclusivas': inconclusivas,
+            'folhas': folhas,
+            'letras': ['A', 'B', 'C', 'D', 'E'],
+        },
+    )
+
+
+@require_POST
+@login_required
+def desempenho_revisao_manual(request, pk):
+    """Aplica a correção manual de uma questão inconclusiva da fila de revisão."""
+    from desempenho.models import Desempenho
+
+    from .services.correcao import corrigir_questao_manual
+
+    desempenho = get_object_or_404(Desempenho.objects.select_related('folha_resposta'), pk=pk)
+    aplicacao_pk = desempenho.folha_resposta.prova_aplicacao_id
+    resposta = request.POST.get('resposta', '')
+
+    try:
+        corrigir_questao_manual(desempenho, resposta, usuario=request.user)
+        rotulo = resposta.strip().upper() or 'em branco'
+        messages.success(request, f'Questão corrigida manualmente (resposta: {rotulo}).')
+    except ValueError as exc:
+        messages.error(request, str(exc))
+
+    return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
+
+
+@require_POST
+@login_required
+def digitalizacao_vincular_folha(request, pk):
+    """Vincula manualmente uma folha a uma digitalização com erro e reprocessa (OMR)."""
+    from .services.correcao import revincular_e_reprocessar
+
+    digitalizacao = get_object_or_404(FolhaDigitalizada.objects.select_related('prova_aplicacao'), pk=pk)
+    aplicacao_pk = digitalizacao.prova_aplicacao_id
+
+    folha = FolhaResposta.objects.filter(
+        pk=request.POST.get('folha_id'), prova_aplicacao_id=aplicacao_pk
+    ).first()
+    if folha is None:
+        messages.error(request, 'Selecione uma folha válida para vincular.')
+        return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
+
+    resultado = revincular_e_reprocessar(digitalizacao, folha, usuario=request.user)
+    if resultado.sucesso:
+        messages.success(request, f'Folha de {folha.aluno.nome} vinculada e reprocessada: {resultado.mensagem}')
+    else:
+        messages.warning(request, f'Folha vinculada, mas o reprocessamento falhou: {resultado.mensagem}')
+
+    return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
 
 
 # ---------------------------------------------------------------------------

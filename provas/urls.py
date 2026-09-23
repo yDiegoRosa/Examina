@@ -25,6 +25,10 @@ urlpatterns = [
     path('provas/<int:pk>/pacote-zip/', views.prova_pacote_zip, name='prova_pacote_zip'),
     path('aplicacoes/<int:pk>/folhas-zip/', views.aplicacao_folhas_zip, name='aplicacao_folhas_zip'),
     path('aplicacoes/<int:pk>/upload-folhas/', views.aplicacao_upload_folhas, name='aplicacao_upload_folhas'),
+    path('aplicacoes/<int:pk>/corrigir-folhas/', views.aplicacao_corrigir_folhas, name='aplicacao_corrigir_folhas'),
+    path('aplicacoes/<int:pk>/revisao/', views.aplicacao_revisao_manual, name='aplicacao_revisao_manual'),
+    path('desempenhos/<int:pk>/revisao-manual/', views.desempenho_revisao_manual, name='desempenho_revisao_manual'),
+    path('digitalizacoes/<int:pk>/vincular-folha/', views.digitalizacao_vincular_folha, name='digitalizacao_vincular_folha'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),
     path('itens/<int:item_pk>/substituir/', views.item_substituir_questao, name='item_substituir_questao'),
     # AJAX / APIs

@@ -49,6 +49,7 @@ from .services.answer_sheet_layout import (
     geometry_from_dict,
     max_questoes_por_pagina,
 )
+from .services.correcao import corrigir_folha_digitalizada, corrigir_questao_manual
 from .services.folha_service import (
     contar_questoes_objetivas,
     gerar_folhas_da_aplicacao,
@@ -61,6 +62,7 @@ from .services.omr import (
     decodificar_qr,
     extrair_qr_token,
     identificar_folha,
+    ler_respostas,
     localizar_folha,
 )
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
@@ -3126,3 +3128,293 @@ class OmrReaderTest(TestCase):
         branco = np.full((int(PAGE_H * PX_POR_MM), int(PAGE_W * PX_POR_MM), 3), 255, np.uint8)
         with self.assertRaises(OmrError):
             corrigir_perspectiva(branco)
+
+
+def _canvas_bolhas(pares, num_questoes=6, qr_payload=None, px=PX_POR_MM):
+    """
+    Canvas canônico com marcadores ArUco (+ QR opcional) e bolhas de resposta preenchidas.
+
+    ``pares``: iterável de tuplas ``(questao, opção)`` a preencher, ex.: ``{(1, 'A'), (2, 'C')}``.
+    Retorna ``(canvas, geometry)``.
+    """
+    geo = build_layout(num_questoes=num_questoes, num_alternativas=5, id_digits=8, columns=3)
+    largura = int(round(PAGE_W * px))
+    altura = int(round(PAGE_H * px))
+    canvas = np.full((altura, largura, 3), 255, np.uint8)
+
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    for m in geo.markers:
+        size_px = int(round(m.size * px))
+        marcador = cv2.cvtColor(cv2.aruco.generateImageMarker(dictionary, m.id, size_px), cv2.COLOR_GRAY2BGR)
+        x0 = int(round(m.left * px))
+        y0 = int(round(m.top * px))
+        canvas[y0 : y0 + size_px, x0 : x0 + size_px] = marcador
+
+    if qr_payload:
+        qr = qrcode.QRCode(border=1, box_size=10)
+        qr.add_data(qr_payload)
+        qr.make(fit=True)
+        pil = qr.make_image(fill_color='black', back_color='white').convert('RGB')
+        qr_arr = np.array(pil)[:, :, ::-1].copy()
+        qsize = int(round(geo.qr.w * px))
+        qr_arr = cv2.resize(qr_arr, (qsize, qsize), interpolation=cv2.INTER_NEAREST)
+        qx = int(round(geo.qr.x * px))
+        qy = int(round(geo.qr.y * px))
+        canvas[qy : qy + qsize, qx : qx + qsize] = qr_arr
+
+    alvo = set(pares)
+    for b in geo.answer_bubbles:
+        if (b.question, b.option) in alvo:
+            cv2.circle(canvas, (int(round(b.cx * px)), int(round(b.cy * px))), int(round(b.r * px)), (0, 0, 0), -1)
+
+    return canvas, geo
+
+
+class OmrLerRespostasTest(SimpleTestCase):
+    """Amostragem das bolhas: leitura da alternativa marcada, branco e ambígua."""
+
+    def test_le_marcadas_e_branco(self):
+        canvas, geo = _canvas_bolhas({(1, 'A'), (2, 'C'), (3, 'E')}, num_questoes=4)
+        leituras = ler_respostas(canvas, geo.answer_bubbles)
+        self.assertEqual(leituras[1].status, 'ok')
+        self.assertEqual(leituras[1].marcada, 'A')
+        self.assertEqual(leituras[2].marcada, 'C')
+        self.assertEqual(leituras[3].marcada, 'E')
+        self.assertEqual(leituras[4].status, 'branco')
+        self.assertIsNone(leituras[4].marcada)
+
+    def test_ambigua_com_duas_marcadas(self):
+        canvas, geo = _canvas_bolhas({(1, 'A'), (1, 'B')}, num_questoes=2)
+        leituras = ler_respostas(canvas, geo.answer_bubbles)
+        self.assertEqual(leituras[1].status, 'ambigua')
+        self.assertIsNone(leituras[1].marcada)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class CorrecaoFolhaTest(TestCase):
+    """RF11: correção automática end-to-end gravando Desempenho."""
+
+    GABARITO = {1: 'B', 2: 'A', 3: 'D'}
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='corretor', password='segredo123')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Disc Correcao')
+        self.prova = Prova.objects.create(titulo='Prova Correcao', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.questoes = {}
+        for ordem, correta in self.GABARITO.items():
+            questao = Questao.objects.create(disciplina=self.disc, tipo='OBJ', dificuldade='F', enunciado=f'Q{ordem}')
+            self.questoes[ordem] = questao
+            pq = ProvaQuestao.objects.create(
+                prova=self.prova, questao=questao, numero=ordem, ordem=ordem, snapshot_questao={'tipo': 'OBJ'}
+            )
+            alts = [{'letra': letra, 'correta': (letra == correta)} for letra in ['A', 'B', 'C', 'D', 'E']]
+            ProvaVersaoItem.objects.create(
+                versao=self.versao, prova_questao=pq, numero=ordem, ordem=ordem, alternativas_embaralhadas=alts
+            )
+        self.turma = Turma.objects.create(periodo='2026.2', nome='T Correcao')
+        self.aluno = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.folha = FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+        )
+
+    def _digitalizacao(self, pares, qr_payload=None, folha=None, torta=False):
+        canvas, _ = _canvas_bolhas(pares, num_questoes=3, qr_payload=qr_payload)
+        if torta:
+            altura, largura = canvas.shape[:2]
+            origem = np.float32([[0, 0], [largura, 0], [largura, altura], [0, altura]])
+            destino = np.float32(
+                [
+                    [largura * 0.04, altura * 0.03],
+                    [largura * 0.98, altura * 0.01],
+                    [largura * 0.99, altura * 0.98],
+                    [largura * 0.02, altura * 0.97],
+                ]
+            )
+            matriz = cv2.getPerspectiveTransform(origem, destino)
+            canvas = cv2.warpPerspective(canvas, matriz, (largura, altura), borderValue=(255, 255, 255))
+        _ok, buffer = cv2.imencode('.png', canvas)
+        arquivo = SimpleUploadedFile('folha.png', buffer.tobytes(), content_type='image/png')
+        return FolhaDigitalizada.objects.create(
+            prova_aplicacao=self.aplicacao, imagem=arquivo, folha_resposta=folha, enviado_por=self.user
+        )
+
+    def test_correcao_grava_desempenho(self):
+        from desempenho.models import Desempenho
+
+        # Q1 marca B (correta), Q2 marca C (errada), Q3 em branco.
+        dig = self._digitalizacao({(1, 'B'), (2, 'C')}, folha=self.folha)
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+
+        self.assertTrue(resultado.sucesso, resultado.mensagem)
+        self.assertEqual(resultado.total_questoes, 3)
+        self.assertEqual(resultado.acertos, 1)
+        self.assertEqual(resultado.brancos, 1)
+
+        d1 = Desempenho.objects.get(folha_resposta=self.folha, questao=self.questoes[1])
+        self.assertEqual(d1.resposta_marcada, 'B')
+        self.assertTrue(d1.acertou)
+        self.assertEqual(d1.tipo_correcao, Desempenho.TipoCorrecao.AUTOMATICA)
+
+        d2 = Desempenho.objects.get(folha_resposta=self.folha, questao=self.questoes[2])
+        self.assertEqual(d2.resposta_marcada, 'C')
+        self.assertFalse(d2.acertou)
+
+        d3 = Desempenho.objects.get(folha_resposta=self.folha, questao=self.questoes[3])
+        self.assertEqual(d3.resposta_marcada, '')
+        self.assertFalse(d3.acertou)
+
+        self.folha.refresh_from_db()
+        dig.refresh_from_db()
+        self.assertEqual(self.folha.status, FolhaResposta.Status.LIDA)
+        self.assertEqual(dig.status, FolhaDigitalizada.Status.PROCESSADA)
+
+    def test_identifica_folha_pelo_qr(self):
+        dig = self._digitalizacao({(1, 'B')}, qr_payload=f'EXM1F|{self.folha.qr_token}')
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+        self.assertTrue(resultado.sucesso, resultado.mensagem)
+        dig.refresh_from_db()
+        self.assertEqual(dig.folha_resposta_id, self.folha.pk)
+
+    def test_qr_ausente_marca_erro(self):
+        dig = self._digitalizacao(set())  # sem QR e sem folha pré-identificada
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+        self.assertFalse(resultado.sucesso)
+        dig.refresh_from_db()
+        self.assertEqual(dig.status, FolhaDigitalizada.Status.ERRO)
+
+    def test_view_corrige_pendentes(self):
+        from desempenho.models import Desempenho
+
+        self.client.login(username='corretor', password='segredo123')  # noqa: S106
+        dig = self._digitalizacao({(1, 'B'), (2, 'A'), (3, 'D')}, folha=self.folha)  # todas corretas
+        url = reverse('provas:aplicacao_corrigir_folhas', args=[self.aplicacao.pk])
+        resp = self.client.post(url)
+
+        self.assertRedirects(resp, reverse('provas:aplicacao_upload_folhas', args=[self.aplicacao.pk]))
+        dig.refresh_from_db()
+        self.assertEqual(dig.status, FolhaDigitalizada.Status.PROCESSADA)
+        self.assertEqual(Desempenho.objects.filter(folha_resposta=self.folha, acertou=True).count(), 3)
+
+    def test_dupla_marcacao_end_to_end(self):
+        from desempenho.models import Desempenho
+
+        dig = self._digitalizacao({(1, 'A'), (1, 'B')}, folha=self.folha)  # Q1 com duas marcações
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+        self.assertTrue(resultado.sucesso, resultado.mensagem)
+        self.assertEqual(resultado.ambiguas, 1)
+        d1 = Desempenho.objects.get(folha_resposta=self.folha, questao=self.questoes[1])
+        self.assertEqual(d1.resposta_marcada, '*')
+        self.assertFalse(d1.acertou)
+
+    def test_folha_torta_end_to_end(self):
+        from desempenho.models import Desempenho
+
+        # Todas corretas, mas a imagem chega distorcida (perspectiva): o deskew deve resolver.
+        dig = self._digitalizacao({(1, 'B'), (2, 'A'), (3, 'D')}, folha=self.folha, torta=True)
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+        self.assertTrue(resultado.sucesso, resultado.mensagem)
+        self.assertEqual(resultado.acertos, 3)
+        self.assertEqual(Desempenho.objects.filter(folha_resposta=self.folha, acertou=True).count(), 3)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class RevisaoManualTest(TestCase):
+    """Fila de revisão manual: listagem, correção pontual e revínculo de folha."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='rev', password='segredo123')  # noqa: S106
+        self.disc = Disciplina.objects.create(nome='Disc Rev')
+        self.prova = Prova.objects.create(titulo='Prova Rev', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.questao = Questao.objects.create(
+            disciplina=self.disc, tipo='OBJ', dificuldade='F', enunciado='Questão de revisão'
+        )
+        pq = ProvaQuestao.objects.create(
+            prova=self.prova, questao=self.questao, numero=1, ordem=1, snapshot_questao={'tipo': 'OBJ'}
+        )
+        alts = [{'letra': letra, 'correta': (letra == 'B')} for letra in ['A', 'B', 'C', 'D', 'E']]
+        ProvaVersaoItem.objects.create(
+            versao=self.versao, prova_questao=pq, numero=1, ordem=1, alternativas_embaralhadas=alts
+        )
+        self.turma = Turma.objects.create(periodo='2026.2', nome='T Rev')
+        self.aluno = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.folha = FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+        )
+        self.client.login(username='rev', password='segredo123')  # noqa: S106
+
+    def _desempenho(self, marcada):
+        from desempenho.models import Desempenho
+
+        return Desempenho.objects.create(
+            folha_resposta=self.folha,
+            questao=self.questao,
+            tipo_correcao=Desempenho.TipoCorrecao.AUTOMATICA,
+            resposta_marcada=marcada,
+            acertou=False,
+        )
+
+    def _digitalizacao_erro(self, pares):
+        canvas, _ = _canvas_bolhas(pares, num_questoes=1)
+        _ok, buffer = cv2.imencode('.png', canvas)
+        return FolhaDigitalizada.objects.create(
+            prova_aplicacao=self.aplicacao,
+            imagem=SimpleUploadedFile('erro.png', buffer.tobytes(), content_type='image/png'),
+            status=FolhaDigitalizada.Status.ERRO,
+            mensagem='QR não identificado',
+        )
+
+    def test_pagina_lista_pendencias(self):
+        self._desempenho('*')
+        self._digitalizacao_erro(set())
+        resp = self.client.get(reverse('provas:aplicacao_revisao_manual', args=[self.aplicacao.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Dupla marcação')
+        self.assertContains(resp, 'QR não identificado')
+
+    def test_corrigir_questao_manual_letra_correta(self):
+        from desempenho.models import Desempenho
+
+        dsp = self._desempenho('*')
+        resp = self.client.post(
+            reverse('provas:desempenho_revisao_manual', args=[dsp.pk]), {'resposta': 'B'}
+        )
+        self.assertRedirects(resp, reverse('provas:aplicacao_revisao_manual', args=[self.aplicacao.pk]))
+        dsp.refresh_from_db()
+        self.assertEqual(dsp.resposta_marcada, 'B')
+        self.assertTrue(dsp.acertou)
+        self.assertEqual(dsp.tipo_correcao, Desempenho.TipoCorrecao.MANUAL)
+
+    def test_corrigir_questao_manual_em_branco_recalcula(self):
+        dsp = self._desempenho('*')
+        corrigir_questao_manual(dsp, '', usuario=self.user)
+        dsp.refresh_from_db()
+        self.assertEqual(dsp.resposta_marcada, '')
+        self.assertFalse(dsp.acertou)
+
+    def test_corrigir_questao_manual_resposta_invalida(self):
+        dsp = self._desempenho('')
+        with self.assertRaises(ValueError):
+            corrigir_questao_manual(dsp, 'Z', usuario=self.user)
+
+    def test_vincular_folha_reprocessa(self):
+        from desempenho.models import Desempenho
+
+        dig = self._digitalizacao_erro({(1, 'B')})  # marca a alternativa correta
+        resp = self.client.post(
+            reverse('provas:digitalizacao_vincular_folha', args=[dig.pk]), {'folha_id': self.folha.pk}
+        )
+        self.assertRedirects(resp, reverse('provas:aplicacao_revisao_manual', args=[self.aplicacao.pk]))
+        dig.refresh_from_db()
+        self.assertEqual(dig.status, FolhaDigitalizada.Status.PROCESSADA)
+        self.assertEqual(dig.folha_resposta_id, self.folha.pk)
+        self.assertTrue(
+            Desempenho.objects.filter(folha_resposta=self.folha, questao=self.questao, acertou=True).exists()
+        )

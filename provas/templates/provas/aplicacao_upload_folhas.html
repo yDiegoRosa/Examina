@@ -40,6 +40,17 @@
 <div class="card-surface">
   <div class="p-3 flex items-center justify-between" style="border-bottom: 1px solid var(--border-color);">
     <h3 class="font-bold text-main mb-0"><i class="bi bi-images"></i> Folhas enviadas ({{ total }})</h3>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'provas:aplicacao_revisao_manual' aplicacao.pk %}" class="btn btn-outline" title="Tratar manualmente folhas com erro e questões em branco/dupla marcação">
+        <i class="bi bi-clipboard-check"></i> Revisão manual{% if pendencias_revisao %} ({{ pendencias_revisao }}){% endif %}
+      </a>
+      <form method="post" action="{% url 'provas:aplicacao_corrigir_folhas' aplicacao.pk %}" style="margin: 0;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary" title="Executa a leitura óptica (OMR) das folhas pendentes e corrige as questões objetivas">
+          <i class="bi bi-magic"></i> Corrigir folhas (OMR)
+        </button>
+      </form>
+    </div>
   </div>
   <div class="table-responsive">
     <table class="saas-table">
@@ -49,6 +60,7 @@
           <th>Arquivo</th>
           <th style="width: 130px;">Status</th>
           <th style="width: 200px;">Folha identificada</th>
+          <th>Resultado</th>
           <th style="width: 150px;">Enviada em</th>
         </tr>
       </thead>
@@ -70,11 +82,14 @@
             {% if d.folha_resposta %}<span class="font-bold text-main">{{ d.folha_resposta.aluno.nome }}</span>
             {% else %}<span class="text-muted small">— aguardando OMR</span>{% endif %}
           </td>
+          <td class="small {% if d.status == 'ERRO' %}text-danger{% else %}text-muted{% endif %}">
+            {% if d.mensagem %}{{ d.mensagem }}{% else %}—{% endif %}
+          </td>
           <td class="small text-muted">{{ d.criado_em|date:"d/m/Y H:i" }}</td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="5" class="text-center p-5">
+          <td colspan="6" class="text-center p-5">
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-inbox"></i></div>
             <p class="text-muted mb-0">Nenhuma folha enviada ainda.</p>
           </td>
