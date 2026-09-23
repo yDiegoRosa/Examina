@@ -1,6 +1,9 @@
 """Modelos do Módulo 4 (Desempenho): resultado da correção por questão."""
 
+from decimal import Decimal
+
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -41,7 +44,15 @@ class Desempenho(models.Model):
         help_text='Alternativa(s) marcada(s) pelo aluno; vazio para em branco ou questão discursiva.',
     )
     acertou = models.BooleanField('acertou', null=True, blank=True)
-    nota = models.DecimalField('nota', max_digits=5, decimal_places=2, null=True, blank=True)
+    nota = models.DecimalField(
+        'nota',
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('10'))],
+        help_text='Nota de 0 a 10 (usada nas discursivas / correção manual).',
+    )
     corrigido_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

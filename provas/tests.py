@@ -3534,3 +3534,34 @@ class LancamentoManualTest(TestCase):
         resp = self.client.get(reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk]))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Ana')
+
+    def test_model_valida_intervalo_da_nota(self):
+        from desempenho.models import Desempenho
+
+        registro = Desempenho(folha_resposta=self.folha, questao=self.dis, nota=Decimal('11'))
+        with self.assertRaises(ValidationError):
+            registro.full_clean()
+        registro.nota = Decimal('-1')
+        with self.assertRaises(ValidationError):
+            registro.full_clean()
+        registro.nota = Decimal('10')
+        registro.full_clean()  # dentro do intervalo: não levanta
+
+    def test_duplicado_folha_questao_bloqueado(self):
+        from desempenho.models import Desempenho
+
+        Desempenho.objects.create(folha_resposta=self.folha, questao=self.dis, nota=Decimal('5'))
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Desempenho.objects.create(folha_resposta=self.folha, questao=self.dis, nota=Decimal('6'))
+
+    def test_relancamento_atualiza_sem_duplicar(self):
+        from desempenho.models import Desempenho
+
+        lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)
+        lancar_nota_discursiva(self.folha, self.dis, 9, Decimal('6'), usuario=self.user)
+        self.assertEqual(
+            Desempenho.objects.filter(folha_resposta=self.folha, questao=self.dis).count(), 1
+        )
+        registro = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
+        self.assertEqual(registro.nota, Decimal('9'))
+        self.assertTrue(registro.acertou)
