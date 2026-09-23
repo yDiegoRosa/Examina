@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 
 from banco_questoes.models import Questao
 
+from .matrix_calculator import DIFICULDADE_DISPLAY_MAP
+
 
 @dataclass
 class ItemDeficitEstoque:
@@ -73,10 +75,12 @@ class EstoqueInsuficienteError(Exception):
 
 def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
     """
-    Audita o banco de questões e valida a disponibilidade real para cada célula (Tópico × Dificuldade).
+    Audita o banco de questões e valida a disponibilidade real para cada balde do
+    plano de seleção (Tópico × Dificuldade × Tipo), respeitando o split
+    objetivas/discursivas da modalidade MISTA.
 
     Garantias:
-    - Retorna `esta_valido=True` somente se todas as células $(t, d)$ possuírem quantidade suficiente.
+    - Retorna `esta_valido=True` somente se todos os baldes possuírem quantidade suficiente.
     - Lista detalhadamente cada combinação deficiente com demanda, estoque e quantidade faltante.
 
     Args:
@@ -85,37 +89,39 @@ def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
     Returns:
         RelatorioDiagnosticoEstoque estruturado.
     """
-    matriz = mascara.calcular_matriz_metas()
+    plano = mascara.montar_plano_selecao()
 
     questoes_base = Questao.objects.filter(ativo=True)
     if mascara.disciplina_id:
         questoes_base = questoes_base.filter(disciplina=mascara.disciplina)
 
-    if mascara.modalidade == mascara.Modalidade.OBJETIVA:
-        questoes_base = questoes_base.filter(tipo=Questao.Tipo.OBJETIVA)
-    elif mascara.modalidade == mascara.Modalidade.DISCURSIVA:
-        questoes_base = questoes_base.filter(tipo=Questao.Tipo.DISCURSIVA)
-
     total_acervo = questoes_base.count()
     deficits: list[ItemDeficitEstoque] = []
     celulas_diagnostico: list[CelulaDiagnosticoEstoque] = []
 
-    for cel in matriz.celulas:
-        qtd_necessaria = cel.quantidade
+    for balde in plano:
+        qtd_necessaria = balde.quantidade
 
-        qs_cel = questoes_base.filter(dificuldade=cel.dificuldade)
-        if cel.topico_id is not None:
-            qs_cel = qs_cel.filter(topico_id=cel.topico_id)
+        qs_cel = questoes_base.filter(tipo=balde.tipo)
+        if balde.dificuldade:
+            qs_cel = qs_cel.filter(dificuldade=balde.dificuldade)
+        if balde.topico_id is not None:
+            qs_cel = qs_cel.filter(topico_id=balde.topico_id)
 
         qtd_disponivel = qs_cel.count()
         suficiente = qtd_disponivel >= qtd_necessaria
         qtd_faltante = max(0, qtd_necessaria - qtd_disponivel)
 
+        if balde.dificuldade:
+            dificuldade_display = DIFICULDADE_DISPLAY_MAP.get(balde.dificuldade, balde.dificuldade)
+        else:
+            dificuldade_display = 'Discursiva' if balde.tipo == Questao.Tipo.DISCURSIVA else 'Todas'
+
         cel_diag = CelulaDiagnosticoEstoque(
-            topico_id=cel.topico_id,
-            topico_nome=cel.topico_nome,
-            dificuldade=cel.dificuldade,
-            dificuldade_display=cel.dificuldade_display,
+            topico_id=balde.topico_id,
+            topico_nome=balde.topico_nome,
+            dificuldade=balde.dificuldade,
+            dificuldade_display=dificuldade_display,
             quantidade_necessaria=qtd_necessaria,
             quantidade_disponivel=qtd_disponivel,
             quantidade_faltante=qtd_faltante,
@@ -126,10 +132,10 @@ def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
         if not suficiente and qtd_necessaria > 0:
             deficits.append(
                 ItemDeficitEstoque(
-                    topico_id=cel.topico_id,
-                    topico_nome=cel.topico_nome,
-                    dificuldade=cel.dificuldade,
-                    dificuldade_display=cel.dificuldade_display,
+                    topico_id=balde.topico_id,
+                    topico_nome=balde.topico_nome,
+                    dificuldade=balde.dificuldade,
+                    dificuldade_display=dificuldade_display,
                     quantidade_necessaria=qtd_necessaria,
                     quantidade_disponivel=qtd_disponivel,
                     quantidade_faltante=qtd_faltante,

@@ -210,6 +210,40 @@ class Mascara(models.Model):
             topicos=topicos_data if topicos_data else None,
         )
 
+    def montar_plano_selecao(self):
+        """
+        Monta o plano de seleção da prova (lista de ``BaldeSelecao``), respeitando
+        a modalidade e, na modalidade MISTA, o split objetivas/discursivas.
+
+        É a fonte única consumida pela seleção automatizada (RF07) e pela
+        validação de estoque, garantindo que ambas usem exatamente a mesma
+        distribuição de questões por (tópico, dificuldade, tipo).
+        """
+        from .services.matrix_calculator import montar_baldes_selecao
+
+        topicos_data = []
+        if self.pk:
+            criterios = self.topicos_distribuicao.select_related('topico').all()
+            for crit in criterios:
+                topicos_data.append(
+                    {
+                        'id': crit.topico_id,
+                        'nome': crit.topico.nome,
+                        'percentual': crit.percentual,
+                    }
+                )
+
+        return montar_baldes_selecao(
+            modalidade=self.modalidade,
+            quantidade_questoes=self.quantidade_questoes,
+            quantidade_objetivas=self.quantidade_objetivas,
+            quantidade_discursivas=self.quantidade_discursivas,
+            percentual_facil=self.percentual_facil,
+            percentual_medio=self.percentual_medio,
+            percentual_dificil=self.percentual_dificil,
+            topicos=topicos_data if topicos_data else None,
+        )
+
     def calcular_distribuicao_dificuldade(self) -> dict[str, int]:
         """
         Calcula a quantidade de questões inteiras para cada nível de dificuldade (F, M, D)

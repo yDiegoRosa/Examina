@@ -2,6 +2,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
@@ -12,8 +13,15 @@ from django.views.decorators.http import require_POST
 from banco_questoes.models import Disciplina, Questao, Topico
 
 from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm, UploadFolhasForm
-from .models import FolhaDigitalizada, MascaraProva, Prova, ProvaAplicacao, ProvaQuestao
-from .presets import preset_enade_initial
+from .models import (
+    FolhaDigitalizada,
+    MascaraCriterioTopico,
+    MascaraProva,
+    Prova,
+    ProvaAplicacao,
+    ProvaQuestao,
+)
+from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
 from .services.manual_generator import ProvaManualError, criar_prova_manual
@@ -177,6 +185,59 @@ def mascara_create(request):
             'titulo_pagina': 'Nova Máscara de Avaliação',
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Criação em um clique do Simulado ENADE (Componente Específico)
+# ---------------------------------------------------------------------------
+@login_required
+@require_POST
+def mascara_enade_create(request):
+    """
+    Cria, em um clique, um Simulado ENADE — Componente Específico já distribuído
+    nas 5 grandes áreas do CE (30 questões = 27 objetivas + 3 discursivas).
+
+    A máscara é criada sem disciplina fixa (abrange todo o acervo) e recebe
+    automaticamente a distribuição de tópicos das áreas presentes no banco.
+    O docente é levado à tela de detalhe para revisar e gerar a prova.
+    """
+    mascara = MascaraProva(autor=request.user, **preset_enade_initial())
+
+    try:
+        mascara.full_clean()
+    except ValidationError as exc:
+        messages.error(request, f'Não foi possível montar o Simulado ENADE: {exc.messages[0]}')
+        return redirect('provas:mascara_list')
+
+    with transaction.atomic():
+        mascara.save()
+        distribuicao = construir_distribuicao_topicos_enade()
+        if distribuicao:
+            MascaraCriterioTopico.objects.bulk_create(
+                [
+                    MascaraCriterioTopico(
+                        mascara=mascara,
+                        topico_id=item['topico_id'],
+                        percentual=item['percentual'],
+                    )
+                    for item in distribuicao
+                ]
+            )
+
+    if distribuicao:
+        messages.success(
+            request,
+            f'Simulado ENADE "{mascara.titulo}" criado com {len(distribuicao)} tópicos '
+            'distribuídos nas 5 áreas do Componente Específico. Revise a distribuição e gere a prova.',
+        )
+    else:
+        messages.warning(
+            request,
+            f'Simulado ENADE "{mascara.titulo}" criado, mas nenhum tópico com questões foi encontrado '
+            'nas áreas do Componente Específico — configure a distribuição de tópicos manualmente.',
+        )
+
+    return redirect('provas:mascara_detail', pk=mascara.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -1174,12 +1235,29 @@ def prova_pdf(request, pk):
 
     identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
 
+    # Seleção do layout: caderno estilo ENADE (discursivas antes das objetivas)
+    # ou o layout institucional FAETERJ padrão. Pode ser forçado por ?layout=enade
+    # ou detectado automaticamente para máscaras de Simulado ENADE.
+    layout = (request.GET.get('layout') or '').lower()
+    usar_layout_enade = layout == 'enade' or (
+        layout == ''
+        and mascara is not None
+        and getattr(mascara, 'priorizar_enade', False)
+        and 'ENADE' in (mascara.titulo or '').upper()
+    )
+
+    # Agrupa por tipo para o caderno ENADE (Componente Específico: discursivas → objetivas).
+    itens_discursivas = [it for it in itens_render if it['questao'].tipo == Questao.Tipo.DISCURSIVA]
+    itens_objetivas = [it for it in itens_render if it['questao'].tipo == Questao.Tipo.OBJETIVA]
+
     context = {
         'prova': prova,
         'versao': versao,
         'identificador_display': identificador_display,
         'itens': itens_render,
         'itens_render': itens_render,
+        'itens_discursivas': itens_discursivas,
+        'itens_objetivas': itens_objetivas,
         'disciplina_nome': disciplina.nome if disciplina else None,
         'docente_nome': docente_nome,
         'turma': snap.get('turma') or request.GET.get('turma') or '',
@@ -1189,14 +1267,18 @@ def prova_pdf(request, pk):
         'tempo_minutos': tempo_minutos,
         'modalidade': modalidade,
         'total_questoes': len(itens_render),
+        'total_objetivas': len(itens_objetivas),
+        'total_discursivas': len(itens_discursivas),
         'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
         'incluir_capa': incluir_capa,
         'incluir_gabarito': incluir_gabarito,
     }
 
+    template_pdf = 'provas/pdf_prova_enade.html' if usar_layout_enade else 'provas/pdf_prova_completa.html'
+
     try:
         pdf_bytes = PDFGeneratorService.render_pdf_from_template(
-            template_name='provas/pdf_prova_completa.html',
+            template_name=template_pdf,
             context=context,
         )
     except Exception as exc:  # noqa: BLE001
