@@ -202,7 +202,9 @@ def questoes_fora_do_esperado(
     for item in indice_facilidade_por_questao(min_respostas=min_respostas):
         indice = item['indice_facilidade']
         if indice <= limite_baixo:
-            fora.append({**item, 'motivo': 'muito_dificil', 'motivo_label': 'Índice muito baixo (quase ninguém acertou)'})
+            fora.append(
+                {**item, 'motivo': 'muito_dificil', 'motivo_label': 'Índice muito baixo (quase ninguém acertou)'}
+            )
         elif indice >= limite_alto:
             fora.append({**item, 'motivo': 'muito_facil', 'motivo_label': 'Índice muito alto (quase todos acertaram)'})
     return fora

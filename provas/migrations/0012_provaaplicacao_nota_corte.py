@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('provas', '0011_folhadigitalizada'),
     ]
@@ -16,6 +15,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='provaaplicacao',
             name='nota_corte',
-            field=models.DecimalField(decimal_places=2, default=Decimal('6.00'), help_text='Nota mínima (0–10) para considerar uma questão discursiva como acerto nos dashboards.', max_digits=4, validators=[django.core.validators.MinValueValidator(Decimal('0')), django.core.validators.MaxValueValidator(Decimal('10'))], verbose_name='nota de corte para "acertou"'),
+            field=models.DecimalField(
+                decimal_places=2,
+                default=Decimal('6.00'),
+                help_text='Nota mínima (0–10) para considerar uma questão discursiva como acerto nos dashboards.',
+                max_digits=4,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0')),
+                    django.core.validators.MaxValueValidator(Decimal('10')),
+                ],
+                verbose_name='nota de corte para "acertou"',
+            ),
         ),
     ]

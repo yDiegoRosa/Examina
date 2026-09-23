@@ -1037,9 +1037,7 @@ def aplicacao_corrigir_folhas(request, pk):
 
     aplicacao = get_object_or_404(ProvaAplicacao, pk=pk)
 
-    pendentes = list(
-        aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.PENDENTE).order_by('criado_em')
-    )
+    pendentes = list(aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.PENDENTE).order_by('criado_em'))
     if not pendentes:
         messages.info(request, 'Não há folhas pendentes para corrigir.')
         return redirect('provas:aplicacao_upload_folhas', pk=aplicacao.pk)
@@ -1145,9 +1143,7 @@ def digitalizacao_vincular_folha(request, pk):
     digitalizacao = get_object_or_404(FolhaDigitalizada.objects.select_related('prova_aplicacao'), pk=pk)
     aplicacao_pk = digitalizacao.prova_aplicacao_id
 
-    folha = FolhaResposta.objects.filter(
-        pk=request.POST.get('folha_id'), prova_aplicacao_id=aplicacao_pk
-    ).first()
+    folha = FolhaResposta.objects.filter(pk=request.POST.get('folha_id'), prova_aplicacao_id=aplicacao_pk).first()
     if folha is None:
         messages.error(request, 'Selecione uma folha válida para vincular.')
         return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)

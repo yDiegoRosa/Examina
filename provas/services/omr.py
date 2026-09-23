@@ -261,9 +261,7 @@ def ler_respostas(
         preenchimentos: dict[str, float] = {}
         for bolha in bolhas:
             r_px = bolha.r * px_por_mm * INNER_R_FRAC
-            preenchimentos[bolha.option] = _fracao_preenchida(
-                binaria, bolha.cx * px_por_mm, bolha.cy * px_por_mm, r_px
-            )
+            preenchimentos[bolha.option] = _fracao_preenchida(binaria, bolha.cx * px_por_mm, bolha.cy * px_por_mm, r_px)
 
         ordenadas = sorted(preenchimentos.items(), key=lambda kv: kv[1], reverse=True)
         melhor_letra, melhor = ordenadas[0]

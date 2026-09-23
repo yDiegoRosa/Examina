@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('desempenho', '0001_initial'),
     ]
@@ -16,6 +15,17 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='desempenho',
             name='nota',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Nota de 0 a 10 (usada nas discursivas / correção manual).', max_digits=5, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0')), django.core.validators.MaxValueValidator(Decimal('10'))], verbose_name='nota'),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                help_text='Nota de 0 a 10 (usada nas discursivas / correção manual).',
+                max_digits=5,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0')),
+                    django.core.validators.MaxValueValidator(Decimal('10')),
+                ],
+                verbose_name='nota',
+            ),
         ),
     ]

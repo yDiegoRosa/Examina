@@ -177,11 +177,7 @@ LETRAS_VALIDAS = frozenset({'', 'A', 'B', 'C', 'D', 'E'})
 
 def _item_da_questao(folha: FolhaResposta, questao) -> ProvaVersaoItem | None:
     """Item da versão da folha correspondente à questão base (para achar o gabarito)."""
-    return (
-        folha.prova_versao.itens.select_related('prova_questao')
-        .filter(prova_questao__questao=questao)
-        .first()
-    )
+    return folha.prova_versao.itens.select_related('prova_questao').filter(prova_questao__questao=questao).first()
 
 
 @transaction.atomic
@@ -260,9 +256,7 @@ def itens_versao_para_lancamento(folha) -> list[dict]:
     """
     from desempenho.models import Desempenho
 
-    desempenhos = {
-        d.questao_id: d for d in Desempenho.objects.filter(folha_resposta=folha).select_related('questao')
-    }
+    desempenhos = {d.questao_id: d for d in Desempenho.objects.filter(folha_resposta=folha).select_related('questao')}
     linhas = []
     for item in folha.prova_versao.itens.select_related('prova_questao__questao').order_by('ordem'):
         questao = item.prova_questao.questao

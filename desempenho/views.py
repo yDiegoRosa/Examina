@@ -106,8 +106,17 @@ def _csv_psicometria(itens):
     resposta.write('﻿')  # BOM p/ acentos no Excel
     escritor = csv.writer(resposta, delimiter=';')
     escritor.writerow(
-        ['Questão', 'Enunciado', 'Disciplina', 'Tópico', 'Dificuldade cadastrada',
-         'Respostas', 'Acertos', 'Índice de facilidade', 'Classificação']
+        [
+            'Questão',
+            'Enunciado',
+            'Disciplina',
+            'Tópico',
+            'Dificuldade cadastrada',
+            'Respostas',
+            'Acertos',
+            'Índice de facilidade',
+            'Classificação',
+        ]
     )
     for i in itens:
         escritor.writerow(
@@ -150,9 +159,7 @@ def psicometria(request):
     limite_alto = _param_float(request, 'limite_alto', 0.90)
 
     itens = indice_facilidade_por_questao(min_respostas=min_respostas)
-    fora = questoes_fora_do_esperado(
-        limite_baixo=limite_baixo, limite_alto=limite_alto, min_respostas=min_respostas
-    )
+    fora = questoes_fora_do_esperado(limite_baixo=limite_baixo, limite_alto=limite_alto, min_respostas=min_respostas)
 
     context = {
         'itens': itens,

@@ -28,7 +28,11 @@ urlpatterns = [
     path('aplicacoes/<int:pk>/corrigir-folhas/', views.aplicacao_corrigir_folhas, name='aplicacao_corrigir_folhas'),
     path('aplicacoes/<int:pk>/revisao/', views.aplicacao_revisao_manual, name='aplicacao_revisao_manual'),
     path('desempenhos/<int:pk>/revisao-manual/', views.desempenho_revisao_manual, name='desempenho_revisao_manual'),
-    path('digitalizacoes/<int:pk>/vincular-folha/', views.digitalizacao_vincular_folha, name='digitalizacao_vincular_folha'),
+    path(
+        'digitalizacoes/<int:pk>/vincular-folha/',
+        views.digitalizacao_vincular_folha,
+        name='digitalizacao_vincular_folha',
+    ),
     path('aplicacoes/<int:pk>/folhas/', views.aplicacao_folhas, name='aplicacao_folhas'),
     path('folhas/<int:pk>/lancamento/', views.folha_lancamento_manual, name='folha_lancamento_manual'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),

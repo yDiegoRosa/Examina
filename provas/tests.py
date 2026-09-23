@@ -3390,9 +3390,7 @@ class RevisaoManualTest(TestCase):
         from desempenho.models import Desempenho
 
         dsp = self._desempenho('*')
-        resp = self.client.post(
-            reverse('provas:desempenho_revisao_manual', args=[dsp.pk]), {'resposta': 'B'}
-        )
+        resp = self.client.post(reverse('provas:desempenho_revisao_manual', args=[dsp.pk]), {'resposta': 'B'})
         self.assertRedirects(resp, reverse('provas:aplicacao_revisao_manual', args=[self.aplicacao.pk]))
         dsp.refresh_from_db()
         self.assertEqual(dsp.resposta_marcada, 'B')
@@ -3445,7 +3443,9 @@ class LancamentoManualTest(TestCase):
             prova_questao=pq_obj,
             numero=1,
             ordem=1,
-            alternativas_embaralhadas=[{'letra': letra, 'correta': (letra == 'B')} for letra in ['A', 'B', 'C', 'D', 'E']],
+            alternativas_embaralhadas=[
+                {'letra': letra, 'correta': (letra == 'B')} for letra in ['A', 'B', 'C', 'D', 'E']
+            ],
         )
 
         self.dis = Questao.objects.create(disciplina=self.disc, tipo='DIS', dificuldade='M', enunciado='Discursiva')
@@ -3559,9 +3559,7 @@ class LancamentoManualTest(TestCase):
 
         lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)
         lancar_nota_discursiva(self.folha, self.dis, 9, Decimal('6'), usuario=self.user)
-        self.assertEqual(
-            Desempenho.objects.filter(folha_resposta=self.folha, questao=self.dis).count(), 1
-        )
+        self.assertEqual(Desempenho.objects.filter(folha_resposta=self.folha, questao=self.dis).count(), 1)
         registro = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
         self.assertEqual(registro.nota, Decimal('9'))
         self.assertTrue(registro.acertou)

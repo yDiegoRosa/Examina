@@ -104,9 +104,7 @@ class TaxaErroAnaliseTest(TestCase):
 
     def _folha(self, nome, matricula):
         aluno = Aluno.objects.create(nome=nome, matricula=matricula)
-        return FolhaResposta.objects.create(
-            prova_aplicacao=self.aplicacao, aluno=aluno, prova_versao=self.versao
-        )
+        return FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=aluno, prova_versao=self.versao)
 
     def _desempenho(self, folha, questao, acertou):
         return Desempenho.objects.create(
@@ -143,9 +141,7 @@ class TaxaErroAnaliseTest(TestCase):
     def test_filtra_por_turma(self):
         # Outra turma/aplicação com desempenho que NÃO deve entrar no resultado da turma 1.
         turma2 = Turma.objects.create(periodo='2026.2', nome='Turma 2')
-        aplic2 = ProvaAplicacao.objects.create(
-            prova=self.prova, turma=turma2, data_aplicacao=date(2026, 11, 11)
-        )
+        aplic2 = ProvaAplicacao.objects.create(prova=self.prova, turma=turma2, data_aplicacao=date(2026, 11, 11))
         aluno = Aluno.objects.create(nome='Carla', matricula='C1')
         folha = FolhaResposta.objects.create(prova_aplicacao=aplic2, aluno=aluno, prova_versao=self.versao)
         self._desempenho(folha, self.q_a1, False)
@@ -155,9 +151,7 @@ class TaxaErroAnaliseTest(TestCase):
 
     def test_registros_sem_acertou_sao_ignorados(self):
         aluno = Aluno.objects.create(nome='Diego', matricula='D1')
-        folha = FolhaResposta.objects.create(
-            prova_aplicacao=self.aplicacao, aluno=aluno, prova_versao=self.versao
-        )
+        folha = FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=aluno, prova_versao=self.versao)
         Desempenho.objects.create(folha_resposta=folha, questao=self.q_a1, acertou=None)  # não corrigido
 
         por_topico = {linha['topico']: linha for linha in taxa_erro_por_topico(turma=self.turma)}
