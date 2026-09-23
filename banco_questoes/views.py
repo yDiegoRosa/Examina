@@ -23,11 +23,6 @@ from .permissions import (
 logger = logging.getLogger(__name__)
 
 
-def style_guide(request):
-    """Kit de componentes do design system (referência viva para novas telas)."""
-    return render(request, 'banco_questoes/style_guide.html')
-
-
 # ---------------------------------------------------------------------------
 # Lista de questões (com django-filter e paginação)
 # ---------------------------------------------------------------------------
