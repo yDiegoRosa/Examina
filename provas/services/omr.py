@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 # Resolução da imagem canônica após o deskew (10 px/mm ≈ 254 DPI).
 PX_POR_MM = 10
 ARUCO_DICT = 'DICT_4X4_50'
-PREFIXO_TOKEN = 'EXM1F'
+PREFIXO_TOKEN = 'EXM1F'  # noqa: S105 — prefixo de folha, não senha
 
 # --- Amostragem de bolhas (leitura das marcações) --------------------------
 # Fração do raio efetivamente amostrada (evita o anel impresso da bolha).
