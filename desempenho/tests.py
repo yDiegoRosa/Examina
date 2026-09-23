@@ -297,3 +297,108 @@ class PsicometriaTest(TestCase):
         resp = self.client.get(reverse('desempenho:psicometria'), {'formato': 'pdf'})
         self.assertEqual(resp['Content-Type'], 'application/pdf')
         self.assertTrue(resp.content.startswith(b'%PDF'))
+
+
+class AgregacoesCalculoTest(TestCase):
+    """Bordas e precisão dos cálculos de agregação (RF13/RF14)."""
+
+    def setUp(self):
+        self.disc = Disciplina.objects.create(nome='Disc Calc')
+        self.prova = Prova.objects.create(titulo='Prova Calc', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.turma = Turma.objects.create(periodo='2026.2', nome='T Calc')
+        self.aplic1 = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+        self.aplic2 = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 20)
+        )
+        self._contador = 0
+
+    def _questao(self, topico=None, dificuldade='M'):
+        return Questao.objects.create(
+            disciplina=self.disc, topico=topico, tipo='OBJ', dificuldade=dificuldade, enunciado='Q'
+        )
+
+    def _resp(self, questao, acertou, aplicacao=None):
+        self._contador += 1
+        aluno = Aluno.objects.create(nome=f'A{self._contador}', matricula=f'M{self._contador}')
+        folha = FolhaResposta.objects.create(
+            prova_aplicacao=aplicacao or self.aplic1, aluno=aluno, prova_versao=self.versao
+        )
+        Desempenho.objects.create(folha_resposta=folha, questao=questao, acertou=acertou)
+
+    def _padrao(self, questao, acertos, total, aplicacao=None):
+        """Cria `acertos` corretas e `total-acertos` erradas para a questão."""
+        for i in range(total):
+            self._resp(questao, i < acertos, aplicacao)
+
+    # --- Vazio -------------------------------------------------------------
+    def test_agregacoes_vazias(self):
+        self.assertEqual(taxa_erro_por_topico(), [])
+        self.assertEqual(taxa_erro_por_dificuldade(), [])
+        self.assertEqual(indice_facilidade_por_questao(), [])
+        self.assertEqual(questoes_fora_do_esperado(), [])
+
+    # --- Filtros no nível do serviço --------------------------------------
+    def test_taxa_erro_filtra_por_aplicacao(self):
+        top = Topico.objects.create(disciplina=self.disc, nome='T')
+        q = self._questao(topico=top)
+        self._resp(q, False, self.aplic1)  # erro na aplic1
+        self._resp(q, True, self.aplic2)  # acerto na aplic2
+        por_topico = {t['topico']: t for t in taxa_erro_por_topico(aplicacao=self.aplic1)}
+        self.assertEqual(por_topico['T']['total'], 1)
+        self.assertEqual(por_topico['T']['taxa_erro'], 1.0)
+
+    def test_taxa_erro_filtra_por_periodo(self):
+        top = Topico.objects.create(disciplina=self.disc, nome='T')
+        q = self._questao(topico=top)
+        self._resp(q, False, self.aplic1)  # 2026-11-10
+        self._resp(q, True, self.aplic2)  # 2026-11-20
+        por_topico = {t['topico']: t for t in taxa_erro_por_topico(data_inicio=date(2026, 11, 15))}
+        self.assertEqual(por_topico['T']['total'], 1)  # só a aplic2
+        self.assertEqual(por_topico['T']['acertos'], 1)
+        self.assertEqual(por_topico['T']['taxa_erro'], 0.0)
+
+    # --- Valores exatos ----------------------------------------------------
+    def test_taxa_erro_zero_e_fracao(self):
+        top_zero = Topico.objects.create(disciplina=self.disc, nome='Zero')
+        top_frac = Topico.objects.create(disciplina=self.disc, nome='Frac')
+        self._padrao(self._questao(topico=top_zero), acertos=3, total=3)  # taxa 0.0
+        self._padrao(self._questao(topico=top_frac), acertos=1, total=3)  # taxa 2/3
+        por_topico = {t['topico']: t for t in taxa_erro_por_topico()}
+        self.assertEqual(por_topico['Zero']['taxa_erro'], 0.0)
+        self.assertEqual(por_topico['Frac']['taxa_erro'], round(2 / 3, 4))
+        self.assertEqual(por_topico['Frac']['disciplina'], 'Disc Calc')
+
+    # --- Limites de classe do índice de facilidade -------------------------
+    def test_indice_classe_nos_limites(self):
+        q30 = self._questao(dificuldade='M')
+        q70 = self._questao(dificuldade='M')
+        q20 = self._questao(dificuldade='D')
+        q80 = self._questao(dificuldade='F')
+        self._padrao(q30, 3, 10)  # p = 0.30
+        self._padrao(q70, 7, 10)  # p = 0.70
+        self._padrao(q20, 1, 5)  # p = 0.20
+        self._padrao(q80, 4, 5)  # p = 0.80
+        por_q = {i['questao_id']: i for i in indice_facilidade_por_questao(min_respostas=1)}
+        self.assertEqual(por_q[q30.id]['classe'], 'medio')  # 0.30 não é < 0.30
+        self.assertEqual(por_q[q70.id]['classe'], 'medio')  # 0.70 não é > 0.70
+        self.assertEqual(por_q[q20.id]['classe'], 'dificil')
+        self.assertEqual(por_q[q80.id]['classe'], 'facil')
+
+    # --- Limiares de outlier inclusivos ------------------------------------
+    def test_outlier_limites_inclusivos(self):
+        q_baixo = self._questao(dificuldade='D')
+        q_alto = self._questao(dificuldade='F')
+        q_ok_baixo = self._questao(dificuldade='M')
+        q_ok_alto = self._questao(dificuldade='M')
+        self._padrao(q_baixo, 1, 5)  # p = 0.20 (== limite_baixo)
+        self._padrao(q_alto, 9, 10)  # p = 0.90 (== limite_alto)
+        self._padrao(q_ok_baixo, 2, 5)  # p = 0.40
+        self._padrao(q_ok_alto, 4, 5)  # p = 0.80
+        fora = {f['questao_id']: f for f in questoes_fora_do_esperado()}
+        self.assertEqual(fora[q_baixo.id]['motivo'], 'muito_dificil')  # inclusivo em 0.20
+        self.assertEqual(fora[q_alto.id]['motivo'], 'muito_facil')  # inclusivo em 0.90
+        self.assertNotIn(q_ok_baixo.id, fora)
+        self.assertNotIn(q_ok_alto.id, fora)
