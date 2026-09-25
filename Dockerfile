@@ -26,6 +26,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Coleta os estáticos na imagem (servidos pelo WhiteNoise). As variáveis abaixo existem
+# só para o settings carregar durante o build — não são usadas em execução.
+RUN SECRET_KEY=build-only-collectstatic DATABASE_URL=sqlite:////tmp/build.sqlite3 \
+    python manage.py collectstatic --noinput
+
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Produção: gunicorn (configuração em gunicorn.conf.py, ajustável por variáveis GUNICORN_*).
+# Em desenvolvimento, o docker-compose.yml sobrescreve com `runserver`.
+CMD ["gunicorn", "Examina.wsgi:application"]

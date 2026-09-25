@@ -1,0 +1,106 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Notas — {{ aplicacao.turma }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Painel da aplicação</a>
+  <a href="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" class="btn btn-outline"><i class="bi bi-pencil-square"></i> Lançar notas por aluno</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-table"></i> Correção • Notas da turma</span>
+    </div>
+    <h1 class="mb-1">Notas finais</h1>
+    <p class="text-secondary" style="max-width: 720px;">
+      {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
+      Nota = (pontos obtidos ÷ pontos possíveis) × <strong>{{ escala|floatformat:"-2" }}</strong>.
+      Objetiva vale o peso da questão quando certa; discursiva vale o peso × nota/10.
+      Questões ainda não corrigidas contam zero e deixam a nota como <em>incompleta</em>.
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="?formato=xlsx" class="btn btn-gold flex items-center gap-2"><i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel (XLSX)</a>
+    <a href="?formato=csv" class="btn btn-outline flex items-center gap-2"><i class="bi bi-filetype-csv"></i> Exportar CSV</a>
+  </div>
+</div>
+
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-calculator-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Média da turma (notas completas)</div>
+      <div class="stat-num-unified">{% if media is not None %}{{ media|floatformat:2 }}{% else %}—{% endif %}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-success"><i class="bi bi-check-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Notas completas</div>
+      <div class="stat-num-unified text-success">{{ total_completas }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-warning"><i class="bi bi-exclamation-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Incompletas (questões sem correção)</div>
+      <div class="stat-num-unified">{{ total_incompletas }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-surface">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 130px;">Matrícula</th>
+          <th>Aluno</th>
+          <th style="width: 80px;">Versão</th>
+          <th style="width: 120px;">Objetivas</th>
+          <th style="width: 120px;">Discursivas</th>
+          <th style="width: 120px;">Pontos</th>
+          <th style="width: 110px;">Nota</th>
+          <th style="width: 190px;">Situação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in linhas %}
+        <tr>
+          <td><span class="font-mono">{{ linha.matricula }}</span></td>
+          <td>
+            <a href="{% url 'provas:folha_lancamento_manual' linha.folha.pk %}" class="font-bold text-main" title="Lançar/revisar notas deste aluno">{{ linha.aluno }}</a>
+          </td>
+          <td>{{ linha.versao }}</td>
+          <td class="small">{{ linha.acertos_objetivas }} / {{ linha.total_objetivas }} acerto(s)</td>
+          <td class="small">{% if linha.total_discursivas %}{{ linha.discursivas_corrigidas }} / {{ linha.total_discursivas }} corrigida(s){% else %}—{% endif %}</td>
+          <td class="small">{{ linha.pontos_obtidos|floatformat:2 }} / {{ linha.pontos_possiveis|floatformat:2 }}</td>
+          <td><strong>{% if linha.nota is not None %}{{ linha.nota|floatformat:2 }}{% else %}—{% endif %}</strong></td>
+          <td>
+            {% if linha.situacao == 'completa' %}
+            <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Completa</span>
+            {% elif linha.situacao == 'incompleta' %}
+            <span class="badge-pill badge-pill-warning" title="{{ linha.pendentes }} questão(ões) sem correção"><i class="bi bi-exclamation-circle-fill"></i> Incompleta ({{ linha.pendentes }})</span>
+            {% elif linha.situacao == 'anulada' %}
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Folha anulada</span>
+            {% else %}
+            <span class="badge-pill badge-pill-inactive">Sem questões</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-table"></i></div>
+            <p class="text-muted mb-2">Nenhuma folha-resposta gerada para esta aplicação.</p>
+            <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline">Ir ao painel da aplicação</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

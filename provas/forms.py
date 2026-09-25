@@ -2,9 +2,10 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
+from academico.models import Turma
 from banco_questoes.models import Disciplina, Topico
 
-from .models import Mascara, MascaraCriterioTopico
+from .models import Mascara, MascaraCriterioTopico, Prova, ProvaAplicacao
 
 
 class _MultipleFileInput(forms.ClearableFileInput):
@@ -58,6 +59,41 @@ class UploadFolhasForm(forms.Form):
     """Upload em lote de folhas escaneadas/fotografadas de uma aplicação."""
 
     imagens = MultipleImageField(label='Imagens das folhas (fotos do celular ou digitalizações)')
+
+
+class ProvaAplicacaoForm(forms.ModelForm):
+    """
+    Cadastro de uma aplicação (prova × turma × data) fora do admin.
+
+    Só aceita provas que já tenham versões (A/B/C…) — sem elas não há como distribuir
+    cadernos nem gerar folhas-resposta — e turmas ativas.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['prova'].queryset = (
+            Prova.objects.filter(versoes__isnull=False).distinct().order_by('-criado_em', '-pk')
+        )
+        self.fields['prova'].help_text = 'Somente provas com versões (cadernos) geradas aparecem na lista.'
+        self.fields['turma'].queryset = Turma.objects.filter(ativo=True).order_by('-periodo', 'nome')
+
+    class Meta:
+        model = ProvaAplicacao
+        fields = ['prova', 'turma', 'data_aplicacao', 'nota_corte', 'observacao']
+        labels = {
+            'prova': 'Prova',
+            'turma': 'Turma',
+            'data_aplicacao': 'Data da aplicação',
+            'nota_corte': 'Nota de corte das discursivas (0–10)',
+            'observacao': 'Observação',
+        }
+        widgets = {
+            'prova': forms.Select(attrs={'class': 'form-select'}),
+            'turma': forms.Select(attrs={'class': 'form-select'}),
+            'data_aplicacao': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
+            'nota_corte': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.5', 'min': '0', 'max': '10'}),
+            'observacao': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
+        }
 
 
 class MascaraForm(forms.ModelForm):

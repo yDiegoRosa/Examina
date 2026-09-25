@@ -4,8 +4,14 @@
 
 {% block content %}
 <div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-arrow-left"></i> Painel da aplicação
+  </a>
   <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
-    <i class="bi bi-arrow-left"></i> Upload de folhas
+    <i class="bi bi-cloud-arrow-up"></i> Upload de folhas
+  </a>
+  <a href="{% url 'provas:aplicacao_notas' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-table"></i> Notas da turma
   </a>
   <a href="{% url 'provas:aplicacao_revisao_manual' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-clipboard-check"></i> Revisão manual

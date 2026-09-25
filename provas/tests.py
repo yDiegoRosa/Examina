@@ -1,3 +1,4 @@
+import base64
 import logging
 import tempfile
 import uuid
@@ -11,9 +12,9 @@ from unittest import skipUnless
 
 import cv2
 import numpy as np
-import qrcode
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.staticfiles import finders
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -27,6 +28,7 @@ from banco_questoes.models import Alternativa, Disciplina, Questao, Topico
 
 from .forms import MascaraCriterioTopicoFormSet, MascaraForm
 from .models import (
+    AtribuicaoVersao,
     FolhaDigitalizada,
     FolhaResposta,
     Mascara,
@@ -57,6 +59,7 @@ from .services.correcao import (
     lancar_objetiva_manual,
     recalcular_acertou_discursivas,
 )
+from .services.fiducial import gerar_qr_data_uri, montar_payload_folha
 from .services.folha_service import (
     contar_questoes_objetivas,
     gerar_folhas_da_aplicacao,
@@ -171,6 +174,7 @@ class ProvasAppBaseTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_provas', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
 
     def test_provas_index_url_resolves(self):
         """O painel principal dá acesso às provas persistidas."""
@@ -200,6 +204,7 @@ class ProvaListTest(TestCase):
         from provas.models import Prova
 
         cls.user = get_user_model().objects.create_user(username='docente_painel')
+        cls.user.groups.add(Group.objects.get(name='Docente'))
         cls.disciplina = Disciplina.objects.create(nome='Disciplina arquivada', ativo=False)
         cls.outra = Disciplina.objects.create(nome='Outra disciplina')
         cls.manual = Prova.objects.create(
@@ -256,6 +261,7 @@ class MascaraProvaModelTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_mascara', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Estrutura de Dados')
         self.top1 = Topico.objects.create(disciplina=self.disc, nome='Árvores')
         self.top2 = Topico.objects.create(disciplina=self.disc, nome='Filas')
@@ -411,6 +417,7 @@ class MascaraViewsTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_views', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='prof_views', password='secret_password')  # noqa: S106
 
         self.disc = Disciplina.objects.create(nome='Banco de Dados (UBD)')
@@ -518,6 +525,7 @@ class MascaraInterdisciplinarTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='coord_integrado', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disciplina_1 = Disciplina.objects.create(nome='Algoritmos')
         self.disciplina_2 = Disciplina.objects.create(nome='Banco de Dados')
         self.topico_1 = Topico.objects.create(disciplina=self.disciplina_1, nome='Estruturas de Controle')
@@ -569,6 +577,7 @@ class WeasyPrintPDFGenerationTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_weasy', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
 
         self.disc = Disciplina.objects.create(nome='Estruturas de Dados')
 
@@ -706,6 +715,7 @@ class MascaraListPaginationTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_masc_pag', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='docente_masc_pag', password='secret_password')  # noqa: S106
         self.url = reverse('provas:mascara_list')
 
@@ -765,6 +775,7 @@ class MascaraValidacaoPercentuaisTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_valida', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Engenharia de Software')
         self.top1 = Topico.objects.create(disciplina=self.disc, nome='Requisitos')
         self.top2 = Topico.objects.create(disciplina=self.disc, nome='Arquitetura')
@@ -1095,6 +1106,7 @@ class MatrizMetasCalculoTest(TestCase):
 
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_matriz', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='docente_matriz', password='secret_password')  # noqa: S106
         self.disc = Disciplina.objects.create(nome='Engenharia de Software')
         self.top1 = Topico.objects.create(disciplina=self.disc, nome='Arquitetura de Software')
@@ -1243,6 +1255,7 @@ class SelecaoQuestoesMenosUsadasTest(TestCase):
 
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_rf07', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Algoritmos e Estrutura de Dados')
         self.topico = Topico.objects.create(disciplina=self.disc, nome='Árvores Binárias')
 
@@ -1386,6 +1399,7 @@ class BloqueioEstoqueInsuficienteTest(TestCase):
 
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_bloqueio', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='docente_bloqueio', password='secret_password')  # noqa: S106
         self.disc = Disciplina.objects.create(nome='Banco de Dados II')
         self.top1 = Topico.objects.create(disciplina=self.disc, nome='Indexação e Árvores B+')
@@ -1545,6 +1559,7 @@ class SnapshotProvaTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_snapshot', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Algoritmos Snapshot')
         self.top1 = Topico.objects.create(disciplina=self.disc, nome='Grafos')
         self.top2 = Topico.objects.create(disciplina=self.disc, nome='Ordenação')
@@ -1714,6 +1729,7 @@ class ProvaRevisaoViewTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_revisao', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='prof_revisao', password='secret_password')  # noqa: S106
         self.disc = Disciplina.objects.create(nome='Revisão Disciplina')
         self.top1 = Topico.objects.create(disciplina=self.disc, nome='Tópico Rev A')
@@ -1821,6 +1837,7 @@ class TrocaIndividualQuestaoTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_troca', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='prof_troca', password='secret_password')  # noqa: S106
 
         self.disc = Disciplina.objects.create(nome='Banco de Dados II')
@@ -2008,6 +2025,7 @@ class MontagemManualProvaTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_manual', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='prof_manual', password='secret_password')  # noqa: S106
 
         self.disc = Disciplina.objects.create(nome='Sistemas Distribuídos')
@@ -2346,6 +2364,7 @@ class ProvaVersaoModelAndGenerationTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_versoes', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='prof_versoes', password='secret_password')  # noqa: S106
 
         self.disc = Disciplina.objects.create(nome='Algoritmos e Estruturas de Dados')
@@ -2476,6 +2495,7 @@ class PresetEnadeTest(TestCase):
         self.disciplina = Disciplina.objects.create(nome='Análise e Desenvolvimento de Sistemas')
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='coord_enade', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
 
     def test_preset_initial_tem_estrutura_do_componente_especifico(self):
         """O preset propõe 30 questões (27 objetivas + 3 discursivas) em modalidade mista."""
@@ -2525,6 +2545,7 @@ class MistaSplitSelecaoTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='doc_mista', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Algoritmos e Programação')
         self.mascara = Mascara.objects.create(
             titulo='AV Mista',
@@ -2591,6 +2612,7 @@ class SimuladoEnadeAreasTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='coord_areas', password='secret_password')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
 
         # Acervo cobrindo 3 áreas do CE (Banco de Dados, Segurança e Desenvolvimento).
         acervo = {
@@ -2907,10 +2929,22 @@ class AtribuicaoVersaoServiceTest(TestCase):
         with self.assertRaises(ValueError):
             atribuir_versoes(self.aplicacao)
 
+    def test_bloqueia_redistribuicao_apos_gerar_folhas(self):
+        ana = self._matricular('Ana', 'A1')
+        self._matricular('Bruno', 'B1')
+        atribuir_versoes(self.aplicacao)
+        versao_ana = self.aplicacao.atribuicoes.get(aluno=ana).versao
+        FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=ana, prova_versao=versao_ana)
+
+        with self.assertRaisesMessage(ValueError, 'folhas-resposta desta aplicação já foram geradas'):
+            atribuir_versoes(self.aplicacao)
+        self.assertEqual(self.aplicacao.atribuicoes.get(aluno=ana).versao, versao_ana)
+
 
 class FolhaRespostaTest(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord_f', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disciplina = Disciplina.objects.create(nome='Disc Folha')
         self.topico = Topico.objects.create(disciplina=self.disciplina, nome='Top Folha')
         self.questao = Questao.objects.create(
@@ -2973,6 +3007,23 @@ class FolhaRespostaTest(TestCase):
         for f in folhas2:
             self.assertEqual(f.qr_token, tokens[f.aluno_id])
 
+    def test_regerar_folhas_nao_troca_versao_de_folha_corrigida(self):
+        folhas = {f.aluno_id: f for f in gerar_folhas_da_aplicacao(self.aplicacao)}
+        lida, gerada = folhas[self.ana.pk], folhas[self.bruno.pk]
+        lida.status = FolhaResposta.Status.LIDA
+        lida.save(update_fields=['status'])
+        versao_lida, versao_gerada = lida.prova_versao_id, gerada.prova_versao_id
+        # Atribuições trocadas por fora (ex.: edição no admin): cada aluno passa à versão do outro.
+        self.aplicacao.atribuicoes.filter(aluno=self.ana).update(versao_id=versao_gerada)
+        self.aplicacao.atribuicoes.filter(aluno=self.bruno).update(versao_id=versao_lida)
+
+        gerar_folhas_da_aplicacao(self.aplicacao)
+
+        lida.refresh_from_db()
+        gerada.refresh_from_db()
+        self.assertEqual(lida.prova_versao_id, versao_lida)  # corrigida: mantém a versão impressa
+        self.assertEqual(gerada.prova_versao_id, versao_lida)  # ainda não corrigida: acompanha a atribuição
+
     def test_render_folha_pdf_gera_bytes(self):
         folhas = gerar_folhas_da_aplicacao(self.aplicacao)
         pdf = render_folha_pdf(folhas[0])
@@ -3007,6 +3058,7 @@ def _imagem_png(nome='folha.png'):
 class UploadFolhasViewTest(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord_up', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.prova = Prova.objects.create(titulo='Prova Upload')
         self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
         self.aplicacao = ProvaAplicacao.objects.create(
@@ -3052,6 +3104,12 @@ class FolhaDigitalizadaModelTest(TestCase):
         self.assertEqual(d.status, FolhaDigitalizada.Status.PENDENTE)
 
 
+# Tokens fixos para os testes que leem o QR: a imagem gerada é sempre a mesma, então a
+# leitura é determinística (com uuid4 aleatório, cada execução testava um QR diferente).
+TOKEN_QR_OMR = uuid.UUID('3f0c0a52-6d0e-4b1a-9f55-0f8f6c1d2e3a')
+TOKEN_QR_CORRECAO = uuid.UUID('9b2d7e41-5c3a-4f86-8d17-2a6e4c9b0f58')
+
+
 def _canvas_omr(payload, px=PX_POR_MM):
     """Gera uma imagem sintética de folha: 4 marcadores ArUco + QR nas posições da geometria."""
     geo = build_layout(num_questoes=10)
@@ -3067,17 +3125,24 @@ def _canvas_omr(payload, px=PX_POR_MM):
         y0 = int(round(m.top * px))
         canvas[y0 : y0 + size_px, x0 : x0 + size_px] = marcador
 
-    qr = qrcode.QRCode(border=1, box_size=10)
-    qr.add_data(payload)
-    qr.make(fit=True)
-    pil = qr.make_image(fill_color='black', back_color='white').convert('RGB')
-    qr_arr = np.array(pil)[:, :, ::-1].copy()  # RGB -> BGR
+    _colar_qr_producao(canvas, geo, payload, px)
+    return canvas
+
+
+def _colar_qr_producao(canvas, geo, payload, px=PX_POR_MM):
+    """
+    Desenha no canvas o QR **exatamente como é impresso** na folha: gerado por
+    ``fiducial.gerar_qr_data_uri`` (margem 2, correção M) e escalado para a caixa do QR
+    da geometria. Antes, os helpers usavam um QR próprio com margem 1 — fora do que vai
+    para o papel —, o que tornava alguns testes intermitentes (~1–3% dos tokens).
+    """
+    png = base64.b64decode(gerar_qr_data_uri(payload).split(',', 1)[1])
+    qr_arr = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
     qsize = int(round(geo.qr.w * px))
     qr_arr = cv2.resize(qr_arr, (qsize, qsize), interpolation=cv2.INTER_NEAREST)
     qx = int(round(geo.qr.x * px))
     qy = int(round(geo.qr.y * px))
     canvas[qy : qy + qsize, qx : qx + qsize] = qr_arr
-    return canvas
 
 
 class OmrReaderTest(TestCase):
@@ -3096,9 +3161,9 @@ class OmrReaderTest(TestCase):
             prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
         )
         self.folha = FolhaResposta.objects.create(
-            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao, qr_token=TOKEN_QR_OMR
         )
-        self.payload = f'EXM1F|{self.folha.qr_token}'
+        self.payload = montar_payload_folha(self.folha.qr_token)
 
     def test_extrair_qr_token(self):
         self.assertEqual(extrair_qr_token(self.payload), str(self.folha.qr_token))
@@ -3158,16 +3223,7 @@ def _canvas_bolhas(pares, num_questoes=6, qr_payload=None, px=PX_POR_MM):
         canvas[y0 : y0 + size_px, x0 : x0 + size_px] = marcador
 
     if qr_payload:
-        qr = qrcode.QRCode(border=1, box_size=10)
-        qr.add_data(qr_payload)
-        qr.make(fit=True)
-        pil = qr.make_image(fill_color='black', back_color='white').convert('RGB')
-        qr_arr = np.array(pil)[:, :, ::-1].copy()
-        qsize = int(round(geo.qr.w * px))
-        qr_arr = cv2.resize(qr_arr, (qsize, qsize), interpolation=cv2.INTER_NEAREST)
-        qx = int(round(geo.qr.x * px))
-        qy = int(round(geo.qr.y * px))
-        canvas[qy : qy + qsize, qx : qx + qsize] = qr_arr
+        _colar_qr_producao(canvas, geo, qr_payload, px)
 
     alvo = set(pares)
     for b in geo.answer_bubbles:
@@ -3205,6 +3261,7 @@ class CorrecaoFolhaTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='corretor', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Disc Correcao')
         self.prova = Prova.objects.create(titulo='Prova Correcao', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -3225,7 +3282,7 @@ class CorrecaoFolhaTest(TestCase):
             prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
         )
         self.folha = FolhaResposta.objects.create(
-            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao, qr_token=TOKEN_QR_CORRECAO
         )
 
     def _digitalizacao(self, pares, qr_payload=None, folha=None, torta=False):
@@ -3280,7 +3337,7 @@ class CorrecaoFolhaTest(TestCase):
         self.assertEqual(dig.status, FolhaDigitalizada.Status.PROCESSADA)
 
     def test_identifica_folha_pelo_qr(self):
-        dig = self._digitalizacao({(1, 'B')}, qr_payload=f'EXM1F|{self.folha.qr_token}')
+        dig = self._digitalizacao({(1, 'B')}, qr_payload=montar_payload_folha(self.folha.qr_token))
         resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
         self.assertTrue(resultado.sucesso, resultado.mensagem)
         dig.refresh_from_db()
@@ -3327,6 +3384,68 @@ class CorrecaoFolhaTest(TestCase):
         self.assertEqual(resultado.acertos, 3)
         self.assertEqual(Desempenho.objects.filter(folha_resposta=self.folha, acertou=True).count(), 3)
 
+    def test_rejeita_folha_de_outra_aplicacao(self):
+        from desempenho.models import Desempenho
+
+        # Mesma prova/versão aplicada a outra turma: a folha lida não pertence a esta aplicação.
+        # (A folha é vinculada diretamente para exercitar a salvaguarda sem depender da leitura do QR.)
+        outra_aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova,
+            turma=Turma.objects.create(periodo='2026.2', nome='T Outra'),
+            data_aplicacao=date(2026, 11, 11),
+        )
+        folha_outra = FolhaResposta.objects.create(
+            prova_aplicacao=outra_aplicacao,
+            aluno=Aluno.objects.create(nome='Bia', matricula='B1'),
+            prova_versao=self.versao,
+        )
+        dig = self._digitalizacao({(1, 'B')}, folha=folha_outra)
+
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+
+        self.assertFalse(resultado.sucesso)
+        self.assertIn('outra aplicação', resultado.mensagem)
+        dig.refresh_from_db()
+        self.assertEqual(dig.status, FolhaDigitalizada.Status.ERRO)
+        self.assertFalse(Desempenho.objects.filter(folha_resposta=folha_outra).exists())
+
+    def test_rejeita_folha_anulada(self):
+        from desempenho.models import Desempenho
+
+        self.folha.status = FolhaResposta.Status.ANULADA
+        self.folha.save(update_fields=['status'])
+        dig = self._digitalizacao({(1, 'B')}, folha=self.folha)
+
+        resultado = corrigir_folha_digitalizada(dig, usuario=self.user)
+
+        self.assertFalse(resultado.sucesso)
+        self.assertIn('anulada', resultado.mensagem)
+        self.assertFalse(Desempenho.objects.filter(folha_resposta=self.folha).exists())
+
+    def test_reprocessamento_preserva_correcao_manual(self):
+        from desempenho.models import Desempenho
+
+        # 1ª leitura: tudo em branco → Q1 vai para a fila e é corrigida manualmente como B (correta).
+        corrigir_folha_digitalizada(self._digitalizacao(set(), folha=self.folha), usuario=self.user)
+        d1 = Desempenho.objects.get(folha_resposta=self.folha, questao=self.questoes[1])
+        corrigir_questao_manual(d1, 'B', usuario=self.user)
+
+        # Reenvio da mesma folha, agora com Q1 lida como C e Q2 como A (correta).
+        resultado = corrigir_folha_digitalizada(
+            self._digitalizacao({(1, 'C'), (2, 'A')}, folha=self.folha), usuario=self.user
+        )
+
+        self.assertTrue(resultado.sucesso, resultado.mensagem)
+        self.assertEqual(resultado.preservadas, 1)
+        self.assertEqual(resultado.acertos, 2)  # Q1 (manual) + Q2 (automática)
+        d1.refresh_from_db()
+        self.assertEqual(d1.tipo_correcao, Desempenho.TipoCorrecao.MANUAL)
+        self.assertEqual(d1.resposta_marcada, 'B')
+        self.assertTrue(d1.acertou)
+        d2 = Desempenho.objects.get(folha_resposta=self.folha, questao=self.questoes[2])
+        self.assertEqual(d2.tipo_correcao, Desempenho.TipoCorrecao.AUTOMATICA)
+        self.assertTrue(d2.acertou)
+
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class RevisaoManualTest(TestCase):
@@ -3334,6 +3453,7 @@ class RevisaoManualTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='rev', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Disc Rev')
         self.prova = Prova.objects.create(titulo='Prova Rev', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -3430,6 +3550,7 @@ class LancamentoManualTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='prof', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Disc Lanc')
         self.prova = Prova.objects.create(titulo='Prova Lanc', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -3563,3 +3684,408 @@ class LancamentoManualTest(TestCase):
         registro = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
         self.assertEqual(registro.nota, Decimal('9'))
         self.assertTrue(registro.acertou)
+
+
+class TravaProvaAplicadaTest(TestCase):
+    """Prova com versões distribuídas a alunos fica travada; antes disso, a troca sincroniza os cadernos."""
+
+    def setUp(self):
+        from provas.services.snapshot_builder import construir_snapshot_questao
+        from provas.services.version_generator import gerar_versoes_prova
+
+        self.user = get_user_model().objects.create_user(username='prof_trava', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.client.login(username='prof_trava', password='segredo123')  # noqa: S106
+
+        self.disc = Disciplina.objects.create(nome='Disc Trava')
+        self.topico = Topico.objects.create(disciplina=self.disc, nome='Tópico Trava')
+        self.questoes = [self._questao(f'Q{i}') for i in range(1, 4)]
+        self.prova = Prova.objects.create(titulo='Prova Trava', disciplina=self.disc, autor=self.user)
+        for ordem, questao in enumerate(self.questoes, start=1):
+            ProvaQuestao.objects.create(
+                prova=self.prova,
+                questao=questao,
+                numero=ordem,
+                ordem=ordem,
+                snapshot_questao=construir_snapshot_questao(questao),
+            )
+        self.versoes = gerar_versoes_prova(self.prova, quantidade_versoes=2)
+        self.item = self.prova.itens.get(ordem=1)
+        self.nova = self._questao('NOVA', correta='C')
+
+        self.aluno = Aluno.objects.create(nome='Ana', matricula='A1')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova,
+            turma=Turma.objects.create(periodo='2026.2', nome='T Trava'),
+            data_aplicacao=date(2026, 11, 10),
+        )
+
+    def _questao(self, enunciado, correta='A'):
+        questao = Questao.objects.create(
+            disciplina=self.disc, topico=self.topico, tipo='OBJ', dificuldade='F', enunciado=enunciado
+        )
+        for letra in 'ABCDE':
+            Alternativa.objects.create(
+                questao=questao, letra=letra, texto=f'{enunciado}-{letra}', correta=(letra == correta)
+            )
+        return questao
+
+    def _distribuir_por_folha(self):
+        return FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versoes[0]
+        )
+
+    def test_nao_travada_sem_folhas_nem_atribuicoes(self):
+        # Ter uma aplicação cadastrada não trava: nada foi distribuído a alunos ainda.
+        self.assertFalse(self.prova.versoes_distribuidas)
+
+    def test_travada_por_atribuicao_ou_folha(self):
+        AtribuicaoVersao.objects.create(aplicacao=self.aplicacao, aluno=self.aluno, versao=self.versoes[1])
+        self.assertTrue(self.prova.versoes_distribuidas)
+        AtribuicaoVersao.objects.all().delete()
+        self._distribuir_por_folha()
+        self.assertTrue(self.prova.versoes_distribuidas)
+
+    def test_regerar_versoes_bloqueado_apos_distribuicao(self):
+        from provas.services.version_generator import VersoesDistribuidasError, gerar_versoes_prova
+
+        self._distribuir_por_folha()
+        pks_antes = set(self.prova.versoes.values_list('pk', flat=True))
+
+        with self.assertRaises(VersoesDistribuidasError):
+            gerar_versoes_prova(self.prova, quantidade_versoes=3)
+        self.assertEqual(set(self.prova.versoes.values_list('pk', flat=True)), pks_antes)
+
+    def test_view_regerar_bloqueado_redireciona_com_mensagem(self):
+        self._distribuir_por_folha()
+        pks_antes = set(self.prova.versoes.values_list('pk', flat=True))
+
+        resp = self.client.post(
+            reverse('provas:prova_gerar_versoes', args=[self.prova.pk]), {'quantidade_versoes': 3}, follow=True
+        )
+
+        self.assertRedirects(resp, reverse('provas:prova_revisao', args=[self.prova.pk]))
+        self.assertContains(resp, 'Não foi possível regerar os cadernos')
+        self.assertEqual(set(self.prova.versoes.values_list('pk', flat=True)), pks_antes)
+
+    def test_troca_bloqueada_apos_distribuicao(self):
+        from provas.services.question_replacer import SubstituicaoQuestaoError, substituir_questao_prova
+
+        self._distribuir_por_folha()
+        with self.assertRaises(SubstituicaoQuestaoError):
+            substituir_questao_prova(self.item, self.nova)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.questao, self.questoes[0])
+
+    def test_troca_antes_da_distribuicao_sincroniza_cadernos(self):
+        from provas.services.question_replacer import substituir_questao_prova
+
+        substituir_questao_prova(self.item, self.nova)
+
+        textos_nova = {f'NOVA-{letra}' for letra in 'ABCDE'}
+        for versao in self.versoes:
+            item_versao = versao.itens.get(prova_questao=self.item)
+            alternativas = item_versao.alternativas_embaralhadas
+            self.assertEqual({a['texto'] for a in alternativas}, textos_nova)
+            self.assertEqual([a['letra'] for a in alternativas], list('ABCDE'))
+            corretas = [a for a in alternativas if a['correta']]
+            self.assertEqual(len(corretas), 1)
+            self.assertEqual(corretas[0]['texto'], 'NOVA-C')
+        # A versão A (1ª) não embaralha: gabarito igual ao da questão original.
+        item_a = self.versoes[0].itens.get(prova_questao=self.item)
+        self.assertEqual([a['letra_original'] for a in item_a.alternativas_embaralhadas], list('ABCDE'))
+
+    def test_revisao_exibe_trava_e_desabilita_troca(self):
+        self._distribuir_por_folha()
+        resp = self.client.get(reverse('provas:prova_revisao', args=[self.prova.pk]))
+        self.assertContains(resp, 'versões travadas')
+        self.assertContains(resp, 'Troca bloqueada')
+        self.assertNotContains(resp, reverse('provas:prova_gerar_versoes', args=[self.prova.pk]))
+
+
+class ControleAcessoPerfilProvasTest(TestCase):
+    """Views de provas/correção exigem perfil Docente ou Coordenador (não basta estar logado)."""
+
+    def setUp(self):
+        self.prova = Prova.objects.create(titulo='Prova Acesso')
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova,
+            turma=Turma.objects.create(periodo='2026.2', nome='T Acesso'),
+            data_aplicacao=date(2026, 11, 10),
+        )
+        self.sem_grupo = get_user_model().objects.create_user(username='sem_grupo', password='segredo123')  # noqa: S106
+        self.coordenador = get_user_model().objects.create_user(username='coord_ac', password='segredo123')  # noqa: S106
+        self.coordenador.groups.add(Group.objects.get(name='Coordenador'))
+
+    def _urls(self):
+        return [
+            reverse('provas:prova_list'),
+            reverse('provas:mascara_list'),
+            reverse('provas:prova_gabarito_pdf', args=[self.prova.pk]),
+            reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk]),
+            reverse('provas:aplicacao_revisao_manual', args=[self.aplicacao.pk]),
+            reverse('provas:pdf_teste'),
+            reverse('provas:folha_resposta_demo'),
+            reverse('provas:aplicacao_list'),
+            reverse('provas:aplicacao_detail', args=[self.aplicacao.pk]),
+            reverse('provas:aplicacao_notas', args=[self.aplicacao.pk]),
+        ]
+
+    def test_usuario_sem_grupo_recebe_403(self):
+        self.client.force_login(self.sem_grupo)
+        for url in self._urls():
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_anonimo_redirecionado_ao_login_inclusive_demo(self):
+        for url in (reverse('provas:prova_list'), reverse('provas:folha_resposta_demo')):
+            with self.subTest(url=url):
+                resp = self.client.get(url)
+                self.assertEqual(resp.status_code, 302)
+                self.assertIn(reverse('login'), resp['Location'])
+
+    def test_coordenador_acessa(self):
+        self.client.force_login(self.coordenador)
+        for url in (reverse('provas:prova_list'), reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk])):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+
+class AplicacaoTelasTest(TestCase):
+    """Fluxo de aplicações fora do admin: listagem, cadastro, painel e distribuição de versões."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='doc_aplic', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.client.force_login(self.user)
+
+        self.prova = Prova.objects.create(titulo='Prova Aplicável')
+        self.versoes = [
+            ProvaVersao.objects.create(prova=self.prova, identificador=ident, numero_versao=i)
+            for i, ident in enumerate(['A', 'B'], start=1)
+        ]
+        self.prova_sem_versao = Prova.objects.create(titulo='Prova Sem Versão')
+        self.turma = Turma.objects.create(periodo='2026.2', nome='T Aplic')
+        self.alunos = []
+        for nome, matricula in (('Ana', 'A1'), ('Bruno', 'B1')):
+            aluno = Aluno.objects.create(nome=nome, matricula=matricula)
+            Matricula.objects.create(aluno=aluno, turma=self.turma)
+            self.alunos.append(aluno)
+
+    def _aplicacao(self):
+        return ProvaAplicacao.objects.create(prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10))
+
+    def _dados(self, **extra):
+        dados = {
+            'prova': self.prova.pk,
+            'turma': self.turma.pk,
+            'data_aplicacao': '2026-11-20',
+            'nota_corte': '6',
+            'observacao': '',
+        }
+        dados.update(extra)
+        return dados
+
+    def test_lista_exibe_aplicacoes_e_ignora_filtro_invalido(self):
+        aplicacao = self._aplicacao()
+        resp = self.client.get(reverse('provas:aplicacao_list'), {'turma': 'abc'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, reverse('provas:aplicacao_detail', args=[aplicacao.pk]))
+
+    def test_form_pre_seleciona_prova_e_lista_so_provas_com_versoes(self):
+        resp = self.client.get(reverse('provas:aplicacao_create'), {'prova': self.prova.pk})
+        self.assertEqual(resp.status_code, 200)
+        form = resp.context['form']
+        self.assertEqual(str(form.initial['prova']), str(self.prova.pk))
+        self.assertIn(self.prova, form.fields['prova'].queryset)
+        self.assertNotIn(self.prova_sem_versao, form.fields['prova'].queryset)
+
+    def test_criar_aplicacao_redireciona_para_o_painel(self):
+        resp = self.client.post(reverse('provas:aplicacao_create'), self._dados())
+        aplicacao = ProvaAplicacao.objects.get(prova=self.prova, turma=self.turma)
+        self.assertRedirects(resp, reverse('provas:aplicacao_detail', args=[aplicacao.pk]))
+        self.assertEqual(aplicacao.data_aplicacao, date(2026, 11, 20))
+
+    def test_criar_rejeita_prova_sem_versoes_e_duplicada(self):
+        resp = self.client.post(reverse('provas:aplicacao_create'), self._dados(prova=self.prova_sem_versao.pk))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['form'].errors.get('prova'))
+
+        self._aplicacao()
+        resp = self.client.post(reverse('provas:aplicacao_create'), self._dados(data_aplicacao='2026-11-10'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['form'].non_field_errors())
+        self.assertEqual(ProvaAplicacao.objects.count(), 1)
+
+    def test_painel_mostra_etapas_e_distribui_versoes(self):
+        aplicacao = self._aplicacao()
+        url_painel = reverse('provas:aplicacao_detail', args=[aplicacao.pk])
+        resp = self.client.get(url_painel)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['matriculados'], 2)
+        for rota in (
+            'aplicacao_atribuir_versoes',
+            'aplicacao_folhas_zip',
+            'aplicacao_upload_folhas',
+            'aplicacao_notas',
+        ):
+            self.assertContains(resp, reverse(f'provas:{rota}', args=[aplicacao.pk]))
+
+        resp = self.client.post(reverse('provas:aplicacao_atribuir_versoes', args=[aplicacao.pk]), follow=True)
+        self.assertRedirects(resp, url_painel)
+        self.assertEqual(aplicacao.atribuicoes.count(), 2)
+        self.assertContains(resp, '2 aluno(s) receberam versão')
+
+    def test_redistribuicao_bloqueada_apos_folhas(self):
+        aplicacao = self._aplicacao()
+        atribuir_versoes(aplicacao)
+        FolhaResposta.objects.create(prova_aplicacao=aplicacao, aluno=self.alunos[0], prova_versao=self.versoes[0])
+
+        resp = self.client.get(reverse('provas:aplicacao_detail', args=[aplicacao.pk]))
+        self.assertTrue(resp.context['redistribuicao_bloqueada'])
+        self.assertNotContains(resp, reverse('provas:aplicacao_atribuir_versoes', args=[aplicacao.pk]))
+
+        resp = self.client.post(reverse('provas:aplicacao_atribuir_versoes', args=[aplicacao.pk]), follow=True)
+        self.assertContains(resp, 'Não foi possível distribuir as versões')
+
+    def test_menu_e_revisao_da_prova_levam_as_aplicacoes(self):
+        resp = self.client.get(reverse('provas:prova_revisao', args=[self.prova.pk]))
+        self.assertContains(resp, f'{reverse("provas:aplicacao_create")}?prova={self.prova.pk}')
+        self.assertContains(resp, f'href="{reverse("provas:aplicacao_list")}"')
+
+
+class NotasAplicacaoViewTest(TestCase):
+    """Página de notas da turma e exportação XLSX/CSV (com proteção contra injeção de fórmula)."""
+
+    def setUp(self):
+        from desempenho.models import Desempenho
+
+        self.user = get_user_model().objects.create_user(username='doc_notas', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.client.force_login(self.user)
+
+        disc = Disciplina.objects.create(nome='Disc Export')
+        self.prova = Prova.objects.create(titulo='Prova Export', disciplina=disc)
+        versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        questao = Questao.objects.create(disciplina=disc, tipo='OBJ', dificuldade='F', enunciado='Q1')
+        pq = ProvaQuestao.objects.create(
+            prova=self.prova, questao=questao, numero=1, ordem=1, snapshot_questao={'tipo': 'OBJ'}
+        )
+        ProvaVersaoItem.objects.create(versao=versao, prova_questao=pq, numero=1, ordem=1)
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova,
+            turma=Turma.objects.create(periodo='2026.2', nome='T Export'),
+            data_aplicacao=date(2026, 11, 10),
+        )
+        # Nome malicioso: começaria uma fórmula numa planilha.
+        aluno = Aluno.objects.create(nome='=HYPERLINK("http://x")', matricula='M1')
+        folha = FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=aluno, prova_versao=versao)
+        Desempenho.objects.create(folha_resposta=folha, questao=questao, acertou=True)
+        self.url = reverse('provas:aplicacao_notas', args=[self.aplicacao.pk])
+
+    def test_pagina_de_notas(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['linhas'][0]['nota'], Decimal('10.00'))
+        self.assertContains(resp, 'Completa')
+
+    def test_exporta_xlsx_com_texto_seguro(self):
+        from openpyxl import load_workbook
+
+        resp = self.client.get(self.url, {'formato': 'xlsx'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('spreadsheetml', resp['Content-Type'])
+        self.assertIn('.xlsx', resp['Content-Disposition'])
+
+        planilha = load_workbook(BytesIO(resp.content)).active
+        self.assertEqual(planilha['A1'].value, 'Matrícula')
+        self.assertEqual(planilha['J1'].value, 'Nota final (0–10)')
+        self.assertEqual(planilha['A2'].value, 'M1')
+        self.assertEqual(planilha['B2'].data_type, 's')  # texto, não fórmula
+        self.assertEqual(planilha['B2'].value, '=HYPERLINK("http://x")')
+        self.assertEqual(float(planilha['J2'].value), 10.0)
+
+    def test_exporta_csv_pt_br_com_texto_seguro(self):
+        resp = self.client.get(self.url, {'formato': 'csv'})
+        self.assertEqual(resp.status_code, 200)
+        conteudo = resp.content.decode('utf-8')
+        self.assertTrue(conteudo.startswith('\N{BYTE ORDER MARK}'))
+        linhas = conteudo.lstrip('\N{BYTE ORDER MARK}').splitlines()
+        self.assertTrue(linhas[0].startswith('Matrícula;Aluno;'))
+        self.assertIn(';"\'=HYPERLINK(""http://x"")";', linhas[1])  # prefixo ' neutraliza a fórmula
+        self.assertIn(';10,00;', linhas[1])  # decimal com vírgula
+
+
+class DiagnosticarOmrCommandTest(TestCase):
+    """Comando de calibração do teste de campo: diagnostica QR, marcadores e bolhas sem gravar nada."""
+
+    def setUp(self):
+        disc = Disciplina.objects.create(nome='Disc Diag')
+        prova = Prova.objects.create(titulo='Prova Diag', disciplina=disc)
+        versao = ProvaVersao.objects.create(prova=prova, identificador='A', numero_versao=1)
+        for ordem in range(1, 4):
+            questao = Questao.objects.create(disciplina=disc, tipo='OBJ', dificuldade='F', enunciado=f'Q{ordem}')
+            pq = ProvaQuestao.objects.create(
+                prova=prova, questao=questao, numero=ordem, ordem=ordem, snapshot_questao={'tipo': 'OBJ'}
+            )
+            ProvaVersaoItem.objects.create(versao=versao, prova_questao=pq, numero=ordem, ordem=ordem)
+        aplicacao = ProvaAplicacao.objects.create(
+            prova=prova, turma=Turma.objects.create(periodo='2026.2', nome='T Diag'), data_aplicacao=date(2026, 11, 10)
+        )
+        self.folha = FolhaResposta.objects.create(
+            prova_aplicacao=aplicacao,
+            aluno=Aluno.objects.create(nome='Ana Diag', matricula='D1'),
+            prova_versao=versao,
+            qr_token=TOKEN_QR_CORRECAO,
+        )
+        self.pasta = Path(tempfile.mkdtemp())
+
+    def _imagem(self, nome, pares, com_qr=True):
+        payload = montar_payload_folha(self.folha.qr_token) if com_qr else None
+        canvas, _ = _canvas_bolhas(pares, num_questoes=3, qr_payload=payload)
+        caminho = self.pasta / nome
+        cv2.imwrite(str(caminho), canvas)
+        return str(caminho)
+
+    def _executar(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        saida = StringIO()
+        call_command('diagnosticar_omr', *args, stdout=saida)
+        return saida.getvalue()
+
+    def test_folha_identificada_pelo_qr_mostra_bolhas_sem_gravar(self):
+        from desempenho.models import Desempenho
+
+        saida = self._executar(self._imagem('folha.png', {(1, 'B'), (2, 'A'), (2, 'C')}))
+
+        self.assertIn('QR: ok — Ana Diag (versão A)', saida)
+        self.assertRegex(saida, r'Q01 .*→ ok \(B\)')
+        self.assertRegex(saida, r'Q02 .*→ ambigua')
+        self.assertRegex(saida, r'Q03 .*→ branco')
+        self.assertIn('folha identificada pelo QR em 1', saida)
+        self.assertFalse(Desempenho.objects.exists())
+        self.assertFalse(FolhaDigitalizada.objects.exists())
+
+    def test_sem_qr_usa_questoes_e_salva_imagem_endireitada(self):
+        saida_dir = self.pasta / 'canonicas'
+        saida = self._executar(
+            self._imagem('sem_qr.png', {(3, 'E')}, com_qr=False),
+            '--questoes',
+            '3',
+            '--salvar-canonica',
+            str(saida_dir),
+        )
+
+        self.assertIn('QR: não lido', saida)
+        self.assertRegex(saida, r'Q03 .*→ ok \(E\)')
+        self.assertTrue((saida_dir / 'sem_qr_canonica.png').is_file())
+
+    def test_imagem_ilegivel_nao_interrompe(self):
+        invalida = self.pasta / 'nao_e_imagem.jpg'
+        invalida.write_text('texto', encoding='utf-8')
+        saida = self._executar(str(invalida), self._imagem('ok.png', {(1, 'A')}))
+        self.assertIn('Imagem ilegível', saida)
+        self.assertIn('2 imagem(ns)', saida)

@@ -1,0 +1,88 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Aplicações — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-clipboard2-check-fill"></i> Correção • Aplicações de prova</span>
+    </div>
+    <h1 class="mb-1">Aplicações</h1>
+    <p class="text-secondary" style="max-width: 660px;">
+      Cada aplicação liga uma prova a uma turma numa data. A partir dela você distribui as versões,
+      gera as folhas-resposta, envia as folhas escaneadas, revisa a correção e exporta as notas.
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'provas:aplicacao_create' %}" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-plus-circle-fill"></i> Nova aplicação
+    </a>
+  </div>
+</div>
+
+<div class="card-surface p-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-3">
+    <input type="text" name="q" value="{{ busca }}" class="form-input flex-1" style="min-width: 220px;"
+           placeholder="Buscar por prova, turma ou período…" aria-label="Buscar aplicações">
+    <select name="turma" class="form-select" onchange="this.form.submit()" aria-label="Filtrar por turma">
+      <option value="">Todas as turmas</option>
+      {% for turma in turmas %}
+      <option value="{{ turma.pk }}" {% if turma_selecionada == turma.pk|stringformat:"s" %}selected{% endif %}>{{ turma }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
+    {% if busca or turma_selecionada %}
+    <a href="{% url 'provas:aplicacao_list' %}" class="btn btn-outline"><i class="bi bi-x-lg"></i> Limpar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card-surface">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th style="width: 120px;">Data</th>
+          <th>Prova</th>
+          <th style="width: 220px;">Turma</th>
+          <th style="width: 190px;">Folhas</th>
+          <th style="width: 110px;" class="text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for aplicacao in aplicacoes %}
+        <tr>
+          <td><span class="font-bold font-mono">{{ aplicacao.data_aplicacao|date:"d/m/Y" }}</span></td>
+          <td><a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="font-bold text-main">{{ aplicacao.prova.titulo }}</a></td>
+          <td>{{ aplicacao.turma }}</td>
+          <td class="small text-muted">
+            {% if aplicacao.total_folhas %}{{ aplicacao.folhas_lidas }} lida(s) de {{ aplicacao.total_folhas }}{% else %}Nenhuma folha gerada{% endif %}
+          </td>
+          <td class="text-right">
+            <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn-table-action" title="Abrir painel da aplicação" aria-label="Abrir painel da aplicação {{ aplicacao }}">
+              <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-clipboard2-x"></i></div>
+            {% if total %}
+            <h4 class="font-bold text-main">Nenhuma aplicação encontrada</h4>
+            <p class="text-muted mb-0">Ajuste a busca ou o filtro de turma.</p>
+            {% else %}
+            <h4 class="font-bold text-main">Nenhuma aplicação cadastrada</h4>
+            <p class="text-muted mb-3">Cadastre a primeira aplicação de uma prova (com versões geradas) a uma turma.</p>
+            <a href="{% url 'provas:aplicacao_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Nova aplicação</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "banco_questoes/includes/pagination.html" %}
+</div>
+{% endblock %}

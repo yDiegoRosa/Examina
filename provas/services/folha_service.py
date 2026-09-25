@@ -45,7 +45,8 @@ def gerar_folhas_da_aplicacao(aplicacao: ProvaAplicacao) -> list[FolhaResposta]:
 
     A versão de cada folha vem da ``AtribuicaoVersao``. Se ainda não houver atribuições,
     executa o round-robin automaticamente. O ``qr_token`` de folhas já existentes é
-    preservado; apenas a versão é atualizada caso a atribuição tenha mudado.
+    preservado; a versão só é atualizada (caso a atribuição tenha mudado) enquanto a
+    folha não tiver sido corrigida — folha lida ou com notas mantém a versão original.
     """
     from provas.models import FolhaResposta
     from provas.services.version_assigner import atribuir_versoes
@@ -61,7 +62,12 @@ def gerar_folhas_da_aplicacao(aplicacao: ProvaAplicacao) -> list[FolhaResposta]:
             aluno=atrib.aluno,
             defaults={'prova_versao': atrib.versao},
         )
-        if not criada and folha.prova_versao_id != atrib.versao_id:
+        if (
+            not criada
+            and folha.prova_versao_id != atrib.versao_id
+            and folha.status == FolhaResposta.Status.GERADA
+            and not folha.desempenhos.exists()
+        ):
             folha.prova_versao = atrib.versao
             folha.save(update_fields=['prova_versao', 'atualizado_em'])
         folhas.append(folha)

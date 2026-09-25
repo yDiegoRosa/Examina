@@ -268,3 +268,37 @@ class TestQuestaoToggleAtivo:
 
         questao_objetiva.refresh_from_db()
         assert questao_objetiva.ativo is True  # voltou ao estado original
+
+
+# ---------------------------------------------------------------------------
+# Permissões dos grupos após as migrations (banco novo)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestPermissoesDosGruposAposMigrations:
+    """
+    O banco de teste nasce das migrations — o mesmo caminho de uma instalação limpa.
+    A 0002 sozinha deixava os grupos sem permissões (Permission só existe após o
+    post_migrate); a 0008 reaplica o mapeamento.
+    """
+
+    def test_docente_tem_permissoes_do_banco_de_questoes(self):
+        from django.contrib.auth.models import Group
+
+        codenames = set(Group.objects.get(name='Docente').permissions.values_list('codename', flat=True))
+        assert {'add_questao', 'change_questao', 'delete_questao', 'view_questao', 'add_topico'} <= codenames
+
+    def test_coordenador_tem_permissoes_sem_delete(self):
+        from django.contrib.auth.models import Group
+
+        codenames = set(Group.objects.get(name='Coordenador').permissions.values_list('codename', flat=True))
+        assert {'add_questao', 'change_questao', 'view_questao', 'view_disciplina'} <= codenames
+        assert 'delete_questao' not in codenames
+
+    def test_membro_do_grupo_herda_permissao_do_menu_importar(self, django_user_model):
+        from django.contrib.auth.models import Group
+
+        user = django_user_model.objects.create_user(username='doc_menu', password='testpass123')  # noqa: S106
+        user.groups.add(Group.objects.get(name='Docente'))
+        assert user.has_perm('banco_questoes.add_questao')

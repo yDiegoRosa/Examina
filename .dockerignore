@@ -1,0 +1,28 @@
+# Segredos e ambiente local — nunca entram na imagem
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Dados gerados em execução (ficam em volumes, não na imagem)
+media/
+logs/
+backups/
+staticfiles/
+db.sqlite3
+
+# Controle de versão, caches e ferramentas
+.git/
+.github/
+.claude/
+.vscode/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

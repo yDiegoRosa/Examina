@@ -27,10 +27,18 @@ def atribuir_versoes(aplicacao: ProvaAplicacao) -> list[AtribuicaoVersao]:
 
     :param aplicacao: instância de ``ProvaAplicacao``.
     :return: lista de ``AtribuicaoVersao`` criadas, na ordem da sequência.
-    :raises ValueError: se a prova não possuir versões geradas.
+    :raises ValueError: se a prova não possuir versões geradas ou se as folhas-resposta
+        da aplicação já foram geradas (redistribuir trocaria o caderno de quem já
+        recebeu a folha — e o gabarito usado na correção).
     """
     from academico.models import Matricula
     from provas.models import AtribuicaoVersao
+
+    if aplicacao.folhas.exists():
+        raise ValueError(
+            'As folhas-resposta desta aplicação já foram geradas: redistribuir as versões trocaria o '
+            'caderno (e o gabarito) de alunos que já receberam a folha.'
+        )
 
     versoes = list(aplicacao.prova.versoes.order_by('numero_versao'))
     if not versoes:

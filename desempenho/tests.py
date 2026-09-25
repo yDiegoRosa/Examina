@@ -1,19 +1,23 @@
 """Testes do model Desempenho (Módulo 4)."""
 
 from datetime import date
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
 from academico.models import Aluno, Turma
 from banco_questoes.models import Disciplina, Questao, Topico
-from provas.models import FolhaResposta, Prova, ProvaAplicacao, ProvaVersao
+from provas.models import FolhaResposta, Prova, ProvaAplicacao, ProvaQuestao, ProvaVersao, ProvaVersaoItem
 
 from .models import Desempenho
 from .services import (
+    escala_da_prova,
     indice_facilidade_por_questao,
+    notas_da_aplicacao,
     questoes_fora_do_esperado,
     taxa_erro_por_dificuldade,
     taxa_erro_por_topico,
@@ -163,6 +167,7 @@ class DashboardFragilidadesViewTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Disc Dash')
         self.topico = Topico.objects.create(disciplina=self.disc, nome='Redes')
         self.questao = Questao.objects.create(
@@ -183,6 +188,13 @@ class DashboardFragilidadesViewTest(TestCase):
     def test_login_obrigatorio(self):
         resp = self.client.get(reverse('desempenho:dashboard'))
         self.assertEqual(resp.status_code, 302)
+
+    def test_usuario_sem_grupo_recebe_403(self):
+        get_user_model().objects.create_user(username='sem_grupo', password='segredo123')  # noqa: S106
+        self.client.login(username='sem_grupo', password='segredo123')  # noqa: S106
+        for url in (reverse('desempenho:dashboard'), reverse('desempenho:psicometria')):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
 
     def test_renderiza_com_dados(self):
         self.client.login(username='coord', password='segredo123')  # noqa: S106
@@ -209,6 +221,7 @@ class PsicometriaTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord2', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.disc = Disciplina.objects.create(nome='Disc Psi')
         self.prova = Prova.objects.create(titulo='Prova Psi', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -396,3 +409,100 @@ class AgregacoesCalculoTest(TestCase):
         self.assertEqual(fora[q_alto.id]['motivo'], 'muito_facil')  # inclusivo em 0.90
         self.assertNotIn(q_ok_baixo.id, fora)
         self.assertNotIn(q_ok_alto.id, fora)
+
+
+class NotasDaAplicacaoServiceTest(TestCase):
+    """Nota final proporcional: Σ(peso × fração)/Σpeso × escala; pendentes contam zero (incompleta)."""
+
+    def setUp(self):
+        self.disc = Disciplina.objects.create(nome='Disc Notas')
+        self.prova = Prova.objects.create(titulo='Prova Notas', disciplina=self.disc)
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        # Pesos: OBJ1 = 2, OBJ2 = 1, DIS = 1  → pontos possíveis = 4
+        self.obj1 = self._item('OBJ', Decimal('2'), ordem=1)
+        self.obj2 = self._item('OBJ', Decimal('1'), ordem=2)
+        self.dis = self._item('DIS', Decimal('1'), ordem=3)
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova,
+            turma=Turma.objects.create(periodo='2026.2', nome='T Notas'),
+            data_aplicacao=date(2026, 11, 10),
+        )
+
+    def _item(self, tipo, peso, ordem):
+        questao = Questao.objects.create(disciplina=self.disc, tipo=tipo, dificuldade='M', enunciado=f'Q{ordem}')
+        pq = ProvaQuestao.objects.create(
+            prova=self.prova,
+            questao=questao,
+            numero=ordem,
+            ordem=ordem,
+            pontuacao=peso,
+            snapshot_questao={'tipo': tipo},
+        )
+        ProvaVersaoItem.objects.create(versao=self.versao, prova_questao=pq, numero=ordem, ordem=ordem)
+        return questao
+
+    def _folha(self, nome, matricula, status=FolhaResposta.Status.GERADA):
+        return FolhaResposta.objects.create(
+            prova_aplicacao=self.aplicacao,
+            aluno=Aluno.objects.create(nome=nome, matricula=matricula),
+            prova_versao=self.versao,
+            status=status,
+        )
+
+    def test_nota_proporcional_completa(self):
+        folha = self._folha('Ana', 'A1')
+        Desempenho.objects.create(folha_resposta=folha, questao=self.obj1, acertou=True)  # +2
+        Desempenho.objects.create(folha_resposta=folha, questao=self.obj2, acertou=False)  # +0
+        Desempenho.objects.create(folha_resposta=folha, questao=self.dis, nota=Decimal('5'), acertou=False)  # +0,5
+
+        linha = notas_da_aplicacao(self.aplicacao)['linhas'][0]
+
+        self.assertEqual(linha['pontos_obtidos'], Decimal('2.50'))
+        self.assertEqual(linha['pontos_possiveis'], Decimal('4.00'))
+        self.assertEqual(linha['nota'], Decimal('6.25'))  # 2,5/4 × 10
+        self.assertEqual(linha['situacao'], 'completa')
+        self.assertEqual((linha['acertos_objetivas'], linha['total_objetivas']), (1, 2))
+        self.assertEqual((linha['discursivas_corrigidas'], linha['total_discursivas']), (1, 1))
+
+    def test_pendentes_contam_zero_e_marcam_incompleta(self):
+        folha = self._folha('Bia', 'B1')
+        Desempenho.objects.create(folha_resposta=folha, questao=self.obj1, acertou=True)
+        Desempenho.objects.create(folha_resposta=folha, questao=self.obj2, acertou=None)  # não corrigida
+
+        linha = notas_da_aplicacao(self.aplicacao)['linhas'][0]
+
+        self.assertEqual(linha['pendentes'], 2)  # OBJ2 sem acertou + DIS sem registro
+        self.assertEqual(linha['nota'], Decimal('5.00'))  # 2/4 × 10
+        self.assertEqual(linha['situacao'], 'incompleta')
+
+    def test_folha_anulada_sem_nota_e_media_so_de_completas(self):
+        completa = self._folha('Ana', 'A1')
+        for questao in (self.obj1, self.obj2):
+            Desempenho.objects.create(folha_resposta=completa, questao=questao, acertou=True)
+        Desempenho.objects.create(folha_resposta=completa, questao=self.dis, nota=Decimal('10'))
+        self._folha('Caio', 'C1', status=FolhaResposta.Status.ANULADA)
+        self._folha('Duda', 'D1')  # nada corrigido → incompleta
+
+        boletim = notas_da_aplicacao(self.aplicacao)
+        por_aluno = {linha['aluno']: linha for linha in boletim['linhas']}
+
+        self.assertEqual(por_aluno['Ana']['nota'], Decimal('10.00'))
+        self.assertIsNone(por_aluno['Caio']['nota'])
+        self.assertEqual(por_aluno['Caio']['situacao'], 'anulada')
+        self.assertEqual(por_aluno['Duda']['nota'], Decimal('0.00'))
+        self.assertEqual(boletim['media'], Decimal('10.00'))  # só a completa entra
+        self.assertEqual((boletim['total_completas'], boletim['total_incompletas']), (1, 1))
+
+    def test_escala_vem_do_snapshot_da_mascara(self):
+        self.assertEqual(escala_da_prova(self.prova), Decimal('10'))  # sem máscara/snapshot
+        self.prova.snapshot_mascara = {'valor_total': '8.00'}
+        self.prova.save(update_fields=['snapshot_mascara'])
+        folha = self._folha('Ana', 'A1')
+        Desempenho.objects.create(folha_resposta=folha, questao=self.obj1, acertou=True)
+        Desempenho.objects.create(folha_resposta=folha, questao=self.obj2, acertou=True)
+        Desempenho.objects.create(folha_resposta=folha, questao=self.dis, nota=Decimal('0'))
+
+        boletim = notas_da_aplicacao(self.aplicacao)
+
+        self.assertEqual(boletim['escala'], Decimal('8.00'))
+        self.assertEqual(boletim['linhas'][0]['nota'], Decimal('6.00'))  # 3/4 × 8

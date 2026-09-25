@@ -1,6 +1,7 @@
 """Testes do app acadêmico: models (Aluno/Turma/Matrícula) e CRUDs de Aluno/Turma."""
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -193,12 +194,20 @@ class MatriculaModelTest(TestCase):
 class AlunoCrudViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='coord', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='coord', password='segredo123')  # noqa: S106
 
     def test_login_obrigatorio(self):
         self.client.logout()
         resp = self.client.get(reverse('academico:aluno_list'))
         self.assertEqual(resp.status_code, 302)
+
+    def test_usuario_sem_grupo_recebe_403(self):
+        User.objects.create_user(username='sem_grupo', password='segredo123')  # noqa: S106
+        self.client.login(username='sem_grupo', password='segredo123')  # noqa: S106
+        for url in (reverse('academico:aluno_list'), reverse('academico:turma_list')):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
 
     def test_list_ok(self):
         Aluno.objects.create(nome='Ana', matricula='M1')
@@ -242,6 +251,7 @@ class AlunoCrudViewTest(TestCase):
 class TurmaCrudViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='coord2', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='coord2', password='segredo123')  # noqa: S106
 
     def test_list_ok(self):
@@ -277,6 +287,7 @@ class TurmaCrudViewTest(TestCase):
 class TurmaMatriculaViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='coord3', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
         self.client.login(username='coord3', password='segredo123')  # noqa: S106
         self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
         self.ana = Aluno.objects.create(nome='Ana', matricula='A1')

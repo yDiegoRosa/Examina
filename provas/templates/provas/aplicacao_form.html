@@ -1,0 +1,47 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Nova aplicação — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'provas:aplicacao_list' %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Voltar às aplicações</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-clipboard2-plus-fill"></i> Correção • Nova aplicação</span>
+    </div>
+    <h1 class="mb-1">Nova aplicação</h1>
+    <p class="text-secondary" style="max-width: 640px;">
+      Escolha a prova (com versões já geradas), a turma e a data. Depois de salvar, você distribui as
+      versões entre os alunos e gera as folhas-resposta nominais.
+    </p>
+  </div>
+</div>
+
+<div class="card-surface" style="padding: 1.5rem; max-width: 680px;">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert-toast alert-toast-danger mb-3">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {% for field in form %}
+    <div class="mb-3">
+      <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}<div class="small text-muted mt-1">{{ field.help_text }}</div>{% endif %}
+      {% for error in field.errors %}
+      <div class="small mt-1" style="color: var(--color-danger);">{{ error }}</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar aplicação</button>
+      <a href="{% url 'provas:aplicacao_list' %}" class="btn btn-outline">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

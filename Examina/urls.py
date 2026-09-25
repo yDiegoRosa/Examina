@@ -16,10 +16,11 @@ Including another URLconf
 """
 
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+
+from .views import media_protegida
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -36,8 +37,7 @@ urlpatterns = [
     path('academico/', include('academico.urls')),
     path('provas/', include('provas.urls')),
     path('desempenho/', include('desempenho.urls')),
+    # Mídia (uploads) sempre autenticada — ver Examina.views.media_protegida.
+    path(f'{settings.MEDIA_URL.strip("/")}/<path:caminho>', media_protegida, name='media_protegida'),
     path('', include('banco_questoes.urls')),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

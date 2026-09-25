@@ -8,6 +8,8 @@ from django.http import HttpResponse
 from django.shortcuts import render
 
 from academico.models import Turma
+from banco_questoes.permissions import docente_ou_coordenador_required
+from banco_questoes.utils import parse_pk
 from provas.models import ProvaAplicacao
 
 from .services import (
@@ -29,6 +31,7 @@ def _parse_data(valor):
 
 
 @login_required
+@docente_ou_coordenador_required
 def dashboard_fragilidades(request):
     """
     Dashboard de fragilidades/forças: taxa de erro por tópico e por dificuldade,
@@ -37,13 +40,16 @@ def dashboard_fragilidades(request):
     turmas = Turma.objects.all().order_by('periodo', 'nome')
     aplicacoes = ProvaAplicacao.objects.select_related('prova', 'turma').order_by('-data_aplicacao')
 
-    turma_id = request.GET.get('turma') or ''
-    aplicacao_id = request.GET.get('aplicacao') or ''
+    # IDs inválidos (ex.: ?turma=abc) são ignorados em vez de gerar erro 500.
+    turma_pk = parse_pk(request.GET.get('turma'))
+    aplicacao_pk = parse_pk(request.GET.get('aplicacao'))
+    turma_id = str(turma_pk) if turma_pk else ''
+    aplicacao_id = str(aplicacao_pk) if aplicacao_pk else ''
     data_inicio = _parse_data(request.GET.get('data_inicio'))
     data_fim = _parse_data(request.GET.get('data_fim'))
 
-    turma = turmas.filter(pk=turma_id).first() if turma_id else None
-    aplicacao = aplicacoes.filter(pk=aplicacao_id).first() if aplicacao_id else None
+    turma = turmas.filter(pk=turma_pk).first() if turma_pk else None
+    aplicacao = aplicacoes.filter(pk=aplicacao_pk).first() if aplicacao_pk else None
 
     filtros = {'turma': turma, 'aplicacao': aplicacao, 'data_inicio': data_inicio, 'data_fim': data_fim}
     por_topico = taxa_erro_por_topico(**filtros)
@@ -148,6 +154,7 @@ def _pdf_psicometria(context):
 
 
 @login_required
+@docente_ou_coordenador_required
 def psicometria(request):
     """
     Relatório de psicometria básica (RF14): índice de facilidade por questão

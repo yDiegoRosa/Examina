@@ -529,6 +529,18 @@ class Prova(models.Model):
         """Retorna a disciplina associada diretamente ou através da máscara."""
         return self.disciplina or (self.mascara.disciplina if self.mascara else None)
 
+    @property
+    def versoes_distribuidas(self):
+        """
+        Indica se alguma versão desta prova já foi distribuída a alunos (atribuição de
+        versão ou folha-resposta gerada). A partir daí a prova fica travada: regerar
+        versões ou trocar questões invalidaria gabaritos, folhas impressas e notas.
+        """
+        return (
+            AtribuicaoVersao.objects.filter(versao__prova=self).exists()
+            or FolhaResposta.objects.filter(prova_versao__prova=self).exists()
+        )
+
 
 class ProvaQuestao(models.Model):
     """
