@@ -53,11 +53,19 @@
               <i class="bi bi-grid-fill"></i> Acervo
             </a>
           </li>
+          {# Telas de aplicação/correção (url_name aplicacao_* e folha_*) ficam sob "Aplicações". #}
+          {% with url_name=request.resolver_match.url_name|default:'' %}
           <li>
-            <a class="nav-item-link {% if request.resolver_match.app_name == 'provas' %}active{% endif %}" href="{% url 'provas:index' %}">
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'provas' and url_name|slice:':9' != 'aplicacao' and url_name|slice:':6' != 'folha_' %}active{% endif %}" href="{% url 'provas:index' %}">
               <i class="bi bi-file-earmark-ruled-fill"></i> Provas
             </a>
           </li>
+          <li>
+            <a class="nav-item-link {% if request.resolver_match.app_name == 'provas' %}{% if url_name|slice:':9' == 'aplicacao' or url_name|slice:':6' == 'folha_' %}active{% endif %}{% endif %}" href="{% url 'provas:aplicacao_list' %}">
+              <i class="bi bi-clipboard2-check-fill"></i> Aplicações
+            </a>
+          </li>
+          {% endwith %}
           <li>
             <a class="nav-item-link {% if request.resolver_match.app_name == 'academico' %}active{% endif %}" href="{% url 'academico:aluno_list' %}">
               <i class="bi bi-people-fill"></i> Acadêmico

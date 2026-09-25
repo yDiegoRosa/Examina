@@ -1,15 +1,21 @@
+# Ambiente de DESENVOLVIMENTO (código montado + runserver).
+# Produção: use docker-compose.prod.yml.
+#
+# As credenciais do MySQL vêm do .env (MYSQL_*); os valores após ":-" são padrões
+# apenas para desenvolvimento local.
 services:
   db:
     image: mysql:8.0
     container_name: examina_mysql
     restart: always
     environment:
-      MYSQL_DATABASE: examina_db
-      MYSQL_USER: examina_user
-      MYSQL_PASSWORD: sua_senha_aqui
-      MYSQL_ROOT_PASSWORD: root_password_aqui
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-examina_db}
+      MYSQL_USER: ${MYSQL_USER:-examina_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sua_senha_aqui}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_aqui}
     ports:
-      - "3306:3306"
+      # Apenas na interface local: o MySQL não fica exposto à rede.
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:

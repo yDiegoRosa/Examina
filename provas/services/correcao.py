@@ -10,6 +10,10 @@ Convenção de mapeamento: a folha numera as questões objetivas de 1..N na orde
 itens da versão (campo ``ordem``) — exatamente como a folha é impressa por
 ``folha_service.render_folha_pdf``. Assim, a bolha k corresponde ao k-ésimo item
 objetivo da versão.
+
+Salvaguardas: a folha lida precisa pertencer à mesma aplicação da digitalização e não
+pode estar anulada; questões já corrigidas manualmente (``tipo_correcao='MANUAL'``) não
+são sobrescritas por um novo processamento automático.
 """
 
 from __future__ import annotations
@@ -47,6 +51,7 @@ class ResultadoCorrecao:
     acertos: int = 0
     brancos: int = 0
     ambiguas: int = 0
+    preservadas: int = 0  # questões com correção manual mantidas (não sobrescritas)
 
 
 def _letra_correta(item: ProvaVersaoItem) -> str | None:
@@ -83,9 +88,13 @@ def corrigir_folha_digitalizada(digitalizacao: FolhaDigitalizada, usuario=None) 
     """
     Processa uma folha digitalizada: leitura óptica + correção + gravação de ``Desempenho``.
 
-    Não levanta exceção para falhas esperadas (QR ilegível, marcadores insuficientes,
-    versão sem objetivas): marca a digitalização como ERRO e devolve
-    ``ResultadoCorrecao(sucesso=False)`` — para não interromper o processamento em lote.
+    Não levanta exceção para falhas esperadas (QR ilegível, folha de outra aplicação ou
+    anulada, marcadores insuficientes, versão sem objetivas): marca a digitalização como
+    ERRO e devolve ``ResultadoCorrecao(sucesso=False)`` — para não interromper o
+    processamento em lote.
+
+    Questões que já têm correção manual são preservadas (contam no resultado pelo valor
+    manual) — a revisão humana prevalece sobre uma nova leitura automática.
     """
     from desempenho.models import Desempenho
     from provas.models import FolhaDigitalizada as FolhaDigitalizadaModel
@@ -99,6 +108,16 @@ def corrigir_folha_digitalizada(digitalizacao: FolhaDigitalizada, usuario=None) 
     folha = digitalizacao.folha_resposta or identificar_folha(imagem)
     if folha is None:
         return _falha(digitalizacao, 'QR não identificado: não foi possível localizar a folha-resposta.')
+
+    if folha.prova_aplicacao_id != digitalizacao.prova_aplicacao_id:
+        return _falha(
+            digitalizacao,
+            f'A folha lida ({folha.aluno.nome}) pertence a outra aplicação de prova '
+            f'(#{folha.prova_aplicacao_id}). Envie-a no upload da aplicação correta.',
+        )
+
+    if folha.status == FolhaRespostaModel.Status.ANULADA:
+        return _falha(digitalizacao, f'A folha de {folha.aluno.nome} está anulada e não pode ser corrigida.')
 
     itens_obj = _itens_objetivos_ordenados(folha.prova_versao)
     if not itens_obj:
@@ -118,9 +137,22 @@ def corrigir_folha_digitalizada(digitalizacao: FolhaDigitalizada, usuario=None) 
     leituras = ler_respostas(canonica, geometry.answer_bubbles)
 
     agora = timezone.now()
-    acertos = brancos = ambiguas = 0
+    acertos = brancos = ambiguas = preservadas = 0
+
+    # Correções manuais já feitas nesta folha: {questao_id: acertou}
+    manuais = dict(
+        Desempenho.objects.filter(folha_resposta=folha, tipo_correcao=Desempenho.TipoCorrecao.MANUAL).values_list(
+            'questao_id', 'acertou'
+        )
+    )
 
     for numero, item in enumerate(itens_obj, start=1):
+        if item.questao.id in manuais:
+            preservadas += 1
+            if manuais[item.questao.id]:
+                acertos += 1
+            continue
+
         leitura = leituras.get(numero)
         correta = _letra_correta(item)
 
@@ -153,6 +185,8 @@ def corrigir_folha_digitalizada(digitalizacao: FolhaDigitalizada, usuario=None) 
 
     total = len(itens_obj)
     mensagem = f'{acertos}/{total} acertos • {brancos} em branco • {ambiguas} ambígua(s).'
+    if preservadas:
+        mensagem += f' {preservadas} correção(ões) manual(is) preservada(s).'
     digitalizacao.folha_resposta = folha
     digitalizacao.status = FolhaDigitalizadaModel.Status.PROCESSADA
     digitalizacao.mensagem = mensagem
@@ -166,6 +200,7 @@ def corrigir_folha_digitalizada(digitalizacao: FolhaDigitalizada, usuario=None) 
         acertos=acertos,
         brancos=brancos,
         ambiguas=ambiguas,
+        preservadas=preservadas,
     )
 
 

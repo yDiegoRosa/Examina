@@ -77,6 +77,8 @@ TAGGIT_CASE_INSENSITIVE = True
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serve os estáticos coletados (STATIC_ROOT) direto do gunicorn em produção.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -179,10 +181,23 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'banco_questoes' / 'static',
 ]
+# Destino do `collectstatic` (servido pelo WhiteNoise em produção). Criado se ausente para
+# o WhiteNoise não alertar em desenvolvimento/testes (onde os finders servem os arquivos).
+STATIC_ROOT = Path(env('STATIC_ROOT', default=str(BASE_DIR / 'staticfiles')))
+STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Media files (Uploads de Imagens e Documentos)
+# Não há servidor público de mídia: os arquivos (folhas escaneadas, imagens de questões)
+# são entregues pela view autenticada `Examina.views.media_protegida`.
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(env('MEDIA_ROOT', default=str(BASE_DIR / 'media')))
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    # Compressão gzip/brotli sem manifesto: os templates já versionam os assets via ?v=…,
+    # e o manifesto exigiria `collectstatic` antes de qualquer execução com DEBUG=False (testes).
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
@@ -213,9 +228,16 @@ CSV_UPLOAD_MAX_SIZE_MB = env.int('CSV_UPLOAD_MAX_SIZE_MB', default=5)
 # https://docs.djangoproject.com/en/stable/ref/middleware/#module-django.middleware.security
 # ---------------------------------------------------------------------------
 if not DEBUG:
+    # -- Reverse proxy ------------------------------------------------------
+    # Atrás de um proxy que termina o TLS (Nginx, Traefik, Caddy…), o Django recebe
+    # HTTP puro; sem este cabeçalho, SECURE_SSL_REDIRECT entraria em loop de redirect.
+    # Só habilite se o proxy SEMPRE define/sobrescreve X-Forwarded-Proto.
+    if env.bool('BEHIND_PROXY', default=False):
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
     # -- HTTPS enforcement --------------------------------------------------
-    # Redirect every HTTP request to HTTPS.
-    SECURE_SSL_REDIRECT = True
+    # Redirect every HTTP request to HTTPS (desligue apenas se o proxy já redireciona).
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
 
     # Instruct browsers to only use HTTPS for 1 year, including subdomains.
     # NOTE: Once deployed with HSTS, downgrading back to HTTP requires time.

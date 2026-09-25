@@ -11,9 +11,12 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from academico.models import Matricula, Turma
 from banco_questoes.models import Disciplina, Questao, Topico
+from banco_questoes.permissions import docente_ou_coordenador_required
+from banco_questoes.utils import parse_pk
 
-from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaManualForm, UploadFolhasForm
+from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaAplicacaoForm, ProvaManualForm, UploadFolhasForm
 from .models import (
     FolhaDigitalizada,
     FolhaResposta,
@@ -39,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+@docente_ou_coordenador_required
 def prova_list(request):
     """Lista as provas persistidas, inclusive montagens manuais sem máscara."""
     provas = Prova.objects.select_related('disciplina', 'mascara__disciplina', 'autor').annotate(
@@ -89,6 +93,7 @@ def prova_list(request):
 # Listagem de Máscaras (Blueprints)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def mascara_list(request):
     """Exibe o painel de Máscaras de Prova cadastradas com métricas, filtros e paginação."""
     mascaras_qs = (
@@ -97,9 +102,10 @@ def mascara_list(request):
         .all()
     )
 
-    disciplina_id = request.GET.get('disciplina')
-    if disciplina_id:
-        mascaras_qs = mascaras_qs.filter(disciplina_id=disciplina_id)
+    disciplina_pk = parse_pk(request.GET.get('disciplina'))
+    disciplina_id = str(disciplina_pk) if disciplina_pk else None
+    if disciplina_pk:
+        mascaras_qs = mascaras_qs.filter(disciplina_id=disciplina_pk)
 
     disciplinas = Disciplina.objects.filter(ativo=True)
 
@@ -139,11 +145,12 @@ def mascara_list(request):
 # Criar Máscara de Prova
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def mascara_create(request):
     """Cria uma nova Máscara de Avaliação com matriz de dificuldade e tópicos."""
     if request.method == 'POST':
         form = MascaraProvaForm(request.POST)
-        disc_id = request.POST.get('disciplina')
+        disc_id = parse_pk(request.POST.get('disciplina'))
         disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else None
         formset = MascaraTopicoFormSet(request.POST, disciplina=disciplina_post)
 
@@ -167,7 +174,7 @@ def mascara_create(request):
                 messages.success(request, f'Máscara "{mascara_temp.titulo}" criada com sucesso!')
                 return redirect('provas:mascara_detail', pk=mascara_temp.pk)
     else:
-        disc_param = request.GET.get('disciplina')
+        disc_param = parse_pk(request.GET.get('disciplina'))
         disciplina_init = Disciplina.objects.filter(pk=disc_param, ativo=True).first() if disc_param else None
 
         if request.GET.get('preset') == 'enade':
@@ -193,6 +200,7 @@ def mascara_create(request):
 # Criação em um clique do Simulado ENADE (Componente Específico)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 @require_POST
 def mascara_enade_create(request):
     """
@@ -246,13 +254,14 @@ def mascara_enade_create(request):
 # Editar Máscara de Prova
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def mascara_update(request, pk):
     """Edita uma Máscara de Avaliação existente."""
     mascara = get_object_or_404(MascaraProva, pk=pk)
 
     if request.method == 'POST':
         form = MascaraProvaForm(request.POST, instance=mascara)
-        disc_id = request.POST.get('disciplina')
+        disc_id = parse_pk(request.POST.get('disciplina'))
         disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else None
         formset = MascaraTopicoFormSet(
             request.POST,
@@ -298,6 +307,7 @@ def mascara_update(request, pk):
 # Detalhes & Diagnóstico de Estoque da Máscara
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def mascara_detail(request, pk):
     """Visualiza a matriz de critérios da máscara e realiza diagnóstico de estoque no acervo."""
     mascara = get_object_or_404(
@@ -372,6 +382,7 @@ def mascara_detail(request, pk):
 # ---------------------------------------------------------------------------
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def mascara_gerar_prova(request, pk):
     """
     Executa a geração e persistência de uma avaliação a partir da máscara.
@@ -398,6 +409,7 @@ def mascara_gerar_prova(request, pk):
 # Montagem 100% Manual de Prova (Seleção Livre no Acervo)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def prova_manual_create(request):
     """
     Interface para montagem 100% manual de avaliações (seleção livre no acervo).
@@ -436,7 +448,7 @@ def prova_manual_create(request):
         )
 
         # Filtros adicionais via GET
-        topico_filtro = request.GET.get('topico')
+        topico_filtro = parse_pk(request.GET.get('topico'))
         if topico_filtro:
             qs = qs.filter(topico_id=topico_filtro)
 
@@ -512,6 +524,7 @@ def prova_manual_create(request):
 # Revisão da Seleção — Meta vs. Atual (Tópico × Dificuldade)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def prova_revisao(request, pk):
     """Exibe a tela de revisão da seleção com indicadores meta vs. atual por célula."""
     prova = get_object_or_404(
@@ -644,6 +657,7 @@ def prova_revisao(request, pk):
             'total_meta': total_meta,
             'total_atual': total_atual,
             'versoes': prova.versoes.annotate(total_itens=Count('itens')).order_by('numero_versao', 'identificador'),
+            'versoes_distribuidas': prova.versoes_distribuidas,
         },
     )
 
@@ -652,6 +666,7 @@ def prova_revisao(request, pk):
 # Troca Individual de Questão (Ajuste Fino na Tela de Revisão)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def item_candidatas_substituicao(request, item_pk):
     """
     Retorna JSON com a lista de questões candidatas para substituir a questão de um item da prova.
@@ -709,6 +724,7 @@ def item_candidatas_substituicao(request, item_pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def item_substituir_questao(request, item_pk):
     """
     Substitui a questão de um item da prova por uma nova questão selecionada,
@@ -718,15 +734,19 @@ def item_substituir_questao(request, item_pk):
         ProvaQuestao.objects.select_related('prova', 'prova__mascara', 'questao'),
         pk=item_pk,
     )
-    nova_questao_id = request.POST.get('nova_questao_id')
+    nova_questao_id = parse_pk(request.POST.get('nova_questao_id'))
     if not nova_questao_id:
-        return JsonResponse({'success': False, 'error': 'ID da nova questão é obrigatório.'}, status=400)
+        return JsonResponse(
+            {'success': False, 'error': 'ID da nova questão é obrigatório e deve ser válido.'}, status=400
+        )
 
     nova_questao = get_object_or_404(Questao, pk=nova_questao_id)
 
     try:
         substituir_questao_prova(item=item, nova_questao=nova_questao, autor=request.user)
         msg = f'Questão #{item.numero} substituída com sucesso pela questão Q{nova_questao.pk}!'
+        if item.itens_versao.exists():
+            msg += ' Os cadernos A/B/C foram atualizados — baixe-os novamente antes de imprimir.'
 
         is_ajax = request.headers.get(
             'x-requested-with'
@@ -753,6 +773,7 @@ def item_substituir_questao(request, item_pk):
 # ---------------------------------------------------------------------------
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def mascara_toggle_ativo(request, pk):
     """Alterna o status ativo/inativo de uma máscara."""
     mascara = get_object_or_404(MascaraProva, pk=pk)
@@ -768,14 +789,15 @@ def mascara_toggle_ativo(request, pk):
 # API AJAX: Tópicos e Diagnóstico em Tempo Real por Disciplina
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def api_topicos_e_estoque(request):
     """
     Retorna tópicos da disciplina selecionada e contagem de questões
     disponíveis no banco por nível de dificuldade para alimentar a UI em tempo real.
     """
-    disciplina_id = request.GET.get('disciplina_id')
+    disciplina_id = parse_pk(request.GET.get('disciplina_id'))
     if not disciplina_id:
-        return JsonResponse({'error': 'Parâmetro disciplina_id obrigatório.'}, status=400)
+        return JsonResponse({'error': 'Parâmetro disciplina_id obrigatório (numérico).'}, status=400)
 
     disciplina = get_object_or_404(Disciplina, pk=disciplina_id, ativo=True)
     topicos = Topico.objects.filter(disciplina=disciplina, ativo=True).values('id', 'nome')
@@ -805,6 +827,7 @@ def api_topicos_e_estoque(request):
 # View de Teste PDF
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def pdf_teste_view(request):
     """View de demonstração para validação do WeasyPrint."""
     questoes = Questao.objects.filter(ativo=True).prefetch_related('alternativas')[:5]
@@ -839,6 +862,8 @@ def _int_param(request, nome, default, minimo, maximo):
     return max(minimo, min(maximo, valor))
 
 
+@login_required
+@docente_ou_coordenador_required
 def folha_resposta_demo(request):
     """
     Demonstração/validação visual da Folha de Resposta (cartão-resposta / OMR).
@@ -917,6 +942,7 @@ def folha_resposta_demo(request):
 # RF10 — Exportação de folhas-resposta nominais (uma por aluno) em ZIP
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def aplicacao_folhas_zip(request, pk):
     """
     Gera e entrega em ZIP uma folha-resposta nominal (PDF) por aluno matriculado da
@@ -974,6 +1000,7 @@ def aplicacao_folhas_zip(request, pk):
 # Upload em lote de folhas escaneadas (fila de entrada do OMR)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def aplicacao_upload_folhas(request, pk):
     """
     Recebe o upload em lote de imagens (fotos de celular ou digitalizações) de folhas
@@ -1027,6 +1054,7 @@ def aplicacao_upload_folhas(request, pk):
 # ---------------------------------------------------------------------------
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def aplicacao_corrigir_folhas(request, pk):
     """
     Executa a leitura óptica (OMR) das folhas digitalizadas PENDENTES da aplicação:
@@ -1077,6 +1105,7 @@ def aplicacao_corrigir_folhas(request, pk):
 # Fila de revisão manual de falhas do OMR
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def aplicacao_revisao_manual(request, pk):
     """
     Lista os casos que a leitura automática não resolveu, para correção manual:
@@ -1114,6 +1143,7 @@ def aplicacao_revisao_manual(request, pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def desempenho_revisao_manual(request, pk):
     """Aplica a correção manual de uma questão inconclusiva da fila de revisão."""
     from desempenho.models import Desempenho
@@ -1136,6 +1166,7 @@ def desempenho_revisao_manual(request, pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def digitalizacao_vincular_folha(request, pk):
     """Vincula manualmente uma folha a uma digitalização com erro e reprocessa (OMR)."""
     from .services.correcao import revincular_e_reprocessar
@@ -1143,7 +1174,8 @@ def digitalizacao_vincular_folha(request, pk):
     digitalizacao = get_object_or_404(FolhaDigitalizada.objects.select_related('prova_aplicacao'), pk=pk)
     aplicacao_pk = digitalizacao.prova_aplicacao_id
 
-    folha = FolhaResposta.objects.filter(pk=request.POST.get('folha_id'), prova_aplicacao_id=aplicacao_pk).first()
+    folha_pk = parse_pk(request.POST.get('folha_id'))
+    folha = FolhaResposta.objects.filter(pk=folha_pk, prova_aplicacao_id=aplicacao_pk).first() if folha_pk else None
     if folha is None:
         messages.error(request, 'Selecione uma folha válida para vincular.')
         return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
@@ -1161,6 +1193,7 @@ def digitalizacao_vincular_folha(request, pk):
 # Lançamento manual de notas por aluno (discursivas + fallback objetivo)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def aplicacao_folhas(request, pk):
     """Lista as folhas (alunos) de uma aplicação com atalho para o lançamento manual de notas."""
     from desempenho.models import Desempenho
@@ -1201,6 +1234,7 @@ def aplicacao_folhas(request, pk):
 
 
 @login_required
+@docente_ou_coordenador_required
 def folha_lancamento_manual(request, pk):
     """
     Lançamento manual de notas de uma folha (aluno): notas 0–10 de discursivas
@@ -1287,6 +1321,7 @@ def folha_lancamento_manual(request, pk):
 # ---------------------------------------------------------------------------
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def prova_gerar_versoes_view(request, pk):
     """
     (Re)Gera múltiplos cadernos de prova (Versões A, B, C) com permutações
@@ -1299,9 +1334,13 @@ def prova_gerar_versoes_view(request, pk):
     except ValueError:
         qtd = 3
 
-    from provas.services.version_generator import gerar_versoes_prova
+    from provas.services.version_generator import VersoesDistribuidasError, gerar_versoes_prova
 
-    versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=qtd, substituir_existentes=True)
+    try:
+        versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=qtd, substituir_existentes=True)
+    except VersoesDistribuidasError as err:
+        messages.error(request, f'Não foi possível regerar os cadernos: {err}')
+        return redirect('provas:prova_revisao', pk=prova.pk)
     nomes_versoes = ', '.join(f'Versão {v.identificador}' for v in versoes)
     messages.success(
         request,
@@ -1314,6 +1353,7 @@ def prova_gerar_versoes_view(request, pk):
 # Geração do PDF da Capa Padronizada da Prova (Módulo 3)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def prova_capa_pdf(request, pk):
     """
     Gera o PDF da capa padronizada de uma prova gerada ou de uma versão específica.
@@ -1404,6 +1444,7 @@ def prova_capa_pdf(request, pk):
 # Geração do PDF do Caderno de Prova / Prova Completa (Suporte a Versões A/B/C)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def prova_pdf(request, pk):
     """
     Gera o PDF formatado do Caderno de Prova com todas as questões.
@@ -1575,6 +1616,7 @@ def prova_pdf(request, pk):
 # Geração do PDF do Gabarito Oficial por Versão / Caderno da Prova
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def prova_gabarito_pdf(request, pk):
     """
     Gera o PDF do Gabarito Oficial específico para a versão/caderno da prova.
@@ -1792,6 +1834,7 @@ def prova_gabarito_pdf(request, pk):
 # Download do Pacote Completo ZIP (Todas as Versões A, B, C + Gabaritos)
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def prova_pacote_zip(request, pk):
     """
     Gera dinamicamente e entrega em arquivo ZIP todos os cadernos de prova
@@ -1974,3 +2017,260 @@ def prova_pacote_zip(request, pk):
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+# ---------------------------------------------------------------------------
+# Aplicações de prova (fora do admin): listagem, cadastro e painel da aplicação
+# ---------------------------------------------------------------------------
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_list(request):
+    """Lista as aplicações (prova × turma × data) com o progresso das folhas, busca e filtro por turma."""
+    aplicacoes = ProvaAplicacao.objects.select_related('prova', 'turma').annotate(
+        total_folhas=Count('folhas', distinct=True),
+        folhas_lidas=Count('folhas', filter=Q(folhas__status=FolhaResposta.Status.LIDA), distinct=True),
+    )
+    busca = request.GET.get('q', '').strip()
+    turma_id = request.GET.get('turma', '')
+    if busca:
+        aplicacoes = aplicacoes.filter(
+            Q(prova__titulo__icontains=busca) | Q(turma__nome__icontains=busca) | Q(turma__periodo__icontains=busca)
+        )
+    if turma_id.isascii() and turma_id.isdigit() and len(turma_id) <= 18:
+        aplicacoes = aplicacoes.filter(turma_id=turma_id)
+    else:
+        turma_id = ''
+
+    paginator = Paginator(aplicacoes.order_by('-data_aplicacao', '-pk'), 12)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(
+        request,
+        'provas/aplicacao_list.html',
+        {
+            'aplicacoes': page_obj,
+            'page_obj': page_obj,
+            'page_range': paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1),
+            'querystring': params.urlencode(),
+            'busca': busca,
+            'turma_selecionada': turma_id,
+            'turmas': Turma.objects.order_by('-periodo', 'nome'),
+            'total': ProvaAplicacao.objects.count(),
+        },
+    )
+
+
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_create(request):
+    """Cadastra uma aplicação de prova a uma turma (aceita ``?prova=<pk>`` para pré-selecionar a prova)."""
+    if request.method == 'POST':
+        form = ProvaAplicacaoForm(request.POST)
+        if form.is_valid():
+            aplicacao = form.save()
+            messages.success(
+                request,
+                f'Aplicação cadastrada: {aplicacao}. Próximo passo: distribuir as versões e gerar as folhas-resposta.',
+            )
+            return redirect('provas:aplicacao_detail', pk=aplicacao.pk)
+    else:
+        prova_id = request.GET.get('prova', '')
+        initial = {'prova': prova_id} if prova_id.isascii() and prova_id.isdigit() else None
+        form = ProvaAplicacaoForm(initial=initial)
+
+    return render(request, 'provas/aplicacao_form.html', {'form': form})
+
+
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_detail(request, pk):
+    """
+    Painel da aplicação: situação de cada etapa (versões → folhas → digitalizações →
+    revisão → notas) e atalhos para todas as ações do fluxo de correção.
+    """
+    from desempenho.models import Desempenho
+
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+
+    folhas_por_status = dict(aplicacao.folhas.values_list('status').annotate(total=Count('id')))
+    digitalizacoes_por_status = dict(aplicacao.digitalizacoes.values_list('status').annotate(total=Count('id')))
+    desempenhos = Desempenho.objects.filter(folha_resposta__prova_aplicacao=aplicacao)
+    inconclusivas = desempenhos.filter(
+        tipo_correcao=Desempenho.TipoCorrecao.AUTOMATICA,
+        resposta_marcada__in=['', '*'],
+    ).count()
+    dig_erro = digitalizacoes_por_status.get(FolhaDigitalizada.Status.ERRO, 0)
+    total_folhas = sum(folhas_por_status.values())
+
+    return render(
+        request,
+        'provas/aplicacao_detail.html',
+        {
+            'aplicacao': aplicacao,
+            'versoes': aplicacao.prova.versoes.order_by('numero_versao'),
+            'matriculados': Matricula.objects.filter(
+                turma=aplicacao.turma, situacao=Matricula.Situacao.MATRICULADO, aluno__ativo=True
+            ).count(),
+            'total_atribuicoes': aplicacao.atribuicoes.count(),
+            'total_folhas': total_folhas,
+            'folhas_lidas': folhas_por_status.get(FolhaResposta.Status.LIDA, 0),
+            'dig_pendentes': digitalizacoes_por_status.get(FolhaDigitalizada.Status.PENDENTE, 0),
+            'dig_processadas': digitalizacoes_por_status.get(FolhaDigitalizada.Status.PROCESSADA, 0),
+            'dig_erro': dig_erro,
+            'pendencias_revisao': dig_erro + inconclusivas,
+            'total_desempenhos': desempenhos.count(),
+            'redistribuicao_bloqueada': total_folhas > 0,
+        },
+    )
+
+
+@require_POST
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_atribuir_versoes(request, pk):
+    """Distribui as versões (round-robin) aos alunos matriculados — bloqueado após gerar as folhas."""
+    from .services.version_assigner import atribuir_versoes
+
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    try:
+        atribuicoes = atribuir_versoes(aplicacao)
+    except ValueError as exc:
+        messages.error(request, f'Não foi possível distribuir as versões: {exc}')
+    else:
+        if atribuicoes:
+            messages.success(request, f'{len(atribuicoes)} aluno(s) receberam versão (round-robin).')
+        else:
+            messages.warning(request, 'Nenhum aluno matriculado (ativo) nesta turma para receber versão.')
+    return redirect('provas:aplicacao_detail', pk=aplicacao.pk)
+
+
+# ---------------------------------------------------------------------------
+# Notas finais da turma numa aplicação + exportação (XLSX/CSV)
+# ---------------------------------------------------------------------------
+SITUACAO_NOTA_LABEL = {
+    'completa': 'Completa',
+    'incompleta': 'Incompleta (há questões sem correção)',
+    'anulada': 'Folha anulada',
+    'sem_itens': 'Sem questões',
+}
+# Prefixos que planilhas interpretam como fórmula (injeção de fórmula / CSV injection).
+PREFIXOS_FORMULA = ('=', '+', '-', '@', '\t', '\r')
+
+
+def _tabela_notas(boletim):
+    """Cabeçalho e linhas (valores crus) da planilha de notas."""
+    cabecalho = [
+        'Matrícula',
+        'Aluno',
+        'Versão',
+        'Acertos (objetivas)',
+        'Total de objetivas',
+        'Discursivas corrigidas',
+        'Total de discursivas',
+        'Pontos obtidos',
+        'Pontos possíveis',
+        f'Nota final (0–{boletim["escala"].normalize():f})',
+        'Situação',
+    ]
+    linhas = [
+        [
+            linha['matricula'],
+            linha['aluno'],
+            linha['versao'],
+            linha['acertos_objetivas'],
+            linha['total_objetivas'],
+            linha['discursivas_corrigidas'],
+            linha['total_discursivas'],
+            linha['pontos_obtidos'],
+            linha['pontos_possiveis'],
+            linha['nota'],
+            SITUACAO_NOTA_LABEL.get(linha['situacao'], linha['situacao']),
+        ]
+        for linha in boletim['linhas']
+    ]
+    return cabecalho, linhas
+
+
+def _nome_arquivo_notas(aplicacao):
+    from django.utils.text import slugify
+
+    base = slugify(f'notas {aplicacao.prova.titulo} {aplicacao.turma.periodo} {aplicacao.turma.nome}')
+    return (base or f'notas-aplicacao-{aplicacao.pk}')[:120]
+
+
+def _xlsx_notas(aplicacao, boletim):
+    import io
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    cabecalho, linhas = _tabela_notas(boletim)
+    workbook = Workbook()
+    planilha = workbook.active
+    planilha.title = 'Notas'
+    planilha.append(cabecalho)
+    for celula in planilha[1]:
+        celula.font = Font(bold=True)
+    for valores in linhas:
+        planilha.append(valores)
+        for celula in planilha[planilha.max_row]:
+            # Texto começando com "=", "+"… viraria fórmula: força o tipo texto.
+            if isinstance(celula.value, str) and celula.value.startswith(PREFIXOS_FORMULA):
+                celula.data_type = 's'
+    planilha.freeze_panes = 'A2'
+    for coluna, largura in zip('ABCDEFGHIJK', (14, 38, 8, 12, 12, 12, 12, 12, 12, 14, 30), strict=True):
+        planilha.column_dimensions[coluna].width = largura
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    resposta = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resposta['Content-Disposition'] = f'attachment; filename="{_nome_arquivo_notas(aplicacao)}.xlsx"'
+    return resposta
+
+
+def _csv_notas(aplicacao, boletim):
+    import csv
+
+    def _celula(valor):
+        if valor is None:
+            return ''
+        if isinstance(valor, Decimal):
+            return str(valor).replace('.', ',')  # decimal pt-BR (separador de colunas é ";")
+        if isinstance(valor, str) and valor.startswith(PREFIXOS_FORMULA):
+            return f"'{valor}"
+        return valor
+
+    cabecalho, linhas = _tabela_notas(boletim)
+    resposta = HttpResponse(content_type='text/csv; charset=utf-8')
+    resposta['Content-Disposition'] = f'attachment; filename="{_nome_arquivo_notas(aplicacao)}.csv"'
+    resposta.write('\N{BYTE ORDER MARK}')  # BOM p/ acentos no Excel
+    escritor = csv.writer(resposta, delimiter=';')
+    escritor.writerow(cabecalho)
+    for valores in linhas:
+        escritor.writerow([_celula(valor) for valor in valores])
+    return resposta
+
+
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_notas(request, pk):
+    """
+    Notas finais da turma na aplicação (``desempenho.services.notas_da_aplicacao``) e
+    exportação da planilha: ``?formato=xlsx`` ou ``?formato=csv``.
+    """
+    from desempenho.services import notas_da_aplicacao
+
+    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'prova__mascara', 'turma'), pk=pk)
+    boletim = notas_da_aplicacao(aplicacao)
+
+    formato = (request.GET.get('formato') or '').lower()
+    if formato == 'xlsx':
+        return _xlsx_notas(aplicacao, boletim)
+    if formato == 'csv':
+        return _csv_notas(aplicacao, boletim)
+
+    return render(request, 'provas/aplicacao_notas.html', {'aplicacao': aplicacao, **boletim})

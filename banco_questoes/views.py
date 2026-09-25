@@ -19,6 +19,7 @@ from .permissions import (
     is_docente_ou_coordenador,
     pode_editar_questao_required,
 )
+from .utils import parse_pk
 
 logger = logging.getLogger(__name__)
 
@@ -797,7 +798,8 @@ def questao_history(request, pk):
 @login_required
 def api_topicos_por_disciplina(request):
     """Retorna JSON com tópicos ativos de uma disciplina específica."""
-    disciplina_id = request.GET.get('disciplina_id')
+    # Ausente ou inválido (ex.: ?disciplina_id=abc): lista vazia, como sem disciplina.
+    disciplina_id = parse_pk(request.GET.get('disciplina_id'))
     if not disciplina_id:
         return JsonResponse({'topicos': []})
 

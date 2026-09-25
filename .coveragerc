@@ -4,6 +4,7 @@ source =
     banco_questoes
     provas
     academico
+    desempenho
 omit =
     */migrations/*
     */tests/*
@@ -14,7 +15,7 @@ omit =
 
 [report]
 show_missing = True
-# Piso conservador anti-regressão (cobertura medida ~85%). Aumentar gradualmente; meta: 90%.
+# Piso conservador anti-regressão (cobertura medida ~86%, com desempenho). Aumentar gradualmente; meta: 90%.
 fail_under = 80
 exclude_lines =
     pragma: no cover

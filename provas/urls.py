@@ -23,6 +23,16 @@ urlpatterns = [
     path('provas/<int:pk>/gabarito-pdf/', views.prova_gabarito_pdf, name='prova_gabarito_pdf'),
     path('provas/<int:pk>/gerar-versoes/', views.prova_gerar_versoes_view, name='prova_gerar_versoes'),
     path('provas/<int:pk>/pacote-zip/', views.prova_pacote_zip, name='prova_pacote_zip'),
+    # Aplicações (prova × turma × data): listagem, cadastro, painel e notas
+    path('aplicacoes/', views.aplicacao_list, name='aplicacao_list'),
+    path('aplicacoes/nova/', views.aplicacao_create, name='aplicacao_create'),
+    path('aplicacoes/<int:pk>/', views.aplicacao_detail, name='aplicacao_detail'),
+    path(
+        'aplicacoes/<int:pk>/atribuir-versoes/',
+        views.aplicacao_atribuir_versoes,
+        name='aplicacao_atribuir_versoes',
+    ),
+    path('aplicacoes/<int:pk>/notas/', views.aplicacao_notas, name='aplicacao_notas'),
     path('aplicacoes/<int:pk>/folhas-zip/', views.aplicacao_folhas_zip, name='aplicacao_folhas_zip'),
     path('aplicacoes/<int:pk>/upload-folhas/', views.aplicacao_upload_folhas, name='aplicacao_upload_folhas'),
     path('aplicacoes/<int:pk>/corrigir-folhas/', views.aplicacao_corrigir_folhas, name='aplicacao_corrigir_folhas'),

@@ -8,6 +8,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from banco_questoes.permissions import docente_ou_coordenador_required
+from banco_questoes.utils import parse_pk
+
 from .forms import AlunoForm, TurmaForm
 from .models import Aluno, Matricula, Turma
 
@@ -35,6 +38,7 @@ def _filtrar_por_status(queryset, status):
 # CRUD de Aluno
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def aluno_list(request):
     """Lista alunos com busca (nome/matrícula), filtro por status e paginação."""
     alunos_qs = Aluno.objects.all()
@@ -68,6 +72,7 @@ def aluno_list(request):
 
 
 @login_required
+@docente_ou_coordenador_required
 def aluno_create(request):
     """Cria um novo aluno."""
     if request.method == 'POST':
@@ -87,6 +92,7 @@ def aluno_create(request):
 
 
 @login_required
+@docente_ou_coordenador_required
 def aluno_update(request, pk):
     """Edita um aluno existente."""
     aluno = get_object_or_404(Aluno, pk=pk)
@@ -108,6 +114,7 @@ def aluno_update(request, pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def aluno_toggle_ativo(request, pk):
     """Alterna o status ativo/inativo do aluno."""
     aluno = get_object_or_404(Aluno, pk=pk)
@@ -122,6 +129,7 @@ def aluno_toggle_ativo(request, pk):
 # CRUD de Turma
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def turma_list(request):
     """Lista turmas com busca (nome/período), filtro por status e paginação."""
     turmas_qs = Turma.objects.all()
@@ -155,6 +163,7 @@ def turma_list(request):
 
 
 @login_required
+@docente_ou_coordenador_required
 def turma_create(request):
     """Cria uma nova turma."""
     if request.method == 'POST':
@@ -174,6 +183,7 @@ def turma_create(request):
 
 
 @login_required
+@docente_ou_coordenador_required
 def turma_update(request, pk):
     """Edita uma turma existente."""
     turma = get_object_or_404(Turma, pk=pk)
@@ -195,6 +205,7 @@ def turma_update(request, pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def turma_toggle_ativo(request, pk):
     """Alterna o status ativo/inativo da turma."""
     turma = get_object_or_404(Turma, pk=pk)
@@ -209,6 +220,7 @@ def turma_toggle_ativo(request, pk):
 # Tela de Matrícula (vínculo Aluno × Turma), preservando histórico
 # ---------------------------------------------------------------------------
 @login_required
+@docente_ou_coordenador_required
 def turma_matriculas(request, pk):
     """
     Gerencia o elenco de uma turma: mostra as matrículas (com situação) e os alunos
@@ -234,10 +246,11 @@ def turma_matriculas(request, pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def turma_matricular(request, pk):
     """Matricula (ou reativa) os alunos selecionados na turma."""
     turma = get_object_or_404(Turma, pk=pk)
-    ids = request.POST.getlist('alunos')
+    ids = [aluno_pk for aluno_pk in map(parse_pk, request.POST.getlist('alunos')) if aluno_pk]
     alunos = Aluno.objects.filter(pk__in=ids, ativo=True)
 
     total = 0
@@ -262,10 +275,11 @@ def turma_matricular(request, pk):
 
 @require_POST
 @login_required
+@docente_ou_coordenador_required
 def turma_desmatricular(request, pk):
     """Desmatricula (soft) um aluno: situação CANCELADO + data de encerramento; a linha permanece."""
     turma = get_object_or_404(Turma, pk=pk)
-    matricula = get_object_or_404(Matricula, pk=request.POST.get('matricula'), turma=turma)
+    matricula = get_object_or_404(Matricula, pk=parse_pk(request.POST.get('matricula')), turma=turma)
     matricula.situacao = Matricula.Situacao.CANCELADO
     matricula.data_encerramento = timezone.localdate()
     matricula.save(update_fields=['situacao', 'data_encerramento', 'atualizado_em'])

@@ -1,0 +1,64 @@
+# Ambiente de PRODUÇÃO.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Requisitos no .env do servidor (ver .env.example):
+#   - DEBUG=False, SECRET_KEY longa e aleatória, ALLOWED_HOSTS e CSRF_TRUSTED_ORIGINS do domínio;
+#   - MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD (obrigatórias aqui);
+#   - DATABASE_URL=mysql://MYSQL_USER:MYSQL_PASSWORD@db:3306/MYSQL_DATABASE (mesmos valores);
+#   - BEHIND_PROXY=True quando houver proxy HTTPS (Nginx/Traefik/Caddy) na frente.
+#
+# O app escuta só em 127.0.0.1:8000 do host (o proxy HTTPS da instituição encaminha para
+# ele). Para proxy em outra máquina, defina WEB_BIND=0.0.0.0 — nunca exponha sem HTTPS.
+# O timeout do proxy deve ser >= GUNICORN_TIMEOUT (padrão 120 s).
+services:
+  db:
+    image: mysql:8.0
+    container_name: examina_mysql  # nome esperado pelos scripts de backup/restore
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?defina MYSQL_DATABASE no .env}
+      MYSQL_USER: ${MYSQL_USER:?defina MYSQL_USER no .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?defina MYSQL_PASSWORD no .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD no .env}
+    # Sem "ports": o MySQL só é acessível pela rede interna do compose.
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - examina_net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  web:
+    build: .
+    container_name: examina_django
+    restart: always
+    # Aplica migrations pendentes e sobe o gunicorn (estáticos já coletados na imagem).
+    command: sh -c "python manage.py migrate --noinput && exec gunicorn Examina.wsgi:application"
+    env_file:
+      - .env
+    environment:
+      DEBUG: "False"
+    volumes:
+      - media_data:/app/media  # uploads: folhas escaneadas e imagens de questões
+      - logs_data:/app/logs
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8000}:8000"
+    networks:
+      - examina_net
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  media_data:
+  logs_data:
+
+networks:
+  examina_net:
+    driver: bridge

@@ -4,8 +4,11 @@
 
 {% block content %}
 <div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline">
+    <i class="bi bi-arrow-left"></i> Painel da aplicação
+  </a>
   <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
-    <i class="bi bi-arrow-left"></i> Upload de folhas
+    <i class="bi bi-cloud-arrow-up"></i> Upload de folhas
   </a>
 </div>
 

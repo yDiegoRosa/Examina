@@ -8,6 +8,7 @@ from banco_questoes.models import Questao
 
 from .question_selector import consultar_questoes_candidatas_priorizadas
 from .snapshot_builder import construir_snapshot_questao
+from .version_generator import sincronizar_itens_versao
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,10 @@ def substituir_questao_prova(
     garantindo que a nova questão atenda aos mesmos critérios da célula e preservando
     o snapshot imutável.
 
+    Se a prova já tiver versões (A/B/C) geradas, os itens de versão do item trocado são
+    reconstruídos com as alternativas da nova questão. Se as versões já foram
+    distribuídas a alunos, a troca é bloqueada.
+
     Args:
         item: Instância de ProvaQuestao a ser alterada.
         nova_questao: Nova instância de Questao a ser vinculada.
@@ -83,6 +88,13 @@ def substituir_questao_prova(
     prova = item.prova
     disciplina = prova.disciplina_efetiva
     questao_antiga = item.questao
+
+    # 0. Prova travada: versões já distribuídas a alunos (folhas/atribuições)
+    if prova.versoes_distribuidas:
+        raise SubstituicaoQuestaoError(
+            'Esta prova já foi aplicada: suas versões estão vinculadas a alunos (folhas-resposta ou '
+            'atribuições). A troca de questões está bloqueada para preservar gabaritos e notas.'
+        )
 
     # 1. Validação de status ativo
     if not nova_questao.ativo:
@@ -122,6 +134,8 @@ def substituir_questao_prova(
         item.questao = nova_questao
         item.snapshot_questao = construir_snapshot_questao(nova_questao)
         item.save(update_fields=['questao', 'snapshot_questao'])
+        # Mantém os cadernos A/B/C coerentes com a nova questão (alternativas + gabarito)
+        sincronizar_itens_versao(item)
 
         logger.info(
             'Questão #%d da prova #%d substituída com sucesso: Q%d -> Q%d por %s',
