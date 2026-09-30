@@ -152,6 +152,10 @@ def selecionar_questoes_por_matriz(
     if mascara.embaralhar_questoes:
         random.shuffle(questoes_selecionadas)
 
+    # Objetivas primeiro e discursivas no fim (ordenação estável): a numeração das
+    # objetivas no caderno (1..N) coincide com a do cartão-resposta.
+    questoes_selecionadas.sort(key=lambda q: q.tipo != Questao.Tipo.OBJETIVA)
+
     return questoes_selecionadas
 
 
@@ -221,7 +225,7 @@ def gerar_prova_automatizada(
             # Revalidação de segurança caso tenha ocorrido concorrência
             raise EstoqueInsuficienteError(relatorio)
 
-        titulo_prova = titulo or f'{mascara.titulo} (Caderno {numero_caderno})'
+        titulo_prova = titulo or mascara.titulo
 
         prova = Prova.objects.create(
             mascara=mascara,
@@ -250,9 +254,9 @@ def gerar_prova_automatizada(
         ]
         ProvaQuestao.objects.bulk_create(itens_prova)
 
-        # Gera versões A/B/C persistidas com permutações de questões e alternativas
+        # Gera as versões (cadernos) persistidas — quantidade definida pela máscara
         from provas.services.version_generator import gerar_versoes_prova
 
-        gerar_versoes_prova(prova=prova, quantidade_versoes=3)
+        gerar_versoes_prova(prova=prova, quantidade_versoes=mascara.quantidade_versoes)
 
     return prova

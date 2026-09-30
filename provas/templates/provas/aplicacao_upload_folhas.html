@@ -1,6 +1,6 @@
 {% extends "banco_questoes/base.html" %}
 
-{% block title %}Upload de folhas — {{ aplicacao.turma }} — Examina{% endblock %}
+{% block title %}Envio de cartões — {{ aplicacao.turma }} — Examina{% endblock %}
 
 {% block content %}
 <div class="flex flex-wrap gap-2 mb-4">
@@ -15,12 +15,12 @@
 <div class="hero-card mb-4">
   <div>
     <div class="flex items-center gap-2 mb-2">
-      <span class="hero-tag"><i class="bi bi-camera-fill"></i> Correção • Upload de folhas</span>
+      <span class="hero-tag"><i class="bi bi-camera-fill"></i> Correção • Envio de cartões</span>
     </div>
-    <h1 class="mb-1">Enviar folhas escaneadas</h1>
+    <h1 class="mb-1">Enviar cartões-resposta escaneados</h1>
     <p class="text-secondary" style="max-width: 640px;">
       {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
-      Envie fotos (celular) ou digitalizações das folhas; cada imagem entra na fila para leitura óptica (OMR).
+      Envie fotos (celular) ou digitalizações dos cartões-resposta; cada imagem entra na fila para leitura óptica (OMR).
     </p>
   </div>
 </div>
@@ -35,22 +35,22 @@
     {% endfor %}
     <div class="small text-muted mt-1">Selecione várias imagens (JPG/PNG). No celular, permite usar a câmera traseira.</div>
     <div class="mt-3">
-      <button type="submit" class="btn btn-primary"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar folhas</button>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar cartões</button>
     </div>
   </form>
 </div>
 
 <div class="card-surface">
   <div class="p-3 flex items-center justify-between" style="border-bottom: 1px solid var(--border-color);">
-    <h3 class="font-bold text-main mb-0"><i class="bi bi-images"></i> Folhas enviadas ({{ total }})</h3>
+    <h3 class="font-bold text-main mb-0"><i class="bi bi-images"></i> Cartões enviados ({{ total }})</h3>
     <div class="flex items-center gap-2">
       <a href="{% url 'provas:aplicacao_revisao_manual' aplicacao.pk %}" class="btn btn-outline" title="Tratar manualmente folhas com erro e questões em branco/dupla marcação">
         <i class="bi bi-clipboard-check"></i> Revisão manual{% if pendencias_revisao %} ({{ pendencias_revisao }}){% endif %}
       </a>
       <form method="post" action="{% url 'provas:aplicacao_corrigir_folhas' aplicacao.pk %}" style="margin: 0;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary" title="Executa a leitura óptica (OMR) das folhas pendentes e corrige as questões objetivas">
-          <i class="bi bi-magic"></i> Corrigir folhas (OMR)
+        <button type="submit" class="btn btn-primary" title="Executa a leitura óptica (OMR) dos cartões pendentes e corrige as questões objetivas">
+          <i class="bi bi-magic"></i> Corrigir cartões (OMR)
         </button>
       </form>
     </div>
@@ -62,7 +62,7 @@
           <th style="width: 70px;">#</th>
           <th>Arquivo</th>
           <th style="width: 130px;">Status</th>
-          <th style="width: 200px;">Folha identificada</th>
+          <th style="width: 200px;">Cartão identificado</th>
           <th>Resultado</th>
           <th style="width: 150px;">Enviada em</th>
         </tr>
@@ -94,7 +94,7 @@
         <tr>
           <td colspan="6" class="text-center p-5">
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-inbox"></i></div>
-            <p class="text-muted mb-0">Nenhuma folha enviada ainda.</p>
+            <p class="text-muted mb-0">Nenhum cartão enviado ainda.</p>
           </td>
         </tr>
         {% endfor %}

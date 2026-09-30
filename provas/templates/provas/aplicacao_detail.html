@@ -33,7 +33,7 @@
   <div class="col-span-3 stat-card-unified">
     <div class="stat-icon-unified stat-icon-primary"><i class="bi bi-file-earmark-person-fill"></i></div>
     <div>
-      <div class="stat-label-unified">Folhas lidas / geradas</div>
+      <div class="stat-label-unified">Cartões lidos / gerados</div>
       <div class="stat-num-unified">{{ folhas_lidas }} / {{ total_folhas }}</div>
     </div>
   </div>
@@ -65,42 +65,42 @@
     {% if not versoes %}
     <a href="{% url 'provas:prova_revisao' aplicacao.prova.pk %}" class="btn btn-outline"><i class="bi bi-layers"></i> Gerar versões na prova</a>
     {% elif redistribuicao_bloqueada %}
-    <button type="button" class="btn btn-outline" disabled title="As folhas-resposta já foram geradas"><i class="bi bi-lock-fill"></i> Versões distribuídas</button>
-    <p class="small text-muted mt-2 mb-0">As folhas já foram geradas: redistribuir trocaria o caderno de quem já recebeu a folha.</p>
+    <button type="button" class="btn btn-outline" disabled title="Os cartões-resposta já foram gerados"><i class="bi bi-lock-fill"></i> Versões distribuídas</button>
+    <p class="small text-muted mt-2 mb-0">Os cartões-resposta já foram gerados: redistribuir trocaria o caderno de quem já recebeu o cartão.</p>
     {% else %}
     <form method="post" action="{% url 'provas:aplicacao_atribuir_versoes' aplicacao.pk %}" style="margin: 0;">
       {% csrf_token %}
       <button type="submit" class="btn btn-primary"><i class="bi bi-shuffle"></i> {% if total_atribuicoes %}Redistribuir{% else %}Distribuir{% endif %} versões</button>
     </form>
-    <p class="small text-muted mt-2 mb-0">Opcional: ao gerar as folhas, as versões são distribuídas automaticamente se ainda não foram.</p>
+    <p class="small text-muted mt-2 mb-0">Opcional: ao gerar os cartões, as versões são distribuídas automaticamente se ainda não foram.</p>
     {% endif %}
   </section>
 
-  {# 2. Folhas-resposta #}
+  {# 2. Cartões-resposta #}
   <section class="card-surface p-4" aria-labelledby="etapa-folhas">
-    <h2 class="font-bold text-main mb-1" id="etapa-folhas" style="font-size: 1.05rem;"><i class="bi bi-2-circle-fill"></i> Folhas-resposta nominais</h2>
+    <h2 class="font-bold text-main mb-1" id="etapa-folhas" style="font-size: 1.05rem;"><i class="bi bi-2-circle-fill"></i> Cartões-resposta nominais</h2>
     <p class="small text-muted mb-3">
-      {{ total_folhas }} folha(s) gerada(s) — uma por aluno, com nome, matrícula e QR para a leitura óptica.
+      {{ total_folhas }} cartão(ões) gerado(s) — um por aluno, com nome, matrícula e QR para a leitura óptica.
     </p>
     <div class="flex flex-wrap gap-2">
       <form method="post" action="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" style="margin: 0;">
         {% csrf_token %}
         <input type="hidden" name="acao" value="gerar">
-        <button type="submit" class="btn btn-outline"><i class="bi bi-arrow-repeat"></i> Gerar/atualizar folhas</button>
+        <button type="submit" class="btn btn-outline"><i class="bi bi-arrow-repeat"></i> Gerar/atualizar cartões</button>
       </form>
-      <a href="{% url 'provas:aplicacao_folhas_zip' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-file-earmark-zip"></i> Baixar folhas para impressão (ZIP)</a>
+      <a href="{% url 'provas:aplicacao_folhas_zip' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-file-earmark-zip"></i> Baixar cartões para impressão (ZIP)</a>
     </div>
   </section>
 
   {# 3. Correção #}
   <section class="card-surface p-4" aria-labelledby="etapa-correcao">
-    <h2 class="font-bold text-main mb-1" id="etapa-correcao" style="font-size: 1.05rem;"><i class="bi bi-3-circle-fill"></i> Enviar e corrigir folhas</h2>
+    <h2 class="font-bold text-main mb-1" id="etapa-correcao" style="font-size: 1.05rem;"><i class="bi bi-3-circle-fill"></i> Enviar e corrigir cartões</h2>
     <p class="small text-muted mb-3">
       {{ dig_processadas }} processada(s), {{ dig_pendentes }} pendente(s) e {{ dig_erro }} com erro.
-      Folhas com erro e questões em branco/dupla marcação vão para a revisão manual.
+      Cartões com erro e questões em branco/dupla marcação vão para a revisão manual.
     </p>
     <div class="flex flex-wrap gap-2">
-      <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar folhas escaneadas</a>
+      <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar cartões escaneados</a>
       {% if dig_pendentes %}
       <form method="post" action="{% url 'provas:aplicacao_corrigir_folhas' aplicacao.pk %}" style="margin: 0;">
         {% csrf_token %}

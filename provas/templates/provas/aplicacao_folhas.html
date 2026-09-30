@@ -1,6 +1,6 @@
 {% extends "banco_questoes/base.html" %}
 
-{% block title %}Folhas / lançamento — {{ aplicacao.turma }} — Examina{% endblock %}
+{% block title %}Cartões / lançamento — {{ aplicacao.turma }} — Examina{% endblock %}
 
 {% block content %}
 <div class="flex flex-wrap gap-2 mb-4">
@@ -8,7 +8,7 @@
     <i class="bi bi-arrow-left"></i> Painel da aplicação
   </a>
   <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
-    <i class="bi bi-cloud-arrow-up"></i> Upload de folhas
+    <i class="bi bi-cloud-arrow-up"></i> Enviar cartões
   </a>
   <a href="{% url 'provas:aplicacao_notas' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-table"></i> Notas da turma
@@ -26,7 +26,7 @@
     <div class="flex items-center gap-2 mb-2">
       <span class="hero-tag"><i class="bi bi-people-fill"></i> Correção • Lançamento por aluno</span>
     </div>
-    <h1 class="mb-1">Folhas da aplicação</h1>
+    <h1 class="mb-1">Cartões da aplicação</h1>
     <p class="text-secondary" style="max-width: 660px;">
       {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
       Lance manualmente as notas das discursivas e, quando necessário, as respostas das
@@ -42,8 +42,8 @@
     <form method="post" style="margin: 0;">
       {% csrf_token %}
       <input type="hidden" name="acao" value="gerar">
-      <button type="submit" class="btn btn-outline" title="Gera (idempotente) uma folha por aluno matriculado">
-        <i class="bi bi-arrow-repeat"></i> Gerar/atualizar folhas
+      <button type="submit" class="btn btn-outline" title="Gera (idempotente) um cartão por aluno matriculado">
+        <i class="bi bi-arrow-repeat"></i> Gerar/atualizar cartões
       </button>
     </form>
   </div>
@@ -81,8 +81,8 @@
         <tr>
           <td colspan="5" class="text-center p-5">
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-people"></i></div>
-            <p class="text-muted mb-2">Nenhuma folha gerada para esta aplicação.</p>
-            <p class="text-muted small mb-0">Use “Gerar/atualizar folhas” para criar uma folha por aluno matriculado.</p>
+            <p class="text-muted mb-2">Nenhum cartão gerado para esta aplicação.</p>
+            <p class="text-muted small mb-0">Use “Gerar/atualizar cartões” para criar um cartão por aluno matriculado.</p>
           </td>
         </tr>
         {% endfor %}

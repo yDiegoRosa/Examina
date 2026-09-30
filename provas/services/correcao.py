@@ -107,21 +107,21 @@ def corrigir_folha_digitalizada(digitalizacao: FolhaDigitalizada, usuario=None) 
 
     folha = digitalizacao.folha_resposta or identificar_folha(imagem)
     if folha is None:
-        return _falha(digitalizacao, 'QR não identificado: não foi possível localizar a folha-resposta.')
+        return _falha(digitalizacao, 'QR não identificado: não foi possível localizar o cartão-resposta.')
 
     if folha.prova_aplicacao_id != digitalizacao.prova_aplicacao_id:
         return _falha(
             digitalizacao,
-            f'A folha lida ({folha.aluno.nome}) pertence a outra aplicação de prova '
+            f'O cartão lido ({folha.aluno.nome}) pertence a outra aplicação de prova '
             f'(#{folha.prova_aplicacao_id}). Envie-a no upload da aplicação correta.',
         )
 
     if folha.status == FolhaRespostaModel.Status.ANULADA:
-        return _falha(digitalizacao, f'A folha de {folha.aluno.nome} está anulada e não pode ser corrigida.')
+        return _falha(digitalizacao, f'O cartão de {folha.aluno.nome} está anulado e não pode ser corrigido.')
 
     itens_obj = _itens_objetivos_ordenados(folha.prova_versao)
     if not itens_obj:
-        return _falha(digitalizacao, 'A versão da folha não possui questões objetivas.')
+        return _falha(digitalizacao, 'A versão do cartão não possui questões objetivas.')
 
     try:
         canonica = corrigir_perspectiva(imagem)

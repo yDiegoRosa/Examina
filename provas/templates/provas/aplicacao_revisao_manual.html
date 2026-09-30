@@ -8,7 +8,7 @@
     <i class="bi bi-arrow-left"></i> Painel da aplicação
   </a>
   <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
-    <i class="bi bi-cloud-arrow-up"></i> Upload de folhas
+    <i class="bi bi-cloud-arrow-up"></i> Enviar cartões
   </a>
 </div>
 
@@ -20,7 +20,7 @@
     <h1 class="mb-1">Fila de revisão manual</h1>
     <p class="text-secondary" style="max-width: 660px;">
       {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
-      Trate aqui os casos que a leitura automática (OMR) não resolveu: folhas com erro
+      Trate aqui os casos que a leitura automática (OMR) não resolveu: cartões com erro
       (QR ilegível / imagem não alinhada) e questões em branco ou com dupla marcação.
     </p>
   </div>
@@ -31,7 +31,7 @@
   <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
     <h3 class="font-bold text-main mb-0">
       <i class="bi bi-exclamation-triangle-fill text-warning"></i>
-      Folhas com erro de leitura ({{ digitalizacoes_erro|length }})
+      Cartões com erro de leitura ({{ digitalizacoes_erro|length }})
     </h3>
   </div>
   <div class="table-responsive">
@@ -41,7 +41,7 @@
           <th style="width: 70px;">#</th>
           <th>Arquivo</th>
           <th>Mensagem</th>
-          <th style="width: 320px;">Vincular folha e reprocessar</th>
+          <th style="width: 320px;">Vincular cartão e reprocessar</th>
         </tr>
       </thead>
       <tbody>
@@ -65,7 +65,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="4" class="text-center p-4 text-muted">Nenhuma folha com erro de leitura.</td>
+          <td colspan="4" class="text-center p-4 text-muted">Nenhum cartão com erro de leitura.</td>
         </tr>
         {% endfor %}
       </tbody>

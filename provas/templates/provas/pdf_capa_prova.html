@@ -37,9 +37,6 @@
     <!-- Título da avaliação -->
     <div class="capa-titulo-avaliacao">
       {{ prova.titulo|upper }}
-      {% if prova.numero_caderno > 1 %}
-        <span class="capa-caderno-badge">&nbsp;— Caderno {{ prova.numero_caderno }}</span>
-      {% endif %}
     </div>
 
     <!-- Grid de dados da avaliação -->
@@ -96,9 +93,9 @@
         <tr>
           <td class="capa-info-label">Nº de Questões:</td>
           <td class="capa-info-value">{{ total_questoes|default:"—" }}</td>
-          <td class="capa-info-label">Caderno Nº:</td>
+          <td class="capa-info-label">Caderno:</td>
           <td class="capa-info-value capa-caderno-destaque">
-            {{ prova.numero_caderno }}
+            {{ identificador_display|default:"Versão única" }}
           </td>
         </tr>
       </tbody>
@@ -145,33 +142,22 @@
         <li>Respostas a lápis <strong>não dão direito</strong> a pedido de revisão de correção.</li>
         <li>É proibido o uso de celular, fone de ouvido ou qualquer dispositivo eletrônico durante a avaliação.</li>
         <li>Proibido consultar materiais (livros, cadernos, anotações) salvo indicação expressa do docente.</li>
-        <li>Ao terminar, entregue a prova ao docente. <strong>Não é permitido levar o caderno.</strong></li>
+        <li>Ao terminar, entregue <strong>o caderno e o cartão-resposta</strong> ao docente. <strong>Não é permitido levar o caderno.</strong></li>
         {% if instrucoes_extras %}
         <li>{{ instrucoes_extras }}</li>
         {% endif %}
       </ol>
     </div>
 
-    <!-- Placeholder QR Code — Módulo 3 -->
-    <div class="capa-qrcode-col">
-      <div class="capa-qrcode-box">
-        <div class="capa-qrcode-area">
-          <!-- Módulo 3 substituirá este bloco pelo QR Code real -->
-          <div class="capa-qrcode-placeholder">
-            <div class="capa-qrcode-icon">&#11036;</div>
-            <div class="capa-qrcode-corners">
-              <span class="qr-corner qr-corner-tl"></span>
-              <span class="qr-corner qr-corner-tr"></span>
-              <span class="qr-corner qr-corner-bl"></span>
-              <span class="qr-corner qr-corner-br"></span>
-            </div>
-          </div>
-        </div>
-        <div class="capa-qrcode-label">QR Code</div>
-        <div class="capa-qrcode-sublabel">Gabarito Oficial — Módulo 3</div>
-        <div class="capa-qrcode-id">
+    <!-- Aviso do cartão-resposta: o QR da leitura óptica fica só no cartão, nunca no caderno -->
+    <div class="capa-cartao-col">
+      <div class="capa-cartao-box">
+        <div class="capa-cartao-titulo">Cartão-Resposta</div>
+        <div class="capa-cartao-texto">Marque as questões <strong>objetivas</strong> no cartão-resposta com o seu nome. <strong>Somente o cartão é corrigido.</strong></div>
+        <div class="capa-cartao-texto">As questões <strong>discursivas</strong> são respondidas neste caderno.</div>
+        <div class="capa-cartao-id">
           Prova #{{ prova.pk }}
-          {% if prova.numero_caderno %} • Caderno {{ prova.numero_caderno }}{% endif %}
+           • {{ identificador_display|default:"Versão única" }}
         </div>
       </div>
     </div>
@@ -187,7 +173,7 @@
       Uso restrito à instituição. Proibida a reprodução e divulgação não autorizada.
     </div>
     <div class="capa-rodape-dir">
-      Caderno <strong>{{ prova.numero_caderno }}</strong>
+      <strong>{{ identificador_display|default:"Versão única" }}</strong>
       &nbsp;|&nbsp;
       Gerado em {{ prova.criado_em|date:"d/m/Y \à\s H:i" }}
     </div>

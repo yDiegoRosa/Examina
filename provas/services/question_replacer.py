@@ -8,7 +8,7 @@ from banco_questoes.models import Questao
 
 from .question_selector import consultar_questoes_candidatas_priorizadas
 from .snapshot_builder import construir_snapshot_questao
-from .version_generator import sincronizar_itens_versao
+from .version_generator import sincronizar_itens_versao, tipo_do_item
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def substituir_questao_prova(
     # 0. Prova travada: versões já distribuídas a alunos (folhas/atribuições)
     if prova.versoes_distribuidas:
         raise SubstituicaoQuestaoError(
-            'Esta prova já foi aplicada: suas versões estão vinculadas a alunos (folhas-resposta ou '
+            'Esta prova já foi aplicada: suas versões estão vinculadas a alunos (cartões-resposta ou '
             'atribuições). A troca de questões está bloqueada para preservar gabaritos e notas.'
         )
 
@@ -105,6 +105,14 @@ def substituir_questao_prova(
         raise SubstituicaoQuestaoError(
             f'A questão Q{nova_questao.pk} pertence à disciplina "{nova_questao.disciplina}", '
             f'mas a avaliação exige "{disciplina}".',
+        )
+
+    # 2b. Mesmo tipo (objetiva ↔ objetiva, discursiva ↔ discursiva): trocar o tipo mudaria
+    #     a quantidade de bolhas do cartão-resposta e a numeração das objetivas no caderno.
+    if nova_questao.tipo != tipo_do_item(item):
+        raise SubstituicaoQuestaoError(
+            'A questão de substituição deve ser do mesmo tipo da original (objetiva por objetiva, '
+            'discursiva por discursiva).',
         )
 
     # 3. Validação de tópico curricular

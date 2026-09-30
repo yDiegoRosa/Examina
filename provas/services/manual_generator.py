@@ -97,6 +97,9 @@ def criar_prova_manual(
     # Ordena as instâncias de questão conforme a ordem fornecida em ids_unicos
     questoes_map = {q.pk: q for q in questoes}
     questoes_ordenadas = [questoes_map[qid] for qid in ids_unicos]
+    # Discursivas no fim, mantendo a ordem escolhida pelo docente dentro de cada tipo: a
+    # numeração das objetivas no caderno (1..N) coincide com a do cartão-resposta.
+    questoes_ordenadas.sort(key=lambda q: q.tipo != Questao.Tipo.OBJETIVA)
 
     # Constrói snapshots consolidados da avaliação
     total_questoes = len(questoes_ordenadas)
@@ -168,6 +171,7 @@ def criar_prova_manual(
             'embaralhar_questoes': mascara.embaralhar_questoes,
             'embaralhar_alternativas': mascara.embaralhar_alternativas,
             'priorizar_enade': mascara.priorizar_enade,
+            'quantidade_versoes': mascara.quantidade_versoes,
         }
     else:
         snapshot_mascara = {
@@ -213,10 +217,10 @@ def criar_prova_manual(
 
         ProvaQuestao.objects.bulk_create(itens_para_criar)
 
-        # Gera versões A/B/C persistidas com permutações de questões e alternativas
-        from provas.services.version_generator import gerar_versoes_prova
+        # Gera as versões (cadernos) persistidas — quantidade definida pela máscara
+        from provas.services.version_generator import gerar_versoes_prova, quantidade_versoes_da_prova
 
-        gerar_versoes_prova(prova=prova, quantidade_versoes=3)
+        gerar_versoes_prova(prova=prova, quantidade_versoes=quantidade_versoes_da_prova(prova))
 
         logger.info(
             'Prova manual #%d ("%s") criada com sucesso contendo %d questões (Máscara: %s) por %s',

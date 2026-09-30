@@ -20,14 +20,41 @@ LETRAS_PADRAO = ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H')
 LETRAS_ALTERNATIVAS = ('A', 'B', 'C', 'D', 'E')
 
 
+QUANTIDADE_VERSOES_PADRAO = 3
+
+
 class VersoesDistribuidasError(ValueError):
     """Levantada ao tentar (re)gerar versões de uma prova cujas versões já foram distribuídas a alunos."""
+
+
+def quantidade_versoes_da_prova(prova: Prova) -> int:
+    """
+    Quantos cadernos (versões) gerar para a prova: o valor congelado no snapshot da
+    máscara no momento da geração; na falta dele (prova antiga), o da máscara atual;
+    sem máscara (montagem manual livre), o padrão de 3 (A/B/C).
+    """
+    candidatos = [(prova.snapshot_mascara or {}).get('quantidade_versoes')]
+    if prova.mascara_id:
+        candidatos.append(prova.mascara.quantidade_versoes)
+    for valor in candidatos:
+        try:
+            quantidade = int(valor)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= quantidade <= len(LETRAS_PADRAO):
+            return quantidade
+    return QUANTIDADE_VERSOES_PADRAO
 
 
 def _embaralhar_alternativas_padrao(prova: Prova) -> bool:
     """Regra de embaralhamento de alternativas: lê da máscara ou assume True."""
     mascara = getattr(prova, 'mascara', None)
     return getattr(mascara, 'embaralhar_alternativas', True) if mascara else True
+
+
+def tipo_do_item(pq: ProvaQuestao) -> str:
+    """Tipo do item da prova ('OBJ'/'DIS'), priorizando o snapshot congelado na geração."""
+    return (pq.snapshot_questao or {}).get('tipo') or pq.questao.tipo
 
 
 def montar_alternativas_versao(pq: ProvaQuestao, embaralhar: bool) -> list[dict]:
@@ -40,8 +67,7 @@ def montar_alternativas_versao(pq: ProvaQuestao, embaralhar: bool) -> list[dict]
     """
     q = pq.questao
     snap_q = pq.snapshot_questao or {}
-    tipo = snap_q.get('tipo') or q.tipo
-    if tipo != 'OBJ':
+    if tipo_do_item(pq) != 'OBJ':
         return []
 
     # Extrai alternativas originais
@@ -141,7 +167,7 @@ def gerar_versoes_prova(
 
     if prova.versoes_distribuidas:
         raise VersoesDistribuidasError(
-            'As versões desta prova já foram distribuídas a alunos (atribuições ou folhas-resposta geradas). '
+            'As versões desta prova já foram distribuídas a alunos (atribuições ou cartões-resposta gerados). '
             'Regerá-las invalidaria os gabaritos e as notas já vinculados.'
         )
 
@@ -176,11 +202,15 @@ def gerar_versoes_prova(
                 numero_versao=idx_versao,
             )
 
-            # 1. Ordem das questões nesta versão
-            itens_versao_ordenados = list(itens_base)
-            if idx_versao > 1 and embaralhar_questoes and len(itens_versao_ordenados) > 1:
-                # Embaralha questões para versões subsequentes (B, C...)
-                random.shuffle(itens_versao_ordenados)
+            # 1. Ordem das questões nesta versão: objetivas primeiro (numeradas 1..N, a mesma
+            #    numeração do cartão-resposta) e discursivas no fim. Nas versões B, C…,
+            #    embaralha dentro de cada grupo, sem misturar os tipos.
+            objetivas = [pq for pq in itens_base if tipo_do_item(pq) == 'OBJ']
+            discursivas = [pq for pq in itens_base if tipo_do_item(pq) != 'OBJ']
+            if idx_versao > 1 and embaralhar_questoes:
+                random.shuffle(objetivas)
+                random.shuffle(discursivas)
+            itens_versao_ordenados = objetivas + discursivas
 
             # 2. Monta os itens da versão
             itens_versao_db = []

@@ -1,15 +1,18 @@
 """
-Leitor óptico (OMR) — estágios de entrada da correção automática.
+Leitor óptico (OMR) do cartão-resposta — só com OpenCV.
 
-Cobre duas etapas, ambas só com OpenCV (já instalado):
+Cobre três etapas:
 
-1. **Decodificação do QR** — lê o QR de uma folha escaneada, extrai o ``qr_token`` e
+1. **Decodificação do QR** — lê o QR do cartão escaneado, extrai o ``qr_token`` e
    localiza a :class:`~provas.models.FolhaResposta` correspondente.
 2. **Correção de perspectiva (deskew)** — detecta os 4 marcadores ArUco e aplica
    ``warpPerspective`` para produzir uma imagem A4 canônica, alinhada à geometria
-   fonte-única (``answer_sheet_layout``), pronta para a amostragem das bolhas.
+   fonte-única (``answer_sheet_layout``).
+3. **Amostragem das bolhas** (:func:`ler_respostas`) — determina a alternativa marcada
+   (ou branco/ambígua) em cada questão.
 
-A amostragem das bolhas e a gravação de ``Desempenho`` são etapas posteriores.
+A comparação com o gabarito e a gravação de ``Desempenho`` ficam em
+:mod:`provas.services.correcao`.
 """
 
 from __future__ import annotations

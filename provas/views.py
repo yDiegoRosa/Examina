@@ -1,4 +1,6 @@
+import contextlib
 import logging
+import uuid
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -29,6 +31,7 @@ from .models import (
 from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
+from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
 from .services.question_replacer import (
@@ -37,6 +40,7 @@ from .services.question_replacer import (
     substituir_questao_prova,
 )
 from .services.stock_validator import EstoqueInsuficienteError
+from .services.version_generator import quantidade_versoes_da_prova
 
 logger = logging.getLogger(__name__)
 
@@ -478,7 +482,6 @@ def prova_manual_create(request):
                     ids_int = [int(qid) for qid in questoes_selecionadas_ids if qid.isdigit()]
                     disciplina = form.cleaned_data['disciplina']
                     titulo = form.cleaned_data['titulo']
-                    numero_caderno = form.cleaned_data['numero_caderno']
                     mascara_selecionada = form.cleaned_data.get('mascara') or mascara_guia
 
                     prova = criar_prova_manual(
@@ -486,7 +489,6 @@ def prova_manual_create(request):
                         disciplina=disciplina,
                         questoes_ids=ids_int,
                         autor=request.user,
-                        numero_caderno=numero_caderno,
                         mascara=mascara_selecionada,
                     )
                     messages.success(
@@ -658,6 +660,7 @@ def prova_revisao(request, pk):
             'total_atual': total_atual,
             'versoes': prova.versoes.annotate(total_itens=Count('itens')).order_by('numero_versao', 'identificador'),
             'versoes_distribuidas': prova.versoes_distribuidas,
+            'quantidade_versoes': quantidade_versoes_da_prova(prova),
         },
     )
 
@@ -823,36 +826,6 @@ def api_topicos_e_estoque(request):
     )
 
 
-# ---------------------------------------------------------------------------
-# View de Teste PDF
-# ---------------------------------------------------------------------------
-@login_required
-@docente_ou_coordenador_required
-def pdf_teste_view(request):
-    """View de demonstração para validação do WeasyPrint."""
-    questoes = Questao.objects.filter(ativo=True).prefetch_related('alternativas')[:5]
-
-    context = {
-        'titulo': 'Avaliação Modelo • Teste de Impressão WeasyPrint',
-        'disciplina': 'Construção de Aplicações Web (CAW)',
-        'docente': request.user.get_full_name() or request.user.username,
-        'turma': 'ADS-2026.2',
-        'turno': 'Noite',
-        'data': '26/08/2026',
-        'questoes': questoes,
-        'incluir_gabarito': True,
-    }
-
-    pdf_bytes = PDFGeneratorService.render_pdf_from_template(
-        'provas/pdf_template_teste.html',
-        context=context,
-    )
-
-    response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="avaliacao_teste_faeterj.pdf"'
-    return response
-
-
 def _int_param(request, nome, default, minimo, maximo):
     """Lê e limita um parâmetro inteiro de GET dentro de [minimo, maximo]."""
     try:
@@ -866,19 +839,20 @@ def _int_param(request, nome, default, minimo, maximo):
 @docente_ou_coordenador_required
 def folha_resposta_demo(request):
     """
-    Demonstração/validação visual da Folha de Resposta (cartão-resposta / OMR).
+    Demonstração do cartão-resposta com dados fictícios — mesmo formato do cartão
+    nominal real (``folha_service.render_folha_pdf``): sem matriz de matrícula, QR no
+    formato ``EXM1F|<token>`` (token fictício, não corresponde a nenhum aluno) e aviso
+    das discursivas. Útil para imprimir um cartão de teste; não toca no fluxo real.
 
-    Renderiza a folha com dados sintéticos a partir da geometria de
-    :mod:`provas.services.answer_sheet_layout` (fonte única de coordenadas). Não
-    toca no fluxo real de provas — serve para fechar/validar o layout antes do OMR.
-
-    Parâmetros GET opcionais: ``q`` (nº de questões), ``a`` (alternativas),
-    ``id`` (dígitos da matrícula), ``col`` (colunas), ``versao``.
+    Parâmetros GET opcionais: ``q`` (nº de objetivas), ``disc`` (nº de discursivas, só
+    para o aviso), ``a`` (alternativas), ``col`` (colunas), ``versao`` e ``id`` (dígitos
+    da matriz de matrícula — 0 no cartão atual; > 0 só para inspecionar o layout antigo).
     """
-    columns = _int_param(request, 'col', 3, 1, 4)
+    columns = _int_param(request, 'col', FOLHA_COLUMNS, 1, 4)
     num_questoes = _int_param(request, 'q', 30, 1, max_questoes_por_pagina(columns))
-    num_alternativas = _int_param(request, 'a', 5, 2, 5)
-    id_digits = _int_param(request, 'id', 8, 0, 12)
+    num_discursivas = _int_param(request, 'disc', 0, 0, 20)
+    num_alternativas = _int_param(request, 'a', FOLHA_ALTERNATIVAS, 2, 5)
+    id_digits = _int_param(request, 'id', FOLHA_ID_DIGITS, 0, 12)
     versao_ident = (request.GET.get('versao') or 'A').upper()[:10]
 
     try:
@@ -889,7 +863,7 @@ def folha_resposta_demo(request):
             columns=columns,
         )
     except ValueError as exc:
-        return HttpResponse(f'Parâmetros inválidos para a folha: {exc}', status=400)
+        return HttpResponse(f'Parâmetros inválidos para o cartão: {exc}', status=400)
 
     marcadores_info = fiducial.render_marcadores(geometry)
     marcadores = [
@@ -904,15 +878,8 @@ def folha_resposta_demo(request):
         for m in geometry.markers
     ]
 
-    payload = fiducial.montar_payload_qr(
-        prova_id=0,
-        versao=versao_ident,
-        num_questoes=num_questoes,
-        num_alternativas=num_alternativas,
-        schema_version=geometry.schema_version,
-    )
     try:
-        qr_data_uri = fiducial.gerar_qr_data_uri(payload)
+        qr_data_uri = fiducial.gerar_qr_data_uri(fiducial.montar_payload_folha(uuid.uuid4()))
     except fiducial.FiducialError:
         qr_data_uri = None
 
@@ -921,11 +888,14 @@ def folha_resposta_demo(request):
         'marcadores': marcadores,
         'qr_data_uri': qr_data_uri,
         'instituicao': 'FAETERJ-Rio',
-        'prova_titulo': 'Avaliação Modelo (Demonstração de Layout)',
-        'disciplina_nome': 'Construção de Aplicações Web (CAW)',
+        'prova_titulo': 'Avaliação de exemplo (demonstração do cartão-resposta)',
+        'disciplina_nome': 'Disciplina de exemplo',
         'versao_ident': versao_ident,
         'data_aplicacao': '',
+        'aluno_nome': 'Aluno(a) de exemplo',
+        'aluno_matricula': '00000000',
         'instrucoes': [],
+        'aviso_discursivas': aviso_discursivas(num_discursivas),
     }
 
     pdf_bytes = PDFGeneratorService.render_pdf_from_template(
@@ -934,7 +904,7 @@ def folha_resposta_demo(request):
     )
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="folha_resposta_demo.pdf"'
+    response['Content-Disposition'] = 'inline; filename="cartao_resposta_demo.pdf"'
     return response
 
 
@@ -964,14 +934,14 @@ def aplicacao_folhas_zip(request, pk):
         folhas = gerar_folhas_da_aplicacao(aplicacao)
     except ValueError as exc:
         return HttpResponse(
-            f'Não foi possível gerar as folhas: {exc}',
+            f'Não foi possível gerar os cartões: {exc}',
             status=400,
             content_type='text/plain; charset=utf-8',
         )
 
     if not folhas:
         return HttpResponse(
-            'Nenhum aluno matriculado (ativo) nesta turma para gerar folhas.',
+            'Nenhum aluno matriculado (ativo) nesta turma para gerar cartões.',
             status=400,
             content_type='text/plain; charset=utf-8',
         )
@@ -990,7 +960,7 @@ def aplicacao_folhas_zip(request, pk):
             zf.writestr(nome_arquivo, pdf_bytes)
 
     zip_buffer.seek(0)
-    filename = f'folhas_aplicacao_{aplicacao.pk}.zip'
+    filename = f'cartoes_aplicacao_{aplicacao.pk}.zip'
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
@@ -1067,7 +1037,7 @@ def aplicacao_corrigir_folhas(request, pk):
 
     pendentes = list(aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.PENDENTE).order_by('criado_em'))
     if not pendentes:
-        messages.info(request, 'Não há folhas pendentes para corrigir.')
+        messages.info(request, 'Não há cartões pendentes para corrigir.')
         return redirect('provas:aplicacao_upload_folhas', pk=aplicacao.pk)
 
     processadas = 0
@@ -1091,12 +1061,12 @@ def aplicacao_corrigir_folhas(request, pk):
             erros += 1
 
     if processadas:
-        resumo = f'{processadas} folha(s) corrigida(s) automaticamente ({total_acertos} acerto(s) no total).'
+        resumo = f'{processadas} cartão(ões) corrigido(s) automaticamente ({total_acertos} acerto(s) no total).'
         if erros:
             resumo += f' {erros} com erro — verifique a coluna Resultado.'
         messages.success(request, resumo)
     else:
-        messages.warning(request, f'Nenhuma folha corrigida. {erros} com erro — verifique a coluna Resultado.')
+        messages.warning(request, f'Nenhum cartão corrigido. {erros} com erro — verifique a coluna Resultado.')
 
     return redirect('provas:aplicacao_upload_folhas', pk=aplicacao.pk)
 
@@ -1177,14 +1147,14 @@ def digitalizacao_vincular_folha(request, pk):
     folha_pk = parse_pk(request.POST.get('folha_id'))
     folha = FolhaResposta.objects.filter(pk=folha_pk, prova_aplicacao_id=aplicacao_pk).first() if folha_pk else None
     if folha is None:
-        messages.error(request, 'Selecione uma folha válida para vincular.')
+        messages.error(request, 'Selecione um cartão válido para vincular.')
         return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
 
     resultado = revincular_e_reprocessar(digitalizacao, folha, usuario=request.user)
     if resultado.sucesso:
-        messages.success(request, f'Folha de {folha.aluno.nome} vinculada e reprocessada: {resultado.mensagem}')
+        messages.success(request, f'Cartão de {folha.aluno.nome} vinculado e reprocessado: {resultado.mensagem}')
     else:
-        messages.warning(request, f'Folha vinculada, mas o reprocessamento falhou: {resultado.mensagem}')
+        messages.warning(request, f'Cartão vinculado, mas o reprocessamento falhou: {resultado.mensagem}')
 
     return redirect('provas:aplicacao_revisao_manual', pk=aplicacao_pk)
 
@@ -1205,9 +1175,9 @@ def aplicacao_folhas(request, pk):
 
         try:
             folhas = gerar_folhas_da_aplicacao(aplicacao)
-            messages.success(request, f'{len(folhas)} folha(s) gerada(s)/atualizada(s).')
+            messages.success(request, f'{len(folhas)} cartão(ões) gerado(s)/atualizado(s).')
         except Exception as exc:  # noqa: BLE001
-            messages.error(request, f'Não foi possível gerar as folhas: {exc}')
+            messages.error(request, f'Não foi possível gerar os cartões: {exc}')
         return redirect('provas:aplicacao_folhas', pk=aplicacao.pk)
 
     folhas = list(aplicacao.folhas.select_related('aluno', 'prova_versao').order_by('aluno__nome'))
@@ -1324,28 +1294,30 @@ def folha_lancamento_manual(request, pk):
 @docente_ou_coordenador_required
 def prova_gerar_versoes_view(request, pk):
     """
-    (Re)Gera múltiplos cadernos de prova (Versões A, B, C) com permutações
-    de questões e alternativas para a avaliação.
+    (Re)Gera os cadernos de prova (Versões A, B, C…) com permutações de questões e
+    alternativas. A quantidade padrão vem da máscara da prova (1 = caderno único,
+    como no Simulado ENADE); ``quantidade_versoes`` no POST a sobrescreve (1–8).
     """
-    prova = get_object_or_404(Prova, pk=pk)
-    qtd_str = request.POST.get('quantidade_versoes', '3')
-    try:
-        qtd = max(1, min(8, int(qtd_str)))
-    except ValueError:
-        qtd = 3
-
     from provas.services.version_generator import VersoesDistribuidasError, gerar_versoes_prova
+
+    prova = get_object_or_404(Prova.objects.select_related('mascara'), pk=pk)
+    qtd = quantidade_versoes_da_prova(prova)
+    with contextlib.suppress(TypeError, ValueError):
+        qtd = max(1, min(8, int(request.POST.get('quantidade_versoes', qtd))))
 
     try:
         versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=qtd, substituir_existentes=True)
     except VersoesDistribuidasError as err:
         messages.error(request, f'Não foi possível regerar os cadernos: {err}')
         return redirect('provas:prova_revisao', pk=prova.pk)
-    nomes_versoes = ', '.join(f'Versão {v.identificador}' for v in versoes)
-    messages.success(
-        request,
-        f'Cadernos de avaliação gerados com sucesso: {nomes_versoes} ({len(versoes)} versões com questões e alternativas embaralhadas)!',
-    )
+    if len(versoes) == 1:
+        messages.success(request, 'Caderno único gerado com sucesso (Versão A), sem embaralhamento.')
+    else:
+        nomes_versoes = ', '.join(f'Versão {v.identificador}' for v in versoes)
+        messages.success(
+            request,
+            f'Cadernos de avaliação gerados com sucesso: {nomes_versoes} ({len(versoes)} versões com questões e alternativas embaralhadas)!',
+        )
     return redirect('provas:prova_revisao', pk=prova.pk)
 
 
@@ -1402,7 +1374,7 @@ def prova_capa_pdf(request, pk):
 
     total_questoes = prova.itens.count()
 
-    identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
+    identificador_display = f'Versão {versao.identificador}' if versao else 'Versão única'
 
     context = {
         'prova': prova,
@@ -1545,7 +1517,7 @@ def prova_pdf(request, pk):
     param_gabarito = request.GET.get('incluir_gabarito', '0')
     incluir_gabarito = param_gabarito in ('1', 'true', 'True')
 
-    identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
+    identificador_display = f'Versão {versao.identificador}' if versao else 'Versão única'
 
     # Seleção do layout: caderno estilo ENADE (discursivas antes das objetivas)
     # ou o layout institucional FAETERJ padrão. Pode ser forçado por ?layout=enade
@@ -1792,7 +1764,7 @@ def prova_gabarito_pdf(request, pk):
                 }
             )
 
-    identificador_display = f'Versão {versao.identificador}' if versao else f'Caderno {prova.numero_caderno}'
+    identificador_display = f'Versão {versao.identificador}' if versao else 'Versão única'
 
     context = {
         'prova': prova,
@@ -1857,7 +1829,7 @@ def prova_pacote_zip(request, pk):
     if not versoes and prova.itens.exists():
         from provas.services.version_generator import gerar_versoes_prova
 
-        versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=3)
+        versoes = gerar_versoes_prova(prova=prova, quantidade_versoes=quantidade_versoes_da_prova(prova))
 
     disciplina = prova.disciplina_efetiva
     mascara = prova.mascara
@@ -2071,7 +2043,7 @@ def aplicacao_create(request):
             aplicacao = form.save()
             messages.success(
                 request,
-                f'Aplicação cadastrada: {aplicacao}. Próximo passo: distribuir as versões e gerar as folhas-resposta.',
+                f'Aplicação cadastrada: {aplicacao}. Próximo passo: distribuir as versões e gerar os cartões-resposta.',
             )
             return redirect('provas:aplicacao_detail', pk=aplicacao.pk)
     else:
@@ -2151,7 +2123,7 @@ def aplicacao_atribuir_versoes(request, pk):
 SITUACAO_NOTA_LABEL = {
     'completa': 'Completa',
     'incompleta': 'Incompleta (há questões sem correção)',
-    'anulada': 'Folha anulada',
+    'anulada': 'Cartão anulado',
     'sem_itens': 'Sem questões',
 }
 # Prefixos que planilhas interpretam como fórmula (injeção de fórmula / CSV injection).

@@ -36,8 +36,8 @@ def atribuir_versoes(aplicacao: ProvaAplicacao) -> list[AtribuicaoVersao]:
 
     if aplicacao.folhas.exists():
         raise ValueError(
-            'As folhas-resposta desta aplicação já foram geradas: redistribuir as versões trocaria o '
-            'caderno (e o gabarito) de alunos que já receberam a folha.'
+            'Os cartões-resposta desta aplicação já foram gerados: redistribuir as versões trocaria o '
+            'caderno (e o gabarito) de alunos que já receberam o cartão.'
         )
 
     versoes = list(aplicacao.prova.versoes.order_by('numero_versao'))

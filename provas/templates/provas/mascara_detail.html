@@ -17,7 +17,7 @@
     </div>
     <h1 class="mb-1">{{ mascara.titulo }}</h1>
     <p class="text-secondary" style="max-width: 650px;">
-      {% if mascara.disciplina %}{{ mascara.disciplina.nome }}{% else %}Todas as disciplinas{% endif %} • {{ mascara.quantidade_questoes }} questões ({{ mascara.valor_total }} pts) • {{ mascara.get_modalidade_display }}
+      {% if mascara.disciplina %}{{ mascara.disciplina.nome }}{% else %}Todas as disciplinas{% endif %} • {{ mascara.quantidade_questoes }} questões ({{ mascara.valor_total }} pts) • {{ mascara.get_modalidade_display }} • {% if mascara.quantidade_versoes == 1 %}caderno único{% else %}{{ mascara.quantidade_versoes }} cadernos{% endif %}
     </p>
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
@@ -327,7 +327,7 @@
           <td class="font-mono font-bold text-muted">{{ p.pk }}</td>
           <td class="font-bold text-main">{{ p.titulo|truncatechars:50 }}</td>
           <td class="text-center">
-            <span class="badge-pill badge-pill-medio small">Cad. {{ p.numero_caderno }}</span>
+            
           </td>
           <td class="text-center font-mono font-bold">{{ p.total_questoes }}</td>
           <td class="text-secondary small">

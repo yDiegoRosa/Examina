@@ -84,7 +84,7 @@
             {% elif linha.situacao == 'incompleta' %}
             <span class="badge-pill badge-pill-warning" title="{{ linha.pendentes }} questão(ões) sem correção"><i class="bi bi-exclamation-circle-fill"></i> Incompleta ({{ linha.pendentes }})</span>
             {% elif linha.situacao == 'anulada' %}
-            <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Folha anulada</span>
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Cartão anulado</span>
             {% else %}
             <span class="badge-pill badge-pill-inactive">Sem questões</span>
             {% endif %}
@@ -94,7 +94,7 @@
         <tr>
           <td colspan="8" class="text-center p-5">
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-table"></i></div>
-            <p class="text-muted mb-2">Nenhuma folha-resposta gerada para esta aplicação.</p>
+            <p class="text-muted mb-2">Nenhum cartão-resposta gerado para esta aplicação.</p>
             <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline">Ir ao painel da aplicação</a>
           </td>
         </tr>
