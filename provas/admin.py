@@ -67,7 +67,7 @@ class ProvaQuestaoInline(admin.TabularInline):
 
 @admin.register(Prova)
 class ProvaAdmin(admin.ModelAdmin):
-    list_display = ['titulo', 'mascara', 'numero_caderno', 'autor', 'criado_em']
+    list_display = ['titulo', 'mascara', 'autor', 'criado_em']
     list_filter = ['mascara__disciplina', 'criado_em']
     search_fields = ['titulo', 'mascara__titulo']
     inlines = [ProvaQuestaoInline]
@@ -95,7 +95,7 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
     def total_atribuicoes(self, obj):
         return obj.atribuicoes.count()
 
-    @admin.action(description='Exportar folhas-resposta nominais (ZIP)')
+    @admin.action(description='Exportar cartões-resposta nominais (ZIP)')
     def acao_exportar_folhas(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(
@@ -107,7 +107,7 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
         aplicacao = queryset.first()
         return HttpResponseRedirect(reverse('provas:aplicacao_folhas_zip', args=[aplicacao.pk]))
 
-    @admin.action(description='Enviar folhas escaneadas (upload em lote)')
+    @admin.action(description='Enviar cartões escaneados (upload em lote)')
     def acao_upload_folhas(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(

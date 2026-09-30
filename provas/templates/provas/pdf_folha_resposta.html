@@ -3,7 +3,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Folha de Resposta — {{ prova_titulo }} — Versão {{ versao_ident }} — FAETERJ-Rio</title>
+  <title>Cartão-Resposta — {{ prova_titulo }} — Versão {{ versao_ident }} — FAETERJ-Rio</title>
   {% comment %}
     CSS embutido de propósito: coordenadas em mm dependem de @page{margin:0} e do
     posicionamento absoluto. O WeasyPrint (base_url=BASE_DIR) não resolve /static/,
@@ -62,7 +62,7 @@
 </head>
 <body>
   {% comment %}
-    Folha de Resposta (Cartão-Resposta / OMR). TODAS as posições vêm de
+    Cartão-Resposta (OMR). TODAS as posições vêm de
     provas.services.answer_sheet_layout (mm, fonte única). Não posicionar nada
     "no olho": alterar a geometria só naquele módulo. O bloco localize off garante
     ponto decimal (não vírgula pt-BR) nas coordenadas em mm.
@@ -82,9 +82,9 @@
     <div class="fr-header"
          style="left: {{ geo.header_rect.x }}mm; top: {{ geo.header_rect.y }}mm; width: {{ geo.header_rect.w }}mm; height: {{ geo.header_rect.h }}mm;">
       <div class="fr-inst">{{ instituicao|default:"FAETERJ-Rio" }}</div>
-      <div class="fr-title">FOLHA DE RESPOSTA — {{ prova_titulo }}</div>
+      <div class="fr-title">CARTÃO-RESPOSTA — {{ prova_titulo }}</div>
       <div class="fr-sub">
-        {{ disciplina_nome|default:"—" }} &nbsp;•&nbsp; Versão {{ versao_ident }}
+        {% if disciplina_nome %}{{ disciplina_nome }} &nbsp;•&nbsp; {% endif %}Versão {{ versao_ident }}
         {% if data_aplicacao %}&nbsp;•&nbsp; {{ data_aplicacao }}{% endif %}
       </div>
     </div>
@@ -136,8 +136,9 @@
         <li>Use caneta esferográfica <strong>preta ou azul</strong>.</li>
         <li>Preencha <strong>totalmente</strong> a bolha da alternativa escolhida.</li>
         <li>Marque <strong>apenas uma</strong> alternativa por questão.</li>
-        <li>Não rasure, dobre ou amasse esta folha.</li>
+        <li>Não rasure, dobre ou amasse este cartão.</li>
         {% endfor %}
+        {% if aviso_discursivas %}<li><strong>{{ aviso_discursivas }}</strong></li>{% endif %}
       </ul>
     </div>
 

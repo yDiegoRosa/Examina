@@ -17,14 +17,42 @@ from django.db import transaction
 from . import fiducial
 from .answer_sheet_layout import build_layout
 from .pdf_generator import PDFGeneratorService
+from .version_generator import tipo_do_item
 
 if TYPE_CHECKING:
     from provas.models import FolhaResposta, ProvaAplicacao, ProvaVersao
 
 # Parâmetros visuais da folha nominal.
 FOLHA_ALTERNATIVAS = 5
-FOLHA_ID_DIGITS = 8  # mantém a matriz de matrícula como redundância ao QR
+# Sem matriz de matrícula: o cartão é nominal (nome/matrícula impressos) e o QR já
+# identifica o aluno — a matriz nunca foi lida pelo OMR e não comportava matrículas com
+# mais de 8 dígitos. As bolhas de resposta têm posição fixa, independente da matriz, então
+# cartões antigos (impressos com a matriz) continuam sendo lidos com esta geometria.
+FOLHA_ID_DIGITS = 0
 FOLHA_COLUMNS = 3
+
+
+def texto_discursivas_no_caderno(versao: ProvaVersao) -> str:
+    """
+    Aviso impresso no cartão-resposta: as discursivas da versão são respondidas no
+    caderno, sem bolhas no cartão. Vazio se a versão não tiver discursivas.
+
+    Cita a quantidade, não os números: o caderno padrão numera as discursivas depois das
+    objetivas (ex.: 28 a 30) e o caderno estilo ENADE as numera à parte (D01 a D03).
+    """
+    total = sum(
+        1 for item in versao.itens.select_related('prova_questao__questao') if tipo_do_item(item.prova_questao) != 'OBJ'
+    )
+    return aviso_discursivas(total)
+
+
+def aviso_discursivas(total: int) -> str:
+    """Texto do aviso de discursivas do cartão-resposta para ``total`` discursivas (vazio se 0)."""
+    if total <= 0:
+        return ''
+    if total == 1:
+        return 'A questão discursiva é respondida no caderno — ela não tem bolha neste cartão.'
+    return f'As {total} questões discursivas são respondidas no caderno — elas não têm bolhas neste cartão.'
 
 
 def contar_questoes_objetivas(versao: ProvaVersao) -> int:
@@ -88,7 +116,7 @@ def render_folha_pdf(folha: FolhaResposta) -> bytes:
 
     num_questoes = contar_questoes_objetivas(versao)
     if num_questoes < 1:
-        raise ValueError('A versão não possui questões objetivas para compor a folha-resposta.')
+        raise ValueError('A versão não possui questões objetivas para compor o cartão-resposta.')
 
     geometry = build_layout(
         num_questoes=num_questoes,
@@ -128,6 +156,7 @@ def render_folha_pdf(folha: FolhaResposta) -> bytes:
         'aluno_nome': folha.aluno.nome,
         'aluno_matricula': folha.aluno.matricula,
         'instrucoes': [],
+        'aviso_discursivas': texto_discursivas_no_caderno(versao),
     }
 
     return PDFGeneratorService.render_pdf_from_template('provas/pdf_folha_resposta.html', context=context)

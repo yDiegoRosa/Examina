@@ -386,6 +386,7 @@ body {
   font-weight: bold;
   color: #002B49;
   font-size: 11pt;
+  white-space: nowrap; /* "Versão B" numa linha só */
 }
 
 /* Tabela de informações da avaliação */
@@ -507,101 +508,44 @@ body {
   margin-bottom: 2pt;
 }
 
-/* --- Placeholder do QR Code (Módulo 3) ------------------------------- */
-.capa-qrcode-col {
-  width: 90pt;
+/* --- Aviso do cartão-resposta (capa) --------------------------------
+   O QR da leitura óptica fica só no cartão-resposta nominal; a capa apenas
+   orienta o aluno a marcar as objetivas no cartão. */
+.capa-cartao-col {
+  width: 140pt;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.capa-qrcode-box {
-  text-align: center;
-  border: 1pt dashed #94A3B8;
+.capa-cartao-box {
+  border: 1.5pt solid #002B49;
   border-radius: 4pt;
-  padding: 6pt 8pt;
+  padding: 7pt 9pt;
   background-color: #F8FAFC;
-  width: 90pt;
+  width: 140pt;
 }
 
-.capa-qrcode-area {
-  width: 70pt;
-  height: 70pt;
-  margin: 0 auto 4pt auto;
-  border: 1.5pt solid #CBD5E1;
-  border-radius: 3pt;
-  background-color: #FFFFFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.capa-qrcode-placeholder {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.capa-qrcode-icon {
-  font-size: 26pt;
-  color: #CBD5E1;
-  line-height: 1;
-}
-
-/* Cantos decorativos do QR Code */
-.qr-corner {
-  position: absolute;
-  width: 10pt;
-  height: 10pt;
-  border-color: #94A3B8;
-  border-style: solid;
-}
-
-.qr-corner-tl {
-  top: 2pt;
-  left: 2pt;
-  border-width: 2pt 0 0 2pt;
-}
-
-.qr-corner-tr {
-  top: 2pt;
-  right: 2pt;
-  border-width: 2pt 2pt 0 0;
-}
-
-.qr-corner-bl {
-  bottom: 2pt;
-  left: 2pt;
-  border-width: 0 0 2pt 2pt;
-}
-
-.qr-corner-br {
-  bottom: 2pt;
-  right: 2pt;
-  border-width: 0 2pt 2pt 0;
-}
-
-.capa-qrcode-label {
-  font-size: 7.5pt;
+.capa-cartao-titulo {
+  font-size: 9pt;
   font-weight: bold;
+  color: #002B49;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  margin-bottom: 4pt;
+}
+
+.capa-cartao-texto {
+  font-size: 7.5pt;
   color: #334155;
-  margin-top: 3pt;
+  line-height: 1.45;
+  margin-bottom: 3pt;
 }
 
-.capa-qrcode-sublabel {
-  font-size: 6.5pt;
-  color: #64748B;
-  margin-top: 1pt;
-}
-
-.capa-qrcode-id {
+.capa-cartao-id {
   font-size: 6pt;
   color: #94A3B8;
-  margin-top: 2pt;
+  margin-top: 4pt;
   font-family: 'Courier New', Courier, monospace;
 }
 

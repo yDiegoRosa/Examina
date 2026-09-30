@@ -3,7 +3,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>{{ prova.titulo }} — Caderno {{ prova.numero_caderno }} — FAETERJ-Rio</title>
+  <title>{{ prova.titulo }} — {{ identificador_display|default:"Versão única" }} — FAETERJ-Rio</title>
   <link rel="stylesheet" href="{% static 'provas/css/print_prova.css' %}">
 </head>
 <body>
@@ -35,9 +35,6 @@
 
       <div class="capa-titulo-avaliacao">
         {{ prova.titulo|upper }}
-        {% if prova.numero_caderno > 1 %}
-          <span class="capa-caderno-badge">&nbsp;— Caderno {{ prova.numero_caderno }}</span>
-        {% endif %}
       </div>
 
       <table class="capa-info-table">
@@ -85,9 +82,9 @@
           <tr>
             <td class="capa-info-label">Nº de Questões:</td>
             <td class="capa-info-value">{{ total_questoes }}</td>
-            <td class="capa-info-label">Caderno Nº:</td>
+            <td class="capa-info-label">Caderno:</td>
             <td class="capa-info-value capa-caderno-destaque">
-              {{ identificador_display|default:prova.numero_caderno }}
+              {{ identificador_display|default:"Versão única" }}
             </td>
           </tr>
         </tbody>
@@ -126,28 +123,19 @@
           <li>Respostas a lápis <strong>não dão direito</strong> a pedido de revisão de correção.</li>
           <li>É proibido o uso de celular ou dispositivos eletrônicos durante a avaliação.</li>
           <li>Proibido consultar materiais salvo indicação expressa do docente.</li>
-          <li>Ao terminar, entregue a prova ao docente. <strong>Não é permitido levar o caderno.</strong></li>
+          <li>Ao terminar, entregue <strong>o caderno e o cartão-resposta</strong> ao docente. <strong>Não é permitido levar o caderno.</strong></li>
           {% if instrucoes_extras %}<li>{{ instrucoes_extras }}</li>{% endif %}
         </ol>
       </div>
 
-      <div class="capa-qrcode-col">
-        <div class="capa-qrcode-box">
-          <div class="capa-qrcode-area">
-            <div class="capa-qrcode-placeholder">
-              <div class="capa-qrcode-icon">&#11036;</div>
-              <div class="capa-qrcode-corners">
-                <span class="qr-corner qr-corner-tl"></span>
-                <span class="qr-corner qr-corner-tr"></span>
-                <span class="qr-corner qr-corner-bl"></span>
-                <span class="qr-corner qr-corner-br"></span>
-              </div>
-            </div>
-          </div>
-          <div class="capa-qrcode-label">QR Code</div>
-          <div class="capa-qrcode-sublabel">Gabarito Oficial — Módulo 3</div>
-          <div class="capa-qrcode-id">
-            Prova #{{ prova.pk }} • Caderno {{ prova.numero_caderno }}
+      {# Aviso do cartão-resposta: o QR da leitura óptica fica só no cartão, nunca no caderno. #}
+      <div class="capa-cartao-col">
+        <div class="capa-cartao-box">
+          <div class="capa-cartao-titulo">Cartão-Resposta</div>
+          <div class="capa-cartao-texto">Marque as questões <strong>objetivas</strong> no cartão-resposta com o seu nome. <strong>Somente o cartão é corrigido.</strong></div>
+          <div class="capa-cartao-texto">As questões <strong>discursivas</strong> são respondidas neste caderno.</div>
+          <div class="capa-cartao-id">
+            Prova #{{ prova.pk }} • {{ identificador_display|default:"Versão única" }}
           </div>
         </div>
       </div>
@@ -158,7 +146,7 @@
         Documento gerado automaticamente pelo <strong>Sistema Examina — FAETERJ-Rio</strong>.
       </div>
       <div class="capa-rodape-dir">
-        Caderno <strong>{{ prova.numero_caderno }}</strong>
+        <strong>{{ identificador_display|default:"Versão única" }}</strong>
       </div>
     </div>
   </div>
@@ -175,7 +163,7 @@
       </div>
       <div style="text-align: right;">
         <span class="badge-avaliacao-compacto">AVALIAÇÃO OFICIAL</span>
-        <div style="font-size: 7.5pt; color: #002B49; font-weight: bold; margin-top: 2pt;">Caderno {{ prova.numero_caderno }}</div>
+        <div style="font-size: 7.5pt; color: #002B49; font-weight: bold; margin-top: 2pt;">{{ identificador_display|default:"Versão única" }}</div>
       </div>
     </div>
 
@@ -320,7 +308,7 @@
       <div class="gabarito-sub">
         Avaliação: <strong>{{ prova.titulo }}</strong> &nbsp;•&nbsp;
         Disciplina: <strong>{{ disciplina_nome }}</strong> &nbsp;•&nbsp;
-        Caderno: <strong>{{ prova.numero_caderno }}</strong>
+        Caderno: <strong>{{ identificador_display|default:"Versão única" }}</strong>
       </div>
     </div>
 

@@ -31,6 +31,8 @@ ENADE_PERC_MEDIO = 50
 ENADE_PERC_DIFICIL = 20
 ENADE_TEMPO_MINUTOS = 180  # referência para o Componente Específico
 ENADE_VALOR_TOTAL = 10
+# O ENADE real é aplicado em caderno único: o simulado gera 1 versão (sem cadernos A/B/C).
+ENADE_QUANTIDADE_CADERNOS = 1
 
 # Nº máximo de tópicos aproveitados por área (evita distribuição excessivamente
 # granular e reduz a chance de déficit de estoque em células muito específicas).
@@ -96,6 +98,7 @@ def preset_enade_initial(disciplina=None):
         'priorizar_enade': True,
         'embaralhar_questoes': True,
         'embaralhar_alternativas': True,
+        'quantidade_versoes': ENADE_QUANTIDADE_CADERNOS,
     }
     if disciplina is not None:
         initial['disciplina'] = disciplina

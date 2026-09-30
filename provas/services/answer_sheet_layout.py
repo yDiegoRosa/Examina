@@ -1,7 +1,7 @@
 """
-Geometria da Folha de Resposta (Cartão-Resposta / OMR) — FONTE ÚNICA de coordenadas.
+Geometria do Cartão-Resposta (OMR) — FONTE ÚNICA de coordenadas.
 
-Este módulo é a fonte única e autoritativa da geometria da folha de resposta usada
+Este módulo é a fonte única e autoritativa da geometria do cartão-resposta usado
 pela leitura óptica (OMR) do Examina. Todas as posições (cantos fiduciais, área do
 QR e cada bolha de resposta / matrícula) são definidas aqui em **milímetros**, com
 origem no canto superior-esquerdo da página física (A4). O ``@page`` do template usa
@@ -9,8 +9,11 @@ origem no canto superior-esquerdo da página física (A4). O ``@page`` do templa
 
 O mesmo objeto de geometria produzido aqui é consumido:
 
-* hoje, pelo template ``pdf_folha_resposta.html`` (para *imprimir* a folha);
-* futuramente, pelo leitor OMR (para *ler* a folha) via :meth:`SheetGeometry.to_dict`.
+* pelo template ``pdf_folha_resposta.html`` (para *imprimir* o cartão);
+* pelo leitor OMR (``omr.ler_respostas`` / ``correcao``), para *ler* o cartão.
+
+A matriz de matrícula (``id_digits``) é opcional e não afeta a posição das bolhas de
+resposta; o cartão nominal atual não a usa (o QR identifica o aluno).
 
 Manter geometria e render acoplados a esta única fonte é o que garante que a posição
 das bolhas seja "fixa e conhecida" — a premissa de todo o reconhecimento óptico.

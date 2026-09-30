@@ -58,7 +58,7 @@ class MultipleImageField(forms.ImageField):
 class UploadFolhasForm(forms.Form):
     """Upload em lote de folhas escaneadas/fotografadas de uma aplicação."""
 
-    imagens = MultipleImageField(label='Imagens das folhas (fotos do celular ou digitalizações)')
+    imagens = MultipleImageField(label='Imagens dos cartões-resposta (fotos do celular ou digitalizações)')
 
 
 class ProvaAplicacaoForm(forms.ModelForm):
@@ -119,6 +119,7 @@ class MascaraForm(forms.ModelForm):
             'embaralhar_questoes',
             'embaralhar_alternativas',
             'priorizar_enade',
+            'quantidade_versoes',
             'ativo',
         ]
         labels = {
@@ -137,6 +138,7 @@ class MascaraForm(forms.ModelForm):
             'embaralhar_questoes': 'Embaralhar ordem das questões nos cadernos',
             'embaralhar_alternativas': 'Embaralhar alternativas (A-E) das questões objetivas',
             'priorizar_enade': 'Priorizar questões do ENADE / POSCOMP',
+            'quantidade_versoes': 'Quantidade de Cadernos (Versões)',
             'ativo': 'Máscara ativa para geração de provas',
         }
         widgets = {
@@ -182,12 +184,15 @@ class MascaraForm(forms.ModelForm):
             'embaralhar_questoes': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
             'embaralhar_alternativas': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
             'priorizar_enade': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'quantidade_versoes': forms.NumberInput(attrs={'class': 'form-input', 'min': 1, 'max': 8}),
             'ativo': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['disciplina'].queryset = Disciplina.objects.filter(ativo=True)
+        # Opcional no POST: se omitido, mantém o valor atual (ou o padrão de 3 numa máscara nova).
+        self.fields['quantidade_versoes'].required = False
 
         self.fields['disciplina'].required = False
         self.fields['disciplina'].empty_label = 'Todas as disciplinas (simulado integrado)'
@@ -196,6 +201,12 @@ class MascaraForm(forms.ModelForm):
         ].help_text = (
             'Deixe em branco para criar um simulado integrado e identificar dificuldades por tópico em todo o acervo.'
         )
+
+    def clean_quantidade_versoes(self):
+        valor = self.cleaned_data.get('quantidade_versoes')
+        if valor is None:
+            return self.instance.quantidade_versoes or Mascara._meta.get_field('quantidade_versoes').default
+        return valor
 
     def clean(self):
         cleaned = super().clean()
@@ -372,18 +383,6 @@ class ProvaManualForm(forms.Form):
             attrs={
                 'class': 'form-select',
                 'id': 'id_mascara_manual',
-            },
-        ),
-    )
-    numero_caderno = forms.IntegerField(
-        label='Número do Caderno',
-        initial=1,
-        min_value=1,
-        widget=forms.NumberInput(
-            attrs={
-                'class': 'form-input',
-                'min': 1,
-                'id': 'id_numero_caderno_manual',
             },
         ),
     )

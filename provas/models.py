@@ -120,6 +120,12 @@ class Mascara(models.Model):
         default=False,
         help_text='Dá preferência a questões cadastradas com origem de exames acadêmicos oficiais.',
     )
+    quantidade_versoes = models.PositiveSmallIntegerField(
+        'quantidade de cadernos (versões)',
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(8)],
+        help_text='Cadernos gerados para cada prova (A, B, C…). Use 1 para caderno único, como no Simulado ENADE.',
+    )
 
     # Metadados e Auditoria
     autor = models.ForeignKey(
@@ -469,6 +475,8 @@ class Prova(models.Model):
         default=TipoGeracao.AUTOMATICA,
     )
     titulo = models.CharField('título da prova', max_length=250)
+    # Legado (anterior às versões A/B/C…): não é mais exibido — PDFs e cartões identificam
+    # o caderno pela versão. Mantido no banco por compatibilidade.
     numero_caderno = models.PositiveIntegerField('número do caderno', default=1)
     questoes = models.ManyToManyField(
         Questao,
@@ -522,7 +530,7 @@ class Prova(models.Model):
         verbose_name_plural = 'provas geradas'
 
     def __str__(self):
-        return f'{self.titulo} (Caderno {self.numero_caderno})'
+        return self.titulo
 
     @property
     def disciplina_efetiva(self):
@@ -693,8 +701,8 @@ class ProvaAplicacao(models.Model):
     """
     Aplicação de uma prova a uma turma numa data específica (o "evento" de avaliação).
 
-    É a base para a atribuição de versões por aluno e, futuramente, para a
-    folha-resposta individual com QR (RF10).
+    Base da atribuição de versões por aluno, dos cartões-resposta nominais com QR, da
+    correção (OMR/manual) e das notas da turma.
     """
 
     prova = models.ForeignKey(

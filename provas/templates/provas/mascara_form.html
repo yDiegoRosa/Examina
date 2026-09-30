@@ -364,6 +364,19 @@
 
       <div class="grid grid-cols-12 gap-3 pt-2">
         <div class="col-span-4">
+          <label for="{{ form.quantidade_versoes.id_for_label }}" class="form-label font-bold">
+            {{ form.quantidade_versoes.label }}
+          </label>
+          {{ form.quantidade_versoes }}
+          <div class="form-help">{{ form.quantidade_versoes.help_text }}</div>
+          {% if form.quantidade_versoes.errors %}
+          <div class="invalid-feedback">{{ form.quantidade_versoes.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-3 pt-2">
+        <div class="col-span-4">
           <label class="flex items-center gap-2 cursor-pointer">
             {{ form.embaralhar_questoes }}
             <span class="font-bold text-main">{{ form.embaralhar_questoes.label }}</span>

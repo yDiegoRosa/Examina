@@ -11,7 +11,7 @@
     <h1 class="mb-1">Aplicações</h1>
     <p class="text-secondary" style="max-width: 660px;">
       Cada aplicação liga uma prova a uma turma numa data. A partir dela você distribui as versões,
-      gera as folhas-resposta, envia as folhas escaneadas, revisa a correção e exporta as notas.
+      gera os cartões-resposta, envia os cartões escaneados, revisa a correção e exporta as notas.
     </p>
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
@@ -46,7 +46,7 @@
           <th style="width: 120px;">Data</th>
           <th>Prova</th>
           <th style="width: 220px;">Turma</th>
-          <th style="width: 190px;">Folhas</th>
+          <th style="width: 190px;">Cartões</th>
           <th style="width: 110px;" class="text-right">Ações</th>
         </tr>
       </thead>
@@ -57,7 +57,7 @@
           <td><a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="font-bold text-main">{{ aplicacao.prova.titulo }}</a></td>
           <td>{{ aplicacao.turma }}</td>
           <td class="small text-muted">
-            {% if aplicacao.total_folhas %}{{ aplicacao.folhas_lidas }} lida(s) de {{ aplicacao.total_folhas }}{% else %}Nenhuma folha gerada{% endif %}
+            {% if aplicacao.total_folhas %}{{ aplicacao.folhas_lidas }} lido(s) de {{ aplicacao.total_folhas }}{% else %}Nenhum cartão gerado{% endif %}
           </td>
           <td class="text-right">
             <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn-table-action" title="Abrir painel da aplicação" aria-label="Abrir painel da aplicação {{ aplicacao }}">

@@ -3,7 +3,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Gabarito Oficial — {{ prova.titulo }} — Caderno {{ prova.numero_caderno }} — FAETERJ-Rio</title>
+  <title>Gabarito Oficial — {{ prova.titulo }} — {{ identificador_display|default:"Versão única" }} — FAETERJ-Rio</title>
   <link rel="stylesheet" href="{% static 'provas/css/print_prova.css' %}">
 </head>
 <body class="gabarito-doc-body">
@@ -26,7 +26,7 @@
       <div class="gabarito-header-badge-col">
         <div class="gabarito-badge-docente">USO EXCLUSIVO DO DOCENTE</div>
         <div class="gabarito-badge-caderno">
-          GABARITO • CADERNO {{ prova.numero_caderno|stringformat:"02d"|default:prova.numero_caderno }}
+          GABARITO • {{ identificador_display|default:"Versão única"|upper }}
         </div>
       </div>
     </div>
@@ -89,7 +89,7 @@
        ═══════════════════════════════════════════════════════════ -->
   <div class="gabarito-secao-titulo">
     <span class="gabarito-secao-icone">&#9658;</span>
-    Quadro de Respostas Rápidas — Caderno {{ prova.numero_caderno }}
+    Quadro de Respostas Rápidas — {{ identificador_display|default:"Versão única" }}
   </div>
 
   <div class="gabarito-resumo-container">

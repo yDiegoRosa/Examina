@@ -55,7 +55,7 @@
               {{ total_questoes }} ({{ total_objetivas }} objetivas + {{ total_discursivas }} discursivas)
             </td>
             <td class="enade-info-label">Caderno:</td>
-            <td class="enade-info-value">{{ identificador_display|default:prova.numero_caderno }}</td>
+            <td class="enade-info-value">{{ identificador_display|default:"Versão única" }}</td>
           </tr>
         </tbody>
       </table>
@@ -109,6 +109,7 @@
       <ol>
         <li>Confira se este caderno contém as questões discursivas e objetivas do Componente Específico.</li>
         <li>As questões de múltipla escolha possuem apenas <strong>uma alternativa correta</strong> (A a E).</li>
+        <li>Marque as respostas das objetivas no <strong>cartão-resposta</strong> com o seu nome: <strong>somente o cartão é corrigido</strong>.</li>
         <li>Responda cada questão discursiva no espaço destinado (máximo de 15 linhas); o que ultrapassar será desconsiderado.</li>
         <li>Use caneta esferográfica de tinta preta; respostas a lápis não dão direito a revisão.</li>
         <li>É proibido o uso de celular ou dispositivos eletrônicos durante a avaliação.</li>

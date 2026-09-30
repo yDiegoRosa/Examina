@@ -1,5 +1,5 @@
 """
-Geração de marcadores fiduciais (ArUco) e do QR Code da folha de resposta.
+Geração de marcadores fiduciais (ArUco) e do QR Code do cartão-resposta.
 
 Complementa :mod:`provas.services.answer_sheet_layout` (que define *onde* os
 marcadores e o QR ficam) fornecendo *o conteúdo visual* desses elementos como
@@ -89,7 +89,7 @@ def gerar_qr_data_uri(
     """
     Gera um QR Code como data-URI PNG.
 
-    :param payload: conteúdo a codificar (ver :func:`montar_payload_qr`).
+    :param payload: conteúdo a codificar (ver :func:`montar_payload_folha`).
     :param box_size: pixels por módulo do QR.
     :param border: quiet zone em módulos.
     :raises FiducialError: se a lib ``qrcode`` não estiver disponível.
@@ -115,27 +115,9 @@ def gerar_qr_data_uri(
     return f'data:image/png;base64,{b64}'
 
 
-def montar_payload_qr(
-    *,
-    prova_id: int | str,
-    versao: str,
-    num_questoes: int,
-    num_alternativas: int,
-    schema_version: str,
-) -> str:
-    """
-    Monta o payload compacto do QR que identifica a folha para o OMR.
-
-    Formato: ``EXM1|prova=<id>|versao=<ident>|nq=<n>|na=<n>|geo=<schema>``.
-    O ``schema`` permite ao leitor validar que a folha corresponde à geometria
-    esperada antes de amostrar as bolhas.
-    """
-    return f'EXM1|prova={prova_id}|versao={versao}|nq={num_questoes}|na={num_alternativas}|geo={schema_version}'
-
-
 def montar_payload_folha(qr_token) -> str:
     """
-    Monta o payload do QR de uma folha nominal (RF10) a partir do seu token único.
+    Monta o payload do QR do cartão-resposta nominal a partir do seu token único.
 
     Formato: ``EXM1F|<uuid>``. O leitor OMR resolve a ``FolhaResposta`` por esse
     token para obter aluno, versão e gabarito.

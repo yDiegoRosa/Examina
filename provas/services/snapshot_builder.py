@@ -41,6 +41,7 @@ def construir_snapshot_mascara(mascara: Mascara) -> dict[str, Any]:
         'embaralhar_questoes': mascara.embaralhar_questoes,
         'embaralhar_alternativas': mascara.embaralhar_alternativas,
         'priorizar_enade': mascara.priorizar_enade,
+        'quantidade_versoes': mascara.quantidade_versoes,
     }
 
 
