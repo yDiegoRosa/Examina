@@ -4,6 +4,8 @@ from django.db.models import Case, Count, IntegerField, Q, QuerySet, Value, When
 
 from banco_questoes.models import Questao
 
+from .caderno_layout import grupo_da_questao, numeros_por_tipo
+
 
 def consultar_questoes_candidatas_priorizadas(
     mascara=None,
@@ -152,9 +154,9 @@ def selecionar_questoes_por_matriz(
     if mascara.embaralhar_questoes:
         random.shuffle(questoes_selecionadas)
 
-    # Objetivas primeiro e discursivas no fim (ordenação estável): a numeração das
-    # objetivas no caderno (1..N) coincide com a do cartão-resposta.
-    questoes_selecionadas.sort(key=lambda q: q.tipo != Questao.Tipo.OBJETIVA)
+    # Ordem do caderno em blocos (ordenação estável): discursivas, objetivas longas e
+    # objetivas curtas — ver caderno_layout.
+    questoes_selecionadas.sort(key=grupo_da_questao)
 
     return questoes_selecionadas
 
@@ -241,16 +243,18 @@ def gerar_prova_automatizada(
         # Cálculo da pontuação proporcional por item
         pontuacao_item = round(mascara.valor_total / mascara.quantidade_questoes, 2)
 
+        # Número contado dentro do tipo: objetivas 1..N (as do cartão) e discursivas 1..k.
+        numeros = numeros_por_tipo(q.tipo for q in questoes)
         itens_prova = [
             ProvaQuestao(
                 prova=prova,
                 questao=q,
-                numero=idx + 1,
+                numero=numero,
                 ordem=idx + 1,
                 pontuacao=pontuacao_item,
                 snapshot_questao=construir_snapshot_questao(q),
             )
-            for idx, q in enumerate(questoes)
+            for idx, (q, numero) in enumerate(zip(questoes, numeros, strict=True))
         ]
         ProvaQuestao.objects.bulk_create(itens_prova)
 

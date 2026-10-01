@@ -76,6 +76,7 @@
           <th style="width: 70px;">ID</th>
           <th style="width: 140px;">Período</th>
           <th>Nome da Turma</th>
+          <th style="width: 110px;">Turno</th>
           <th style="width: 110px;">Status</th>
           <th style="width: 120px;" class="text-right">Ações</th>
         </tr>
@@ -86,6 +87,7 @@
           <td><span class="font-bold text-muted font-mono">#{{ turma.pk }}</span></td>
           <td><span class="font-bold font-mono" style="color: var(--fae-blue-primary);">{{ turma.periodo }}</span></td>
           <td><span class="font-bold text-main">{{ turma.nome }}</span></td>
+          <td>{% if turma.turno %}{{ turma.get_turno_display }}{% else %}<span class="text-muted" title="Turma cadastrada antes do campo turno; edite para informar.">—</span>{% endif %}</td>
           <td>
             {% if turma.ativo %}
             <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Ativa</span>
@@ -114,7 +116,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="5" class="text-center p-5">
+          <td colspan="6" class="text-center p-5">
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-folder-x"></i></div>
             <h4 class="font-bold text-main">Nenhuma turma encontrada</h4>
             <p class="text-muted mb-3">Cadastre a primeira turma do período.</p>

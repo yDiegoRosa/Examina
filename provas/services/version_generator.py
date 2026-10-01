@@ -13,6 +13,14 @@ from typing import TYPE_CHECKING
 
 from django.db import transaction
 
+from .caderno_layout import (
+    GRUPO_DISCURSIVA,
+    GRUPO_OBJETIVA_CURTA,
+    GRUPO_OBJETIVA_LONGA,
+    grupo_do_item,
+    numeros_por_tipo,
+)
+
 if TYPE_CHECKING:
     from provas.models import Prova, ProvaQuestao, ProvaVersao
 
@@ -189,6 +197,8 @@ def gerar_versoes_prova(
     if not itens_base:
         return []
 
+    grupos = {pq.pk: grupo_do_item(pq) for pq in itens_base}
+    ordem_dos_grupos = (GRUPO_DISCURSIVA, GRUPO_OBJETIVA_LONGA, GRUPO_OBJETIVA_CURTA)
     versoes_criadas: list[ProvaVersao] = []
 
     with transaction.atomic():
@@ -202,19 +212,20 @@ def gerar_versoes_prova(
                 numero_versao=idx_versao,
             )
 
-            # 1. Ordem das questões nesta versão: objetivas primeiro (numeradas 1..N, a mesma
-            #    numeração do cartão-resposta) e discursivas no fim. Nas versões B, C…,
-            #    embaralha dentro de cada grupo, sem misturar os tipos.
-            objetivas = [pq for pq in itens_base if tipo_do_item(pq) == 'OBJ']
-            discursivas = [pq for pq in itens_base if tipo_do_item(pq) != 'OBJ']
+            # 1. Ordem das questões nesta versão, em blocos (ver caderno_layout): discursivas,
+            #    objetivas longas e objetivas curtas. Nas versões B, C…, embaralha dentro de
+            #    cada bloco, sem misturá-los.
+            blocos = [[pq for pq in itens_base if grupos[pq.pk] == grupo] for grupo in ordem_dos_grupos]
             if idx_versao > 1 and embaralhar_questoes:
-                random.shuffle(objetivas)
-                random.shuffle(discursivas)
-            itens_versao_ordenados = objetivas + discursivas
+                for bloco in blocos:
+                    random.shuffle(bloco)
+            itens_versao_ordenados = [pq for bloco in blocos for pq in bloco]
 
-            # 2. Monta os itens da versão
+            # 2. Monta os itens da versão. O número é contado dentro do tipo: objetivas
+            #    1..N (a numeração do cartão-resposta) e discursivas 1..k ("Discursiva 01").
+            numeros = numeros_por_tipo(tipo_do_item(pq) for pq in itens_versao_ordenados)
             itens_versao_db = []
-            for num_questao, pq in enumerate(itens_versao_ordenados, start=1):
+            for posicao, (pq, numero) in enumerate(zip(itens_versao_ordenados, numeros, strict=True), start=1):
                 # Embaralha alternativas apenas para versões subsequentes (B, C...)
                 alts_embaralhadas = montar_alternativas_versao(
                     pq, embaralhar=idx_versao > 1 and embaralhar_alternativas
@@ -224,8 +235,8 @@ def gerar_versoes_prova(
                     ProvaVersaoItem(
                         versao=versao,
                         prova_questao=pq,
-                        numero=num_questao,
-                        ordem=num_questao,
+                        numero=numero,
+                        ordem=posicao,
                         alternativas_embaralhadas=alts_embaralhadas,
                     )
                 )

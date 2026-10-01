@@ -43,10 +43,14 @@ class Turma(models.Model):
     """
     Turma escopada por período letivo.
 
-    Cada turma pertence a um único período (ex.: ``2026.2`` + ``MAC Noite``). O
-    histórico de vínculo de um aluno emerge de suas matrículas em turmas de
-    períodos distintos.
+    Cada turma pertence a um único período e turno (ex.: ``2026.2`` + ``RSD`` + Manhã):
+    o mesmo nome pode se repetir em turnos ou períodos diferentes. O histórico de
+    vínculo de um aluno emerge de suas matrículas em turmas de períodos distintos.
     """
+
+    class Turno(models.TextChoices):
+        MANHA = 'MANHA', 'Manhã'
+        NOITE = 'NOITE', 'Noite'
 
     periodo = models.CharField(
         'período',
@@ -57,7 +61,15 @@ class Turma(models.Model):
     nome = models.CharField(
         'nome da turma',
         max_length=120,
-        help_text='Identificação da turma no período, por exemplo: MAC Noite, CAL Manhã.',
+        help_text='Identificação da turma, por exemplo: RSD, MAC. Pode se repetir em outro turno ou período.',
+    )
+    # Vazio só em turmas cadastradas antes do campo existir; a tela de turma exige o turno.
+    turno = models.CharField(
+        'turno',
+        max_length=10,
+        choices=Turno.choices,
+        blank=True,
+        help_text='Turno das aulas da turma. Sai preenchido na ata de avaliação.',
     )
     ativo = models.BooleanField('ativa', default=True)
 
@@ -65,13 +77,15 @@ class Turma(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-periodo', 'nome']
-        unique_together = [('periodo', 'nome')]
+        ordering = ['-periodo', 'nome', 'turno']
+        unique_together = [('periodo', 'nome', 'turno')]
         verbose_name = 'turma'
         verbose_name_plural = 'turmas'
 
     def __str__(self):
-        return f'{self.periodo} — {self.nome}'
+        # O turno entra no nome exibido: turmas de mesmo nome e período só se distinguem por ele.
+        turno = f' ({self.get_turno_display()})' if self.turno else ''
+        return f'{self.periodo} — {self.nome}{turno}'
 
 
 class Matricula(models.Model):

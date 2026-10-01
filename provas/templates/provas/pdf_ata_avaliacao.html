@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Ata de Avaliação — {{ prova_titulo }} — {{ periodo }} {{ turma_nome }} — FAETERJ-Rio</title>
+  {% comment %}
+    Ata de Avaliação (lista de presença da sala), no modelo da ata do sistema acadêmico
+    da faculdade. CSS embutido, como o cartão-resposta: o documento é autocontido.
+    Assinaturas e nota ficam em branco (preenchimento à mão). O curso vem do curso padrão
+    (ata_service.CURSO_PADRAO) e o turno, da turma (linha em branco em turmas antigas,
+    sem turno); a grade não existe no Examina e sai como linha em branco. A disciplina
+    sai só pelo nome (sem o código do Coruja).
+    Da 2ª página em diante, o cabeçalho reduzido (.ata-ref) e o cabeçalho da tabela
+    (thead) se repetem.
+  {% endcomment %}
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 16mm 12mm 16mm 12mm;
+      @top-left { content: element(ata-ref); vertical-align: bottom; padding-bottom: 2mm; }
+      @bottom-left { content: element(ata-rodape); vertical-align: top; padding-top: 2mm; }
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #475569;
+        vertical-align: top; padding-top: 2mm;
+      }
+    }
+    @page :first { @top-left { content: none; } }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #111827; font-size: 8.5pt; }
+
+    .ata-ref { position: running(ata-ref); font-size: 7.5pt; color: #475569; }
+    .ata-rodape { position: running(ata-rodape); font-size: 7.5pt; color: #475569; }
+
+    .ata-titulo { text-align: center; font-size: 14pt; font-weight: bold; color: #002b49; margin-bottom: 4mm; }
+
+    /* Cabeçalho: rótulo | valor | rótulo | valor. */
+    .ata-cab { width: 100%; border-collapse: collapse; margin-bottom: 5mm; table-layout: fixed; }
+    .ata-cab th { text-align: left; font-weight: bold; color: #002b49; padding: 1.2mm 2mm 1.2mm 0; vertical-align: bottom; white-space: nowrap; }
+    .ata-cab th.ata-cab-dir { padding-left: 4mm; }
+    .ata-cab td { padding: 1.2mm 0; vertical-align: bottom; }
+    .ata-instituicao { text-transform: uppercase; }
+    /* Linha para preencher à mão. */
+    .ata-campo { display: inline-block; min-width: 18mm; border-bottom: 0.6pt solid #475569; height: 3.6mm; vertical-align: bottom; }
+    .ata-campo-largo { display: block; width: 100%; }
+
+    /* Lista de alunos. */
+    .ata-lista { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .ata-lista th, .ata-lista td { border: 0.6pt solid #94a3b8; padding: 0 1.5mm; vertical-align: middle; }
+    .ata-lista thead th { background: #e2e8f0; color: #002b49; font-size: 8pt; font-weight: bold; text-align: left; height: 7mm; }
+    .ata-lista tbody tr { height: 7.2mm; page-break-inside: avoid; }
+    .ata-lista .ata-num { text-align: center; }
+    .ata-lista .ata-mat { font-size: 7.8pt; white-space: nowrap; }
+    .ata-lista .ata-nome { font-size: 7.8pt; line-height: 1.15; }
+    .ata-lista .ata-versao { text-align: center; font-weight: bold; }
+    .ata-lista .ata-vazio { text-align: center; color: #64748b; height: 12mm; }
+  </style>
+</head>
+<body>
+  <div class="ata-ref">Ata de Avaliação — {{ periodo }} • {{ turma_nome }}{% if turno %} ({{ turno }}){% endif %} — {{ prova_titulo }}{% if data_aplicacao %} — {{ data_aplicacao }}{% endif %}</div>
+  <div class="ata-rodape">Examina — Emitido em {{ emitido_em }}</div>
+
+  <h1 class="ata-titulo">Ata de Avaliação</h1>
+
+  <table class="ata-cab">
+    <colgroup>
+      <col style="width: 22mm;">
+      <col>
+      <col style="width: 30mm;">
+      <col style="width: 32mm;">
+    </colgroup>
+    <tr>
+      <th>Instituição:</th>
+      <td colspan="3" class="ata-instituicao">Faculdade de Educação Tecnológica do Rio de Janeiro Fernando Mota (FAETERJ-Rio)</td>
+    </tr>
+    <tr>
+      <th>Curso:</th>
+      <td>{% if curso %}{{ curso }}{% else %}<span class="ata-campo ata-campo-largo"></span>{% endif %}</td>
+      <th class="ata-cab-dir">Período Letivo:</th>
+      <td>{{ periodo }}</td>
+    </tr>
+    <tr>
+      <th>Disciplina:</th>
+      <td>{% if disciplina_nome %}{{ disciplina_nome }}{% else %}<span class="ata-campo ata-campo-largo"></span>{% endif %}</td>
+      <th class="ata-cab-dir">Turno:</th>
+      <td>{% if turno %}{{ turno }}{% else %}<span class="ata-campo ata-campo-largo"></span>{% endif %}</td>
+    </tr>
+    <tr>
+      <th>Turma:</th>
+      <td>{{ turma_nome }}</td>
+      <th class="ata-cab-dir">Grade:</th>
+      <td><span class="ata-campo ata-campo-largo"></span></td>
+    </tr>
+    <tr>
+      <th>Professor:</th>
+      <td colspan="3">{% if professor %}{{ professor }}{% else %}<span class="ata-campo ata-campo-largo"></span>{% endif %}</td>
+    </tr>
+    <tr>
+      <th>Avaliação:</th>
+      <td>{{ prova_titulo }}</td>
+      <th class="ata-cab-dir">Data:</th>
+      <td>{% if data_aplicacao %}{{ data_aplicacao }}{% else %}<span class="ata-campo ata-campo-largo"></span>{% endif %}</td>
+    </tr>
+  </table>
+
+  <table class="ata-lista">
+    <colgroup>
+      <col style="width: 7mm;">
+      <col style="width: 25mm;">
+      <col>
+      {% if mostrar_versao %}<col style="width: 13mm;">{% endif %}
+      <col style="width: 28mm;">
+      <col style="width: 28mm;">
+      <col style="width: 12mm;">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="ata-num">Nº</th>
+        <th>Matrícula</th>
+        <th>Nome do Aluno</th>
+        {% if mostrar_versao %}<th class="ata-versao">Versão</th>{% endif %}
+        <th>Ass. Presença</th>
+        <th>Ass. Recebido</th>
+        <th>Nota</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for linha in linhas %}
+      <tr>
+        <td class="ata-num">{{ linha.numero }}</td>
+        <td class="ata-mat">{{ linha.matricula }}</td>
+        <td class="ata-nome">{{ linha.nome|upper }}</td>
+        {% if mostrar_versao %}<td class="ata-versao">{{ linha.versao|default:"—" }}</td>{% endif %}
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="{% if mostrar_versao %}7{% else %}6{% endif %}" class="ata-vazio">Nenhum aluno matriculado (ativo) nesta turma.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

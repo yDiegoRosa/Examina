@@ -16,8 +16,8 @@ class AlunoAdmin(admin.ModelAdmin):
 
 @admin.register(Turma)
 class TurmaAdmin(admin.ModelAdmin):
-    list_display = ('periodo', 'nome', 'ativo', 'criado_em')
-    list_filter = ('ativo', 'periodo')
+    list_display = ('periodo', 'nome', 'turno', 'ativo', 'criado_em')
+    list_filter = ('ativo', 'periodo', 'turno')
     search_fields = ('nome', 'periodo')
     ordering = ('-periodo', 'nome')
     readonly_fields = ('criado_em', 'atualizado_em')

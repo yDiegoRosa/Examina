@@ -31,6 +31,7 @@ from .models import (
 from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
+from .services.caderno_layout import numerar_por_tipo, ordenar_como_caderno, organizar_caderno
 from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
@@ -40,7 +41,7 @@ from .services.question_replacer import (
     substituir_questao_prova,
 )
 from .services.stock_validator import EstoqueInsuficienteError
-from .services.version_generator import quantidade_versoes_da_prova
+from .services.version_generator import quantidade_versoes_da_prova, tipo_do_item
 
 logger = logging.getLogger(__name__)
 
@@ -533,11 +534,12 @@ def prova_revisao(request, pk):
         Prova.objects.select_related('mascara', 'mascara__disciplina', 'disciplina', 'autor'),
         pk=pk,
     )
-    itens = (
+    itens = list(
         prova.itens.select_related('questao', 'questao__topico', 'questao__disciplina')
         .prefetch_related('questao__alternativas')
         .order_by('ordem')
     )
+    numerar_por_tipo(itens, tipo_do_item)  # rótulos "Q05" / "D01", como no caderno
 
     # --- Metas a partir dos snapshots JSON (instante da geração) ---
     snap_matriz = prova.snapshot_matriz_metas or {}
@@ -621,7 +623,7 @@ def prova_revisao(request, pk):
             )
 
     total_meta = snap_matriz.get('total_questoes', 0)
-    total_atual = itens.count()
+    total_atual = len(itens)
 
     # Estruturar comparativo em formato de linhas para a tabela
     linhas_comparativo = []
@@ -963,6 +965,40 @@ def aplicacao_folhas_zip(request, pk):
     filename = f'cartoes_aplicacao_{aplicacao.pk}.zip'
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_ata_pdf(request, pk):
+    """
+    Ata de Avaliação da aplicação (PDF): lista dos alunos com a versão de cada um e as
+    colunas de assinatura de presença, de recebimento e de nota em branco, no modelo da
+    ata do sistema acadêmico da faculdade. Não altera nada (não gera cartões nem versões).
+    """
+    from django.utils.text import slugify
+
+    from .services.ata_service import render_ata_pdf
+
+    aplicacao = get_object_or_404(
+        ProvaAplicacao.objects.select_related('prova', 'prova__mascara', 'prova__autor', 'turma'), pk=pk
+    )
+
+    try:
+        pdf_bytes = render_ata_pdf(aplicacao)
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Erro ao gerar a ata da aplicação pk=%s: %s', pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Erro ao gerar o PDF da ata: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    turma = aplicacao.turma
+    base = slugify(f'ata {turma.periodo} {turma.nome} {turma.get_turno_display()} {aplicacao.prova.titulo}')
+    filename = f'{(base or f"ata-aplicacao-{aplicacao.pk}")[:120]}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
 
 
@@ -1530,9 +1566,11 @@ def prova_pdf(request, pk):
         and 'ENADE' in (mascara.titulo or '').upper()
     )
 
-    # Agrupa por tipo para o caderno ENADE (Componente Específico: discursivas → objetivas).
-    itens_discursivas = [it for it in itens_render if it['questao'].tipo == Questao.Tipo.DISCURSIVA]
-    itens_objetivas = [it for it in itens_render if it['questao'].tipo == Questao.Tipo.OBJETIVA]
+    # Caderno em blocos (os dois layouts): discursivas primeiro, numeradas à parte; objetivas
+    # longas em largura total e curtas em duas colunas — ver services.caderno_layout.
+    itens_render, blocos = organizar_caderno(itens_render)
+    itens_discursivas = [it for it in itens_render if it['tipo'] != Questao.Tipo.OBJETIVA]
+    itens_objetivas = [it for it in itens_render if it['tipo'] == Questao.Tipo.OBJETIVA]
 
     context = {
         'prova': prova,
@@ -1540,6 +1578,8 @@ def prova_pdf(request, pk):
         'identificador_display': identificador_display,
         'itens': itens_render,
         'itens_render': itens_render,
+        'blocos': blocos,
+        'blocos_objetivas': [bloco for bloco in blocos if bloco['formato'] != 'discursivas'],
         'itens_discursivas': itens_discursivas,
         'itens_objetivas': itens_objetivas,
         'disciplina_nome': disciplina.nome if disciplina else None,
@@ -1765,6 +1805,9 @@ def prova_gabarito_pdf(request, pk):
             )
 
     identificador_display = f'Versão {versao.identificador}' if versao else 'Versão única'
+    # Mesma ordem e numeração do caderno: discursivas primeiro (D01…), objetivas Q01…QN.
+    resumo_itens = ordenar_como_caderno(resumo_itens)
+    itens_detalhados = ordenar_como_caderno(itens_detalhados)
 
     context = {
         'prova': prova,
@@ -1932,6 +1975,10 @@ def prova_pacote_zip(request, pk):
                 )
 
             identificador_display = f'Versão {versao.identificador}'
+            # Caderno em blocos e gabarito na mesma ordem/numeração (ver services.caderno_layout).
+            itens_render, blocos = organizar_caderno(itens_render)
+            resumo_itens = ordenar_como_caderno(resumo_itens)
+            itens_detalhados = ordenar_como_caderno(itens_detalhados)
 
             context_prova = {
                 'prova': prova,
@@ -1939,6 +1986,7 @@ def prova_pacote_zip(request, pk):
                 'identificador_display': identificador_display,
                 'itens': itens_render,
                 'itens_render': itens_render,
+                'blocos': blocos,
                 'disciplina_nome': disciplina.nome if disciplina else None,
                 'docente_nome': docente_nome,
                 'turma': snap.get('turma') or request.GET.get('turma') or '',
@@ -2167,7 +2215,8 @@ def _tabela_notas(boletim):
 def _nome_arquivo_notas(aplicacao):
     from django.utils.text import slugify
 
-    base = slugify(f'notas {aplicacao.prova.titulo} {aplicacao.turma.periodo} {aplicacao.turma.nome}')
+    turma = aplicacao.turma
+    base = slugify(f'notas {aplicacao.prova.titulo} {turma.periodo} {turma.nome} {turma.get_turno_display()}')
     return (base or f'notas-aplicacao-{aplicacao.pk}')[:120]
 
 

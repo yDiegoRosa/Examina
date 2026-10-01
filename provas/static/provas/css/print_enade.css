@@ -292,6 +292,23 @@ body {
   margin-bottom: 15pt;
 }
 
+/* Objetivas curtas em duas colunas, cada questão inteira numa coluna
+   (as longas ficam em .enade-largura-total) — ver services.caderno_layout. */
+.enade-colunas {
+  columns: 2;
+  column-gap: 7mm;
+  column-rule: 0.75pt solid #94A3B8;
+}
+
+.enade-colunas .enade-questao {
+  break-inside: avoid;
+  margin-bottom: 11pt;
+}
+
+.enade-colunas .enade-imagem img {
+  max-width: 100%;
+}
+
 .enade-questao-titulo {
   font-size: 10.5pt;
   font-weight: bold;

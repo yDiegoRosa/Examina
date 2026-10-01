@@ -16,7 +16,7 @@
       <div class="gabarito-header-identidade">
         <div class="capa-header-instituicao">FAETERJ-Rio</div>
         <div class="capa-header-nome-completo">
-          Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+          Faculdade de Educação Tecnológica do Rio de Janeiro Fernando Mota
         </div>
         <div class="capa-header-vinculo">
           Secretaria de Estado de Ciência, Tecnologia e Inovação &nbsp;•&nbsp;
@@ -98,7 +98,7 @@
         <tr>
           {% for r in resumo_itens %}
           <td class="gabarito-resumo-celula">
-            <div class="gabarito-resumo-num">Q{{ r.numero|stringformat:"02d" }}</div>
+            <div class="gabarito-resumo-num">{{ r.rotulo_curto }}</div>
             {% if r.tipo == 'OBJ' %}
               <div class="gabarito-resumo-letra">{{ r.letra_correta }}</div>
             {% else %}
@@ -131,7 +131,7 @@
       <!-- Cabeçalho do Item -->
       <div class="gabarito-card-header">
         <div class="gabarito-card-header-esq">
-          <span class="gabarito-card-num-badge">Questão {{ item.numero|stringformat:"02d" }}</span>
+          <span class="gabarito-card-num-badge">{{ item.rotulo }}</span>
           <span class="gabarito-card-peso">[{{ item.pontuacao }} pt{{ item.pontuacao|pluralize }}]</span>
           {% if item.topico_nome %}
           <span class="gabarito-card-topico">{{ item.topico_nome }}</span>

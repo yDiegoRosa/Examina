@@ -18,7 +18,7 @@
         <div class="capa-header-identidade">
           <div class="capa-header-instituicao">FAETERJ-Rio</div>
           <div class="capa-header-nome-completo">
-            Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+            Faculdade de Educação Tecnológica do Rio de Janeiro Fernando Mota
           </div>
           <div class="capa-header-vinculo">
             Secretaria de Estado de Ciência, Tecnologia e Inovação &nbsp;•&nbsp;
@@ -197,17 +197,26 @@
   {% endif %}
 
   <!-- ═══════════════════════════════════════════════════════════
-       CADERNO DE QUESTÕES
+       CADERNO DE QUESTÕES — em blocos (services.caderno_layout):
+       discursivas primeiro, objetivas longas em largura total e
+       objetivas curtas em duas colunas. A numeração das objetivas
+       é a mesma do cartão-resposta; as discursivas têm a sua (D01…).
        ═══════════════════════════════════════════════════════════ -->
-  <div class="questoes-wrapper">
-    {% for item in itens_render %}
+  {% for bloco in blocos %}
+  {% if bloco.secao == 'discursivas' %}
+  <div class="caderno-secao">Questões discursivas <span class="caderno-secao-sub">— responda neste caderno</span></div>
+  {% elif bloco.secao == 'objetivas' %}
+  <div class="caderno-secao">Questões objetivas <span class="caderno-secao-sub">— marque as respostas no cartão-resposta</span></div>
+  {% endif %}
+  <div class="questoes-wrapper{% if bloco.formato == 'colunas' %} questoes-colunas{% endif %}">
+    {% for item in bloco.itens %}
     {% with q=item.questao %}
     <div class="questao-bloco">
 
       <!-- Cabeçalho da Questão: Numeração, Pontuação, Tópico e Origem -->
       <div class="questao-header">
         <div class="questao-header-esq">
-          <span class="questao-numero-badge">Questão {{ item.numero|stringformat:"02d"|default:forloop.counter|stringformat:"02d" }}</span>
+          <span class="questao-numero-badge">{{ item.rotulo }}</span>
           {% if item.pontuacao %}
           <span class="questao-peso-badge">[{{ item.pontuacao }} pt{{ item.pontuacao|pluralize }}]</span>
           {% endif %}
@@ -236,8 +245,8 @@
       <!-- Imagem de Apoio (se houver) -->
       {% if q.imagem %}
       <div class="questao-imagem">
-        <img src="{{ q.imagem.url }}" alt="Figura de apoio da questão {{ item.numero }}">
-        <div class="questao-imagem-legenda">Figura de apoio da Questão {{ item.numero }}</div>
+        <img src="{{ q.imagem.url }}" alt="Figura de apoio — {{ item.rotulo }}">
+        <div class="questao-imagem-legenda">Figura de apoio — {{ item.rotulo }}</div>
       </div>
       {% endif %}
 
@@ -296,6 +305,7 @@
     {% endwith %}
     {% endfor %}
   </div>
+  {% endfor %}
 
 
   <!-- ═══════════════════════════════════════════════════════════
@@ -327,7 +337,7 @@
         {% with q=item.questao %}
         <tr>
           <td style="text-align: center; font-weight: bold; color: #002B49;">
-            Q{{ item.numero|stringformat:"02d"|default:forloop.counter|stringformat:"02d" }}
+            {{ item.rotulo_curto }}
           </td>
           <td>{{ q.get_tipo_display }}</td>
           <td style="text-align: center;">

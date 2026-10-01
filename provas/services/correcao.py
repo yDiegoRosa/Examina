@@ -26,6 +26,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .answer_sheet_layout import build_layout
+from .caderno_layout import numerar_por_tipo
 from .folha_service import (
     FOLHA_ALTERNATIVAS,
     FOLHA_COLUMNS,
@@ -306,7 +307,8 @@ def itens_versao_para_lancamento(folha) -> list[dict]:
                 'gabarito': _letra_correta(item) if tipo == 'OBJ' else None,
             }
         )
-    return linhas
+    # Rótulos do caderno: objetivas "Q01…" (= cartão) e discursivas "D01…".
+    return numerar_por_tipo(linhas, lambda linha: linha['tipo'])
 
 
 @transaction.atomic
