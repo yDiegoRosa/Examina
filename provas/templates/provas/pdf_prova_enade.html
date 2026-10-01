@@ -18,7 +18,7 @@
         <div>
           <div class="enade-instituicao">FAETERJ-Rio</div>
           <div class="enade-instituicao-sub">
-            Faculdade de Educação Tecnológica do Estado do Rio de Janeiro
+            Faculdade de Educação Tecnológica do Rio de Janeiro Fernando Mota
           </div>
         </div>
         <div class="enade-badge">Simulado ENADE</div>
@@ -169,10 +169,13 @@
 
   {% if itens_objetivas %}
   <div class="enade-subsecao">Questões Objetivas</div>
-  {% for item in itens_objetivas %}
+  {# Blocos (services.caderno_layout): longas em largura total, curtas em duas colunas. #}
+  {% for bloco in blocos_objetivas %}
+  <div class="{% if bloco.formato == 'colunas' %}enade-colunas{% else %}enade-largura-total{% endif %}">
+  {% for item in bloco.itens %}
   {% with q=item.questao %}
   <div class="enade-questao">
-    <div class="enade-questao-titulo">Questão {{ forloop.counter|stringformat:"02d" }}</div>
+    <div class="enade-questao-titulo">Questão {{ item.numero_exibido|stringformat:"02d" }}</div>
 
     {% if q.texto_auxiliar %}
     <div class="enade-texto-apoio">{{ q.texto_auxiliar }}</div>
@@ -203,6 +206,8 @@
     </div>
   </div>
   {% endwith %}
+  {% endfor %}
+  </div>
   {% endfor %}
   {% endif %}
 

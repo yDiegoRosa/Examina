@@ -52,7 +52,7 @@
         <tbody>
           {% for l in linhas %}
           <tr>
-            <td class="font-mono text-muted">{{ l.item.numero }}</td>
+            <td class="font-mono text-muted">{{ l.rotulo_curto }}</td>
             <td class="small">{{ l.questao.enunciado|truncatechars:80 }}</td>
             <td>
               {% if l.tipo == 'OBJ' %}

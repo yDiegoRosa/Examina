@@ -38,6 +38,9 @@ class TurmaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # No banco o turno pode ser vazio (turmas antigas); na tela ele é obrigatório.
+        self.fields['turno'].required = True
+        self.fields['turno'].choices = [('', 'Selecione o turno'), *Turma.Turno.choices]
         if self.instance.pk and self.instance.matriculas.exists():
             self.fields['periodo'].disabled = True
             self.fields['periodo'].help_text = (
@@ -47,10 +50,11 @@ class TurmaForm(forms.ModelForm):
 
     class Meta:
         model = Turma
-        fields = ['periodo', 'nome', 'ativo']
+        fields = ['periodo', 'nome', 'turno', 'ativo']
         labels = {
             'periodo': 'Período (Ano.Semestre)',
             'nome': 'Nome da turma',
+            'turno': 'Turno',
             'ativo': 'Turma ativa',
         }
         widgets = {
@@ -58,8 +62,9 @@ class TurmaForm(forms.ModelForm):
                 attrs={'class': 'form-input', 'placeholder': 'Ex.: 2026.2'},
             ),
             'nome': forms.TextInput(
-                attrs={'class': 'form-input', 'placeholder': 'Ex.: MAC Noite'},
+                attrs={'class': 'form-input', 'placeholder': 'Ex.: RSD'},
             ),
+            'turno': forms.Select(attrs={'class': 'form-select'}),
             'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 

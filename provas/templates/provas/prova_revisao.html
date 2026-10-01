@@ -36,11 +36,11 @@
     <div class="exam-question-list" id="tabela-questoes">
       {% for item in itens %}
       <article class="exam-question" id="item-row-{{ item.pk }}">
-        <span class="exam-question-number">{{ item.numero|stringformat:"02d" }}</span>
+        <span class="exam-question-number">{{ item.rotulo_curto }}</span>
         <div class="exam-question-main"><div class="exam-question-meta"><span>{% if item.questao.topico %}{{ item.questao.topico.nome }}{% else %}Sem tópico{% endif %}</span><span class="badge-pill {% if item.questao.dificuldade == 'F' %}badge-pill-facil{% elif item.questao.dificuldade == 'M' %}badge-pill-medio{% else %}badge-pill-dificil{% endif %}">{{ item.questao.get_dificuldade_display }}</span><span>{{ item.questao.get_tipo_display }}</span></div>
           <details class="exam-question-content"><summary><span>{{ item.snapshot_questao.enunciado|default:item.questao.enunciado|striptags|truncatechars:220 }}</span><small>Ver questão completa <i class="bi bi-chevron-down" aria-hidden="true"></i></small></summary><div class="exam-question-full">{{ item.snapshot_questao.enunciado|default:item.questao.enunciado|linebreaksbr }}{% if item.snapshot_questao.alternativas %}<ul class="exam-alternatives">{% for alternativa in item.snapshot_questao.alternativas %}<li><strong>{{ alternativa.letra }}.</strong> {{ alternativa.texto }}{% if alternativa.correta %} <span class="exam-correct-answer">Resposta correta</span>{% endif %}</li>{% endfor %}</ul>{% endif %}</div></details>
           <div class="exam-question-foot">Q{{ item.questao.pk }}{% if item.questao.origem %} · {{ item.questao.origem }}{% endif %}<span>{{ item.pontuacao }} pts</span></div>
-        </div><button type="button" class="btn btn-outline btn-trocar-questao" data-item-id="{{ item.pk }}" data-item-numero="{{ item.numero }}" data-questao-id="{{ item.questao.pk }}" aria-label="Trocar questão {{ item.numero }}" {% if versoes_distribuidas %}disabled title="Troca bloqueada: prova já aplicada (versões distribuídas a alunos)"{% else %}title="Substituir por outra questão do mesmo tópico e dificuldade"{% endif %}><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Trocar</button>
+        </div><button type="button" class="btn btn-outline btn-trocar-questao" data-item-id="{{ item.pk }}" data-item-numero="{{ item.rotulo }}" data-questao-id="{{ item.questao.pk }}" aria-label="Trocar {{ item.rotulo }}" {% if versoes_distribuidas %}disabled title="Troca bloqueada: prova já aplicada (versões distribuídas a alunos)"{% else %}title="Substituir por outra questão do mesmo tópico e dificuldade"{% endif %}><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Trocar</button>
       </article>
       {% empty %}<div class="exam-empty"><p>Esta prova ainda não possui questões.</p></div>{% endfor %}
     </div>
@@ -288,7 +288,7 @@
     if (listaArea) listaArea.classList.add('d-none');
     if (vazioArea) vazioArea.classList.add('d-none');
     if (cardsContainer) cardsContainer.innerHTML = '';
-    if (tituloModal) tituloModal.textContent = `Trocar Questão #${itemNumero}`;
+    if (tituloModal) tituloModal.textContent = `Trocar ${itemNumero}`;
     if (subtituloModal) subtituloModal.textContent = 'Carregando opções da mesma célula...';
 
     fetch(`/provas/itens/${itemPk}/candidatas/`)

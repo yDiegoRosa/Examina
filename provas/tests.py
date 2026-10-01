@@ -2560,19 +2560,20 @@ class MistaSplitSelecaoTest(TestCase):
         baldes_dis = [b for b in plano if b.tipo == Questao.Tipo.DISCURSIVA]
         self.assertTrue(all(b.dificuldade is None for b in baldes_dis))
 
-    def test_geracao_mista_poe_objetivas_primeiro_na_prova_e_nos_cadernos(self):
-        """Objetivas numeradas 1..N (como no cartão-resposta) e discursivas no fim, em todo caderno."""
+    def test_geracao_mista_poe_discursivas_primeiro_na_prova_e_nos_cadernos(self):
+        """Discursivas no início (D1..k) e objetivas numeradas 1..N (como no cartão), em todo caderno."""
         self._criar_questoes(Questao.Tipo.OBJETIVA, 5)
         self._criar_questoes(Questao.Tipo.DISCURSIVA, 4, dificuldade=Questao.Dificuldade.MEDIO)
         prova = self.mascara.gerar_prova(autor=self.user)
 
-        esperado = ['OBJ', 'OBJ', 'OBJ', 'DIS', 'DIS']
+        esperado = ['DIS', 'DIS', 'OBJ', 'OBJ', 'OBJ']
         self.assertEqual([item.questao.tipo for item in prova.itens.order_by('ordem')], esperado)
+        self.assertEqual([item.numero for item in prova.itens.order_by('ordem')], [1, 2, 1, 2, 3])
         for versao in prova.versoes.all():
             with self.subTest(versao=versao.identificador):
                 itens = list(versao.itens.select_related('prova_questao__questao').order_by('ordem'))
                 self.assertEqual([item.prova_questao.questao.tipo for item in itens], esperado)
-                self.assertEqual([item.numero for item in itens], [1, 2, 3, 4, 5])
+                self.assertEqual([item.numero for item in itens], [1, 2, 1, 2, 3])
 
     def test_geracao_mista_respeita_split(self):
         """A prova gerada tem exatamente 3 objetivas e 2 discursivas."""
@@ -2708,13 +2709,17 @@ class SimuladoEnadeAreasTest(TestCase):
                 ],
             }
 
+        from provas.services.caderno_layout import organizar_caderno
+
         discursivas = [_item(1, Questao.Tipo.DISCURSIVA, 'Discursiva de teste')]
         objetivas = [_item(2, Questao.Tipo.OBJETIVA, 'Objetiva de teste')]
+        _, blocos = organizar_caderno(discursivas + objetivas)
         contexto = {
             'prova': SimpleNamespace(titulo='Simulado ENADE', numero_caderno=1, pk=1),
             'identificador_display': 'Caderno 1',
             'itens_discursivas': discursivas,
             'itens_objetivas': objetivas,
+            'blocos_objetivas': [bloco for bloco in blocos if bloco['formato'] != 'discursivas'],
             'total_questoes': 2,
             'total_objetivas': 1,
             'total_discursivas': 1,
@@ -2726,8 +2731,11 @@ class SimuladoEnadeAreasTest(TestCase):
         self.assertIn('Componente Específico', html)
         self.assertIn('Questão Discursiva 01', html)
         self.assertIn('Área livre', html)
-        # A discursiva deve aparecer antes da primeira objetiva no caderno.
+        # A discursiva deve aparecer antes da primeira objetiva no caderno, e a objetiva é a
+        # Questão 01 (numeração do cartão), num bloco de duas colunas por ser curta.
         self.assertLess(html.index('Questão Discursiva 01'), html.index('Objetiva de teste'))
+        self.assertIn('Questão 01', html)
+        self.assertIn('class="enade-colunas"', html)
         # Rascunho com 15 linhas numeradas.
         self.assertIn('>15<', html.replace(' ', '').replace('\n', ''))
 
@@ -3612,6 +3620,13 @@ class LancamentoManualTest(TestCase):
     def test_nota_corte_padrao_seis(self):
         self.assertEqual(self.aplicacao.nota_corte, Decimal('6.00'))
 
+    def test_tela_de_lancamento_usa_os_rotulos_do_caderno(self):
+        # Versão antiga (discursiva gravada com número 2): a tela mostra "D01", como no caderno.
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('provas:folha_lancamento_manual', args=[self.folha.pk]))
+        self.assertEqual([linha['rotulo_curto'] for linha in resp.context['linhas']], ['Q01', 'D01'])
+        self.assertContains(resp, '>D01<')
+
     def test_lancar_discursiva_acima_do_corte_acertou(self):
         from desempenho.models import Desempenho
 
@@ -3851,6 +3866,7 @@ class ControleAcessoPerfilProvasTest(TestCase):
             reverse('provas:aplicacao_list'),
             reverse('provas:aplicacao_detail', args=[self.aplicacao.pk]),
             reverse('provas:aplicacao_notas', args=[self.aplicacao.pk]),
+            reverse('provas:aplicacao_ata_pdf', args=[self.aplicacao.pk]),
         ]
 
     def test_usuario_sem_grupo_recebe_403(self):
@@ -4263,29 +4279,43 @@ class CartaoRespostaCadernoTest(TestCase):
             for item in versao.itens.select_related('prova_questao__questao').order_by('ordem')
         ]
 
-    def test_cadernos_poem_objetivas_primeiro_sem_misturar_tipos(self):
+    def test_cadernos_em_blocos_discursivas_primeiro_sem_misturar_tipos(self):
         from provas.services.version_generator import gerar_versoes_prova
 
         versoes = gerar_versoes_prova(self.prova, quantidade_versoes=3)
 
-        # Versão A: sem embaralhar — só as discursivas vão para o fim, na ordem original.
-        self.assertEqual(self._enunciados(versoes[0]), ['OBJ1', 'OBJ3', 'OBJ5', 'DIS2', 'DIS4'])
+        # Versão A: sem embaralhar — discursivas no início, cada tipo na ordem original.
+        self.assertEqual(self._enunciados(versoes[0]), ['DIS2', 'DIS4', 'OBJ1', 'OBJ3', 'OBJ5'])
         for versao in versoes:
             with self.subTest(versao=versao.identificador):
                 enunciados = self._enunciados(versao)
-                self.assertTrue(all(e.startswith('OBJ') for e in enunciados[:3]))
-                self.assertEqual(sorted(enunciados[3:]), ['DIS2', 'DIS4'])
-                self.assertEqual(list(versao.itens.order_by('ordem').values_list('numero', flat=True)), [1, 2, 3, 4, 5])
+                self.assertEqual(sorted(enunciados[:2]), ['DIS2', 'DIS4'])
+                self.assertTrue(all(e.startswith('OBJ') for e in enunciados[2:]))
+                # Número dentro do tipo: discursivas 1..2, objetivas 1..3 (= bolhas do cartão).
+                self.assertEqual(list(versao.itens.order_by('ordem').values_list('numero', flat=True)), [1, 2, 1, 2, 3])
+                self.assertEqual(list(versao.itens.order_by('ordem').values_list('ordem', flat=True)), [1, 2, 3, 4, 5])
 
-    def test_montagem_manual_poe_discursivas_no_fim_mantendo_a_ordem_do_docente(self):
+    def test_objetiva_longa_vem_antes_das_curtas(self):
+        from provas.services.version_generator import gerar_versoes_prova
+
+        item = self.prova.itens.get(questao=self.questoes[4])  # OBJ5 passa a ter texto de apoio
+        item.snapshot_questao = {**item.snapshot_questao, 'texto_auxiliar': 'Texto de apoio'}
+        item.save()
+
+        versoes = gerar_versoes_prova(self.prova, quantidade_versoes=3)
+        self.assertEqual(self._enunciados(versoes[0]), ['DIS2', 'DIS4', 'OBJ5', 'OBJ1', 'OBJ3'])
+        for versao in versoes:
+            with self.subTest(versao=versao.identificador):
+                self.assertEqual(self._enunciados(versao)[2], 'OBJ5')
+
+    def test_montagem_manual_poe_discursivas_primeiro_mantendo_a_ordem_do_docente(self):
         from provas.services.manual_generator import criar_prova_manual
 
         ids = [q.pk for q in reversed(self.questoes)]  # OBJ5, DIS4, OBJ3, DIS2, OBJ1
         prova = criar_prova_manual(titulo='Manual cartão', disciplina=self.disc, questoes_ids=ids)
-        self.assertEqual(
-            [item.questao.enunciado for item in prova.itens.order_by('ordem')],
-            ['OBJ5', 'OBJ3', 'OBJ1', 'DIS4', 'DIS2'],
-        )
+        itens = list(prova.itens.order_by('ordem'))
+        self.assertEqual([item.questao.enunciado for item in itens], ['DIS4', 'DIS2', 'OBJ5', 'OBJ3', 'OBJ1'])
+        self.assertEqual([item.numero for item in itens], [1, 2, 1, 2, 3])
 
     def test_troca_entre_tipos_bloqueada(self):
         from provas.services.question_replacer import SubstituicaoQuestaoError, substituir_questao_prova
@@ -4386,3 +4416,255 @@ class ModelosAntigosRemovidosTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'application/pdf')
         self.assertIn('cartao_resposta_demo.pdf', resp['Content-Disposition'])
+
+
+class CadernoPadraoLayoutTest(SimpleTestCase):
+    """Caderno em blocos (pdf_prova_completa + caderno_layout): numeração, blocos e layout no PDF."""
+
+    @staticmethod
+    def _questao(tipo, texto_auxiliar=''):
+        return SimpleNamespace(
+            tipo=tipo,
+            topico=None,
+            origem='',
+            numero_questao=None,
+            texto_auxiliar=texto_auxiliar,
+            imagem=None,
+            enunciado=f'Enunciado {tipo}',
+            get_tipo_display=lambda: tipo,
+            alternativas=SimpleNamespace(all=list),  # fallback do gabarito: item.alternativas_versao|default:...
+        )
+
+    @classmethod
+    def _item(cls, tipo, texto_auxiliar=''):
+        alternativas = [{'letra': 'A', 'texto': 'Texto da alternativa A'}] if tipo == 'OBJ' else []
+        return {
+            'questao': cls._questao(tipo, texto_auxiliar),
+            'snapshot_questao': {},
+            'alternativas_versao': alternativas,
+            'pontuacao': None,
+        }
+
+    def _html(self, itens, **extra):
+        from django.template.loader import render_to_string
+
+        from .services.caderno_layout import organizar_caderno
+
+        itens_render, blocos = organizar_caderno(itens)
+        return render_to_string(
+            'provas/pdf_prova_completa.html',
+            {'prova': SimpleNamespace(titulo='T', pk=1), 'itens_render': itens_render, 'blocos': blocos, **extra},
+        )
+
+    @staticmethod
+    def _caixas(html):
+        import weasyprint
+        from django.conf import settings
+
+        from .services.pdf_generator import build_django_url_fetcher
+
+        doc = weasyprint.HTML(
+            string=html, base_url=str(settings.BASE_DIR), url_fetcher=build_django_url_fetcher()
+        ).render()
+        caixas = {}
+        pilha = [page._page_box for page in doc.pages]
+        while pilha:
+            caixa = pilha.pop()
+            elemento = getattr(caixa, 'element', None)
+            if elemento is not None and type(caixa).__name__ != 'TextBox':
+                for classe in (elemento.get('class') or '').split():
+                    caixas.setdefault(classe, []).append(caixa)
+            pilha.extend(getattr(caixa, 'children', []) or [])
+        return caixas
+
+    def test_discursivas_primeiro_com_numeracao_propria_e_objetivas_como_no_cartao(self):
+        import re
+
+        # Versão antiga, com a discursiva no meio: as objetivas seguem 1, 2 (as bolhas do cartão).
+        html = self._html([self._item('OBJ'), self._item('DIS'), self._item('OBJ')], incluir_gabarito=True)
+        self.assertEqual(
+            re.findall(r'questao-numero-badge">([^<]*)<', html), ['Discursiva 01', 'Questão 01', 'Questão 02']
+        )
+        self.assertEqual(re.findall(r'>\s*([QD]\d+)\s*</td>', html), ['D01', 'Q01', 'Q02'])
+        self.assertLess(html.index('Questões discursivas'), html.index('Questões objetivas'))
+
+    def test_objetivas_curtas_em_colunas_e_longas_em_largura_total(self):
+        from .services.caderno_layout import organizar_caderno
+
+        itens = [self._item('OBJ', texto_auxiliar='Texto de apoio'), self._item('OBJ'), self._item('OBJ')]
+        _, blocos = organizar_caderno(itens)
+        self.assertEqual([(b['formato'], len(b['itens'])) for b in blocos], [('largura_total', 1), ('colunas', 2)])
+        self.assertEqual([b['secao'] for b in blocos], ['objetivas', ''])
+        self.assertEqual(self._html(itens).count('questoes-wrapper questoes-colunas'), 1)
+
+    def test_pdf_alternativas_na_linha_da_letra_discursiva_com_linhas_e_curtas_em_duas_colunas(self):
+        caixas = self._caixas(self._html([self._item('DIS')] + [self._item('OBJ') for _ in range(4)]))
+
+        self.assertEqual(caixas['alt-letra-col'][0].position_y, caixas['alt-texto-col'][0].position_y)
+        self.assertGreater(caixas['linha-pautada-traco'][0].style['border_bottom_width'], 0)
+        colunas = {round(bloco.position_x) for bloco in caixas['questao-bloco'] if bloco.element_tag == 'div'}
+        self.assertEqual(len(colunas), 2)  # objetivas curtas lado a lado
+
+
+class CadernoLayoutRegrasTest(SimpleTestCase):
+    """Regras de services.caderno_layout: critério de questão longa e numeração por tipo."""
+
+    def test_criterio_de_objetiva_longa(self):
+        from .services.caderno_layout import CARACTERES_POR_LINHA, LIMITE_LINHAS_CURTA, eh_longa
+
+        alternativas = ['curta'] * 5
+        linha = 'x' * CARACTERES_POR_LINHA
+        no_limite = '\n'.join([linha] * (LIMITE_LINHAS_CURTA - len(alternativas)))
+        self.assertFalse(eh_longa('Enunciado curto', alternativas))
+        self.assertFalse(eh_longa(no_limite, alternativas))
+        self.assertTrue(eh_longa(no_limite + '\nmais uma linha', alternativas))
+        self.assertTrue(eh_longa(linha * 30, alternativas))  # um parágrafo só, mas extenso
+        self.assertTrue(eh_longa('Curto', alternativas, texto_auxiliar='Texto de apoio'))
+        self.assertTrue(eh_longa('Curto', alternativas, tem_imagem=True))
+
+    def test_numeracao_por_tipo_e_ordem_do_gabarito(self):
+        from .services.caderno_layout import numeros_por_tipo, ordenar_como_caderno
+
+        self.assertEqual(numeros_por_tipo(['OBJ', 'DIS', 'OBJ', 'DIS', 'OBJ']), [1, 1, 2, 2, 3])
+        itens = ordenar_como_caderno([{'tipo': 'OBJ'}, {'tipo': 'DIS'}, {'tipo': 'OBJ'}])
+        self.assertEqual([item['rotulo_curto'] for item in itens], ['D01', 'Q01', 'Q02'])
+        self.assertEqual([item['rotulo'] for item in itens], ['Discursiva 01', 'Questão 01', 'Questão 02'])
+
+
+class AtaAvaliacaoTest(TestCase):
+    """Ata de Avaliação (lista de presença da sala): alunos, versão de cada um, cabeçalho e PDF."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='doc_ata', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.client.force_login(self.user)
+
+        autor = get_user_model().objects.create_user(username='autor_ata', first_name='Maria', last_name='Docente')
+        self.prova = Prova.objects.create(
+            titulo='AV1 Ata', disciplina=Disciplina.objects.create(nome='Disc Ata'), autor=autor
+        )
+        self.versoes = [
+            ProvaVersao.objects.create(prova=self.prova, identificador=ident, numero_versao=i)
+            for i, ident in enumerate(['A', 'B'], start=1)
+        ]
+        self.turma = Turma.objects.create(periodo='2026.2', nome='RSD', turno=Turma.Turno.MANHA)
+        self.matriculas = {}
+        for nome, matricula in (('Carla Dias', 'C2'), ('Ana Souza', 'A2'), ('Bruno Silva', 'B2')):
+            aluno = Aluno.objects.create(nome=nome, matricula=matricula)
+            self.matriculas[nome] = Matricula.objects.create(aluno=aluno, turma=self.turma)
+        # Fora da ata: aluno inativo, matrícula trancada e aluno de outra turma.
+        Matricula.objects.create(
+            aluno=Aluno.objects.create(nome='Inativo', matricula='I2', ativo=False), turma=self.turma
+        )
+        Matricula.objects.create(
+            aluno=Aluno.objects.create(nome='Trancada', matricula='T2'),
+            turma=self.turma,
+            situacao=Matricula.Situacao.TRANCADO,
+        )
+        Matricula.objects.create(
+            aluno=Aluno.objects.create(nome='Outra Turma', matricula='O2'),
+            turma=Turma.objects.create(periodo='2026.2', nome='Outra'),
+        )
+        self.aplicacao = ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=date(2026, 11, 10)
+        )
+
+    def _linhas(self):
+        from provas.services.ata_service import linhas_ata_avaliacao
+
+        return linhas_ata_avaliacao(self.aplicacao)
+
+    def test_lista_so_matriculados_ativos_em_ordem_alfabetica(self):
+        linhas = self._linhas()
+        self.assertEqual([linha['nome'] for linha in linhas], ['Ana Souza', 'Bruno Silva', 'Carla Dias'])
+        self.assertEqual([linha['numero'] for linha in linhas], [1, 2, 3])
+        self.assertEqual([linha['matricula'] for linha in linhas], ['A2', 'B2', 'C2'])
+        self.assertEqual({linha['versao'] for linha in linhas}, {''})  # versões ainda não distribuídas
+        self.assertTrue(all('nota' not in linha for linha in linhas))  # nota sempre em branco
+
+    def test_versao_do_cartao_prevalece_sobre_a_distribuicao(self):
+        atribuir_versoes(self.aplicacao)  # round-robin: Ana A, Bruno B, Carla A
+        ana = self.matriculas['Ana Souza'].aluno
+        FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=ana, prova_versao=self.versoes[1])
+
+        self.assertEqual([linha['versao'] for linha in self._linhas()], ['B', 'B', 'A'])
+
+    def test_aluno_com_cartao_que_saiu_da_turma_continua_na_ata(self):
+        carla = self.matriculas['Carla Dias']
+        FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=carla.aluno, prova_versao=self.versoes[0])
+        carla.situacao = Matricula.Situacao.CANCELADO
+        carla.save()
+
+        linhas = self._linhas()
+        self.assertEqual(len(linhas), 3)
+        self.assertEqual(linhas[2]['nome'], 'Carla Dias')
+        self.assertEqual(linhas[2]['versao'], 'A')
+
+    def test_html_tem_cabecalho_e_colunas_do_modelo(self):
+        from django.template.loader import render_to_string
+
+        from provas.services.ata_service import contexto_ata_avaliacao
+
+        html = render_to_string('provas/pdf_ata_avaliacao.html', contexto_ata_avaliacao(self.aplicacao))
+        for trecho in (
+            'Faculdade de Educação Tecnológica do Rio de Janeiro Fernando Mota',
+            'Análise e Desenvolvimento de Sistemas',
+            '2026.2',
+            '<td>RSD</td>',
+            '<td>Manhã</td>',  # turno vem da turma
+            'Disc Ata',
+            'Maria Docente',
+            'AV1 Ata',
+            '10/11/2026',
+            'ANA SOUZA',
+            '>Versão</th>',
+            'Ass. Presença',
+            'Ass. Recebido',
+            '>Nota</th>',
+        ):
+            with self.subTest(trecho=trecho):
+                self.assertIn(trecho, html)
+        self.assertNotIn('Código', html)  # disciplina só pelo nome, sem o código do Coruja
+
+    def test_turma_antiga_sem_turno_deixa_a_linha_em_branco(self):
+        from provas.services.ata_service import contexto_ata_avaliacao
+
+        self.assertEqual(contexto_ata_avaliacao(self.aplicacao)['turno'], 'Manhã')
+        self.turma.turno = ''
+        self.turma.save()
+        self.aplicacao.refresh_from_db()
+        self.assertEqual(contexto_ata_avaliacao(self.aplicacao)['turno'], '')
+
+    def test_caderno_unico_omite_a_coluna_versao(self):
+        from django.template.loader import render_to_string
+
+        from provas.services.ata_service import contexto_ata_avaliacao
+
+        self.versoes[1].delete()
+        contexto = contexto_ata_avaliacao(self.aplicacao)
+        self.assertFalse(contexto['mostrar_versao'])
+        self.assertNotIn('>Versão</th>', render_to_string('provas/pdf_ata_avaliacao.html', contexto))
+
+    def test_view_entrega_o_pdf_sem_gerar_cartoes(self):
+        resp = self.client.get(reverse('provas:aplicacao_ata_pdf', args=[self.aplicacao.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertTrue(resp.content.startswith(b'%PDF'))
+        self.assertIn('ata-20262-rsd-manha-av1-ata.pdf', resp['Content-Disposition'])
+        self.assertFalse(self.aplicacao.folhas.exists())
+        self.assertFalse(self.aplicacao.atribuicoes.exists())
+
+        self.assertEqual(self.client.get(reverse('provas:aplicacao_ata_pdf', args=[999999])).status_code, 404)
+
+    def test_painel_da_aplicacao_tem_o_link_da_ata(self):
+        resp = self.client.get(reverse('provas:aplicacao_detail', args=[self.aplicacao.pk]))
+        self.assertContains(resp, reverse('provas:aplicacao_ata_pdf', args=[self.aplicacao.pk]))
+
+    def test_nome_oficial_da_faculdade(self):
+        from django.template.loader import render_to_string
+
+        self.client.logout()
+        self.assertContains(self.client.get(reverse('login')), 'Tecnológica do Rio de Janeiro Fernando Mota')
+        html = render_to_string('provas/pdf_capa_prova.html', {'prova': self.prova})
+        self.assertIn('Tecnológica do Rio de Janeiro Fernando Mota', html)
+        self.assertNotIn('Tecnológica do Estado do Rio de Janeiro', html)

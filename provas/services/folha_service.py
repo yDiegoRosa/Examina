@@ -37,8 +37,8 @@ def texto_discursivas_no_caderno(versao: ProvaVersao) -> str:
     Aviso impresso no cartão-resposta: as discursivas da versão são respondidas no
     caderno, sem bolhas no cartão. Vazio se a versão não tiver discursivas.
 
-    Cita a quantidade, não os números: o caderno padrão numera as discursivas depois das
-    objetivas (ex.: 28 a 30) e o caderno estilo ENADE as numera à parte (D01 a D03).
+    Cita a quantidade, não os números: nos dois layouts as discursivas vêm no início do
+    caderno com numeração própria ("Discursiva 01"…), à parte das objetivas do cartão.
     """
     total = sum(
         1 for item in versao.itens.select_related('prova_questao__questao') if tipo_do_item(item.prova_questao) != 'OBJ'

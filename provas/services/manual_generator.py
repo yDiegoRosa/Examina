@@ -7,6 +7,7 @@ from django.db import transaction
 from banco_questoes.models import Disciplina, Questao
 from provas.models import Mascara, Prova, ProvaQuestao
 
+from .caderno_layout import grupo_da_questao, numeros_por_tipo
 from .snapshot_builder import construir_snapshot_questao
 
 logger = logging.getLogger(__name__)
@@ -97,9 +98,9 @@ def criar_prova_manual(
     # Ordena as instâncias de questão conforme a ordem fornecida em ids_unicos
     questoes_map = {q.pk: q for q in questoes}
     questoes_ordenadas = [questoes_map[qid] for qid in ids_unicos]
-    # Discursivas no fim, mantendo a ordem escolhida pelo docente dentro de cada tipo: a
-    # numeração das objetivas no caderno (1..N) coincide com a do cartão-resposta.
-    questoes_ordenadas.sort(key=lambda q: q.tipo != Questao.Tipo.OBJETIVA)
+    # Ordem do caderno em blocos (discursivas, objetivas longas, objetivas curtas — ver
+    # caderno_layout), mantendo a ordem escolhida pelo docente dentro de cada bloco.
+    questoes_ordenadas.sort(key=grupo_da_questao)
 
     # Constrói snapshots consolidados da avaliação
     total_questoes = len(questoes_ordenadas)
@@ -202,13 +203,15 @@ def criar_prova_manual(
             snapshot_matriz_metas=snapshot_matriz,
         )
 
+        # Número contado dentro do tipo: objetivas 1..N (as do cartão) e discursivas 1..k.
+        numeros = numeros_por_tipo(q.tipo for q in questoes_ordenadas)
         itens_para_criar = []
-        for idx, q in enumerate(questoes_ordenadas, start=1):
+        for idx, (q, numero) in enumerate(zip(questoes_ordenadas, numeros, strict=True), start=1):
             itens_para_criar.append(
                 ProvaQuestao(
                     prova=prova,
                     questao=q,
-                    numero=idx,
+                    numero=numero,
                     ordem=idx,
                     pontuacao=1.00,
                     snapshot_questao=construir_snapshot_questao(q),

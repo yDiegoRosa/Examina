@@ -39,6 +39,7 @@ class TestProtecoesHistorico(TestCase):
                         {
                             'nome': 'Nome corrigido',
                             'periodo': '2027.1',
+                            'turno': 'MANHA',
                             'ativo': 'on',
                         },
                     )
@@ -61,6 +62,7 @@ class TestProtecoesHistorico(TestCase):
                     {
                         'nome': self.turma_livre.nome,
                         'periodo': '2026.2',
+                        'turno': 'NOITE',
                         'ativo': 'on',
                     },
                 )
@@ -149,7 +151,11 @@ class AlunoModelTest(TestCase):
 class TurmaModelTest(TestCase):
     def test_str(self):
         turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
-        self.assertEqual(str(turma), '2026.2 — MAC Noite')
+        self.assertEqual(str(turma), '2026.2 — MAC Noite')  # turma antiga, sem turno
+
+    def test_str_inclui_o_turno(self):
+        turma = Turma.objects.create(periodo='2026.2', nome='RSD', turno=Turma.Turno.MANHA)
+        self.assertEqual(str(turma), '2026.2 — RSD (Manhã)')
 
     def test_periodo_invalido_reprova_no_full_clean(self):
         turma = Turma(periodo='2026', nome='MAC Noite')
@@ -169,6 +175,14 @@ class TurmaModelTest(TestCase):
         Turma.objects.create(periodo='2026.1', nome='MAC Noite')
         Turma.objects.create(periodo='2026.2', nome='MAC Noite')
         self.assertEqual(Turma.objects.filter(nome='MAC Noite').count(), 2)
+
+    def test_mesmo_nome_e_periodo_em_turnos_diferentes_e_permitido(self):
+        Turma.objects.create(periodo='2026.2', nome='RSD', turno=Turma.Turno.MANHA)
+        Turma.objects.create(periodo='2026.2', nome='RSD', turno=Turma.Turno.NOITE)
+        self.assertEqual(Turma.objects.filter(periodo='2026.2', nome='RSD').count(), 2)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Turma.objects.create(periodo='2026.2', nome='RSD', turno=Turma.Turno.NOITE)
 
 
 class MatriculaModelTest(TestCase):
@@ -255,18 +269,49 @@ class TurmaCrudViewTest(TestCase):
         self.client.login(username='coord2', password='segredo123')  # noqa: S106
 
     def test_list_ok(self):
-        Turma.objects.create(periodo='2026.2', nome='MAC Noite')
+        Turma.objects.create(periodo='2026.2', nome='MAC Noite', turno=Turma.Turno.NOITE)
         resp = self.client.get(reverse('academico:turma_list'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'MAC Noite')
+        self.assertContains(resp, '<td>Noite</td>', html=True)
 
     def test_create(self):
         resp = self.client.post(
             reverse('academico:turma_create'),
-            {'periodo': '2026.2', 'nome': 'CAL Noite', 'ativo': 'on'},
+            {'periodo': '2026.2', 'nome': 'CAL Noite', 'turno': 'NOITE', 'ativo': 'on'},
         )
         self.assertRedirects(resp, reverse('academico:turma_list'))
-        self.assertTrue(Turma.objects.filter(periodo='2026.2', nome='CAL Noite').exists())
+        turma = Turma.objects.get(periodo='2026.2', nome='CAL Noite')
+        self.assertEqual(turma.turno, Turma.Turno.NOITE)
+        self.assertEqual(turma.get_turno_display(), 'Noite')
+
+    def test_create_exige_turno_manha_ou_noite(self):
+        resp = self.client.get(reverse('academico:turma_create'))
+        self.assertContains(resp, 'Selecione o turno')
+        self.assertContains(resp, '<option value="MANHA">Manhã</option>', html=True)
+        self.assertContains(resp, '<option value="NOITE">Noite</option>', html=True)
+
+        for turno in ('', 'TARDE'):
+            with self.subTest(turno=turno):
+                resp = self.client.post(
+                    reverse('academico:turma_create'),
+                    {'periodo': '2026.2', 'nome': 'Sem turno', 'turno': turno, 'ativo': 'on'},
+                )
+                self.assertEqual(resp.status_code, 200)
+                self.assertTrue(resp.context['form'].errors.get('turno'))
+        self.assertFalse(Turma.objects.filter(nome='Sem turno').exists())
+
+    def test_create_mesmo_nome_outro_turno_e_duplicada_no_mesmo_turno(self):
+        Turma.objects.create(periodo='2026.2', nome='RSD', turno=Turma.Turno.MANHA)
+        url = reverse('academico:turma_create')
+
+        resp = self.client.post(url, {'periodo': '2026.2', 'nome': 'RSD', 'turno': 'NOITE', 'ativo': 'on'})
+        self.assertRedirects(resp, reverse('academico:turma_list'))
+
+        resp = self.client.post(url, {'periodo': '2026.2', 'nome': 'RSD', 'turno': 'MANHA', 'ativo': 'on'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['form'].non_field_errors())  # duplicada: mensagem no formulário, sem erro 500
+        self.assertEqual(Turma.objects.filter(periodo='2026.2', nome='RSD').count(), 2)
 
     def test_create_periodo_invalido_reexibe_form(self):
         resp = self.client.post(

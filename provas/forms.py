@@ -75,7 +75,7 @@ class ProvaAplicacaoForm(forms.ModelForm):
             Prova.objects.filter(versoes__isnull=False).distinct().order_by('-criado_em', '-pk')
         )
         self.fields['prova'].help_text = 'Somente provas com versões (cadernos) geradas aparecem na lista.'
-        self.fields['turma'].queryset = Turma.objects.filter(ativo=True).order_by('-periodo', 'nome')
+        self.fields['turma'].queryset = Turma.objects.filter(ativo=True).order_by('-periodo', 'nome', 'turno')
 
     class Meta:
         model = ProvaAplicacao

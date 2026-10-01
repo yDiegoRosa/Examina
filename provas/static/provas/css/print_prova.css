@@ -8,7 +8,7 @@
   margin: 18mm 14mm 20mm 14mm;
 
   @top-left {
-    content: "FAETERJ-Rio • Faculdade de Educação Tecnológica do Estado do RJ";
+    content: "FAETERJ-Rio • Faculdade de Educação Tecnológica do Rio de Janeiro Fernando Mota";
     font-family: Arial, Helvetica, sans-serif;
     font-size: 7.5pt;
     color: #64748B;
@@ -221,6 +221,127 @@ body {
   font-size: 9.5pt;
   color: #1E293B;
   vertical-align: top;
+}
+
+/* --- Classes do caderno (pdf_prova_completa.html): cabeçalho da questão,
+       alternativas com letra e texto na mesma linha e linhas da discursiva --- */
+.questao-header {
+  flex-wrap: wrap;
+  gap: 2pt 6pt;
+}
+
+.questao-header-esq,
+.questao-header-dir {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2pt 6pt;
+}
+
+.questao-numero-badge {
+  font-size: 10.5pt;
+  font-weight: bold;
+  color: #002B49;
+}
+
+.questao-peso-badge,
+.questao-topico-badge,
+.questao-origem-badge,
+.questao-tipo-badge {
+  font-size: 7.5pt;
+  color: #64748B;
+}
+
+.alt-letra-col {
+  display: table-cell;
+  width: 22pt;
+  font-weight: bold;
+  color: #002B49;
+  vertical-align: top;
+}
+
+.alt-texto-col {
+  display: table-cell;
+  font-size: 9.5pt;
+  color: #1E293B;
+  vertical-align: top;
+  text-align: justify;
+}
+
+.resposta-discursiva-box {
+  border: 0.75pt solid #CBD5E1;
+  border-radius: 3pt;
+  padding: 6pt 8pt;
+  margin-top: 6pt;
+  page-break-inside: avoid;
+}
+
+.resposta-discursiva-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8pt;
+  font-weight: bold;
+  color: #002B49;
+  margin-bottom: 2pt;
+}
+
+.linha-pautada-item {
+  display: flex;
+  align-items: flex-end;
+  gap: 6pt;
+  height: 20pt;
+}
+
+.linha-pautada-num {
+  width: 14pt;
+  font-size: 7pt;
+  color: #94A3B8;
+  text-align: right;
+}
+
+.linha-pautada-traco {
+  flex: 1;
+  border-bottom: 0.75pt solid #94A3B8;
+  height: 14pt;
+}
+
+/* --- Caderno em blocos (services.caderno_layout): títulos de seção e objetivas
+       curtas em duas colunas, cada questão inteira numa coluna --- */
+.caderno-secao {
+  font-size: 9.5pt;
+  font-weight: bold;
+  color: #002B49;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  border-bottom: 1.5pt solid #002B49;
+  padding-bottom: 3pt;
+  margin: 4pt 0 10pt 0;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.caderno-secao-sub {
+  font-size: 8pt;
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #475569;
+}
+
+.questoes-colunas {
+  columns: 2;
+  column-gap: 7mm;
+  column-rule: 0.75pt solid #94A3B8;
+}
+
+.questoes-colunas .questao-bloco {
+  break-inside: avoid;
+  margin-bottom: 10pt;
+  padding-bottom: 6pt;
+}
+
+.questoes-colunas .questao-imagem img {
+  max-width: 100%;
 }
 
 /* --- Linhas de Resposta Discursiva --- */
