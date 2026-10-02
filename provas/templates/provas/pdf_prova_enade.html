@@ -8,6 +8,9 @@
 </head>
 <body>
 
+  {# Rodapé de todas as páginas (print_enade.css): a versão identifica folhas soltas. #}
+  <div class="rodape-documento"><span class="rodape-versao">{{ identificador_display|default:"Versão única" }}</span> • {{ prova.titulo|truncatechars:80 }}</div>
+
   {% if incluir_capa %}
   <!-- ═══════════════════════════════════════════════════════════
        CAPA — SIMULADO ENADE (COMPONENTE ESPECÍFICO)
@@ -126,11 +129,11 @@
 
   <!-- ═══════════════════════════════════════════════════════════
        CADERNO — COMPONENTE ESPECÍFICO
+       Sem faixa "Componente Específico" (já está no cabeçalho de toda página) nem
+       subtítulo "Questões Discursivas" (cada uma já se chama "Questão Discursiva NN"):
+       com eles, uma 1ª discursiva longa não cabia e sobrava uma página só com títulos.
        ═══════════════════════════════════════════════════════════ -->
-  <div class="enade-secao">Componente Específico</div>
-
   {% if itens_discursivas %}
-  <div class="enade-subsecao">Questões Discursivas</div>
   {% for item in itens_discursivas %}
   {% with q=item.questao %}
   <div class="enade-questao">

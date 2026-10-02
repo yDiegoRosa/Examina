@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
@@ -6,6 +8,7 @@ from academico.models import Turma
 from banco_questoes.models import Disciplina, Topico
 
 from .models import Mascara, MascaraCriterioTopico, Prova, ProvaAplicacao
+from .services.caderno_layout import eh_mascara_enade
 
 
 class _MultipleFileInput(forms.ClearableFileInput):
@@ -221,6 +224,17 @@ class MascaraForm(forms.ModelForm):
                 'percentual_facil',
                 f'A soma dos percentuais de dificuldade (Fácil + Médio + Difícil) deve ser exatamente 100% (atual: {soma}% — {diff_str}).',
             )
+
+        # Simulado ENADE é sempre caderno único (a geração também força 1 — version_generator).
+        mascara_enade = SimpleNamespace(titulo=cleaned.get('titulo'), priorizar_enade=cleaned.get('priorizar_enade'))
+        if eh_mascara_enade(mascara_enade):
+            if self.data.get(self.add_prefix('quantidade_versoes')) in (None, ''):
+                cleaned['quantidade_versoes'] = 1  # omitido: assume caderno único, sem erro
+            elif (cleaned.get('quantidade_versoes') or 1) > 1:
+                self.add_error(
+                    'quantidade_versoes',
+                    'O Simulado ENADE tem caderno único: a quantidade de cadernos (versões) deve ser 1.',
+                )
 
         modalidade = cleaned.get('modalidade')
         total = cleaned.get('quantidade_questoes') or 0

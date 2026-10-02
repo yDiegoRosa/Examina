@@ -31,7 +31,13 @@ from .models import (
 from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
-from .services.caderno_layout import numerar_por_tipo, ordenar_como_caderno, organizar_caderno
+from .services.caderno_layout import (
+    eh_prova_enade,
+    linhas_da_discursiva,
+    numerar_por_tipo,
+    ordenar_como_caderno,
+    organizar_caderno,
+)
 from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
@@ -471,16 +477,22 @@ def prova_manual_create(request):
 
         questoes_disponiveis = list(qs)
 
+    # Seleção e pontos informados (preservados na tela se a validação falhar).
+    selecionadas: set[int] = set()
+    pontos_informados: dict[int, str] = {}
+
     if request.method == 'POST':
         form = ProvaManualForm(request.POST)
         questoes_selecionadas_ids = request.POST.getlist('questoes_selecionadas')
+        ids_int = [int(qid) for qid in questoes_selecionadas_ids if qid.isdigit()]
+        selecionadas = set(ids_int)
+        pontos_informados = {qid: request.POST.get(f'pontuacao_{qid}', '').strip() for qid in ids_int}
 
         if form.is_valid():
             if not questoes_selecionadas_ids:
                 messages.error(request, 'A avaliação não pode ficar vazia. Selecione ao menos uma questão no acervo.')
             else:
                 try:
-                    ids_int = [int(qid) for qid in questoes_selecionadas_ids if qid.isdigit()]
                     disciplina = form.cleaned_data['disciplina']
                     titulo = form.cleaned_data['titulo']
                     mascara_selecionada = form.cleaned_data.get('mascara') or mascara_guia
@@ -491,6 +503,8 @@ def prova_manual_create(request):
                         questoes_ids=ids_int,
                         autor=request.user,
                         mascara=mascara_selecionada,
+                        # Campo em branco = pontuação padrão (1,00).
+                        pontuacoes={qid: valor for qid, valor in pontos_informados.items() if valor},
                     )
                     messages.success(
                         request,
@@ -509,11 +523,16 @@ def prova_manual_create(request):
             initial_data['titulo'] = f'{mascara_guia.titulo} (Manual)'
         form = ProvaManualForm(initial=initial_data)
 
+    for questao in questoes_disponiveis:
+        questao.selecionada = questao.pk in selecionadas
+        questao.pontuacao_informada = pontos_informados.get(questao.pk) or '1.00'
+
     return render(
         request,
         'provas/prova_manual_form.html',
         {
             'form': form,
+            'escala_nota': mascara_guia.valor_total if mascara_guia else Decimal('10'),
             'mascara_guia': mascara_guia,
             'disciplina_selecionada': disciplina_selecionada,
             'topicos_disciplina': topicos_disciplina,
@@ -1559,12 +1578,7 @@ def prova_pdf(request, pk):
     # ou o layout institucional FAETERJ padrão. Pode ser forçado por ?layout=enade
     # ou detectado automaticamente para máscaras de Simulado ENADE.
     layout = (request.GET.get('layout') or '').lower()
-    usar_layout_enade = layout == 'enade' or (
-        layout == ''
-        and mascara is not None
-        and getattr(mascara, 'priorizar_enade', False)
-        and 'ENADE' in (mascara.titulo or '').upper()
-    )
+    usar_layout_enade = layout == 'enade' or (layout == '' and eh_prova_enade(prova))
 
     # Caderno em blocos (os dois layouts): discursivas primeiro, numeradas à parte; objetivas
     # longas em largura total e curtas em duas colunas — ver services.caderno_layout.
@@ -1596,6 +1610,7 @@ def prova_pdf(request, pk):
         'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
         'incluir_capa': incluir_capa,
         'incluir_gabarito': incluir_gabarito,
+        'linhas_discursiva': linhas_da_discursiva(prova),  # 15 só em prova ENADE, em qualquer layout
     }
 
     template_pdf = 'provas/pdf_prova_enade.html' if usar_layout_enade else 'provas/pdf_prova_completa.html'
@@ -1999,6 +2014,7 @@ def prova_pacote_zip(request, pk):
                 'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
                 'incluir_capa': True,
                 'incluir_gabarito': False,
+                'linhas_discursiva': linhas_da_discursiva(prova),
             }
 
             context_gabarito = {

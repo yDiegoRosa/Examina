@@ -29,6 +29,25 @@ GRUPO_DISCURSIVA = 0
 GRUPO_OBJETIVA_LONGA = 1
 GRUPO_OBJETIVA_CURTA = 2
 
+# Linhas de resposta de cada discursiva: 15 só nas provas ENADE (como no exame), em qualquer
+# layout; nas demais, 6.
+LINHAS_DISCURSIVA_PADRAO = 6
+LINHAS_DISCURSIVA_ENADE = 15
+
+
+def eh_mascara_enade(mascara) -> bool:
+    """Máscara de Simulado ENADE: prioridade ENADE e "ENADE" no título (critério do layout ENADE)."""
+    return bool(mascara and getattr(mascara, 'priorizar_enade', False) and 'ENADE' in (mascara.titulo or '').upper())
+
+
+def eh_prova_enade(prova) -> bool:
+    """Prova de Simulado ENADE: gerada (ou montada) a partir de uma máscara de Simulado ENADE."""
+    return eh_mascara_enade(getattr(prova, 'mascara', None))
+
+
+def linhas_da_discursiva(prova) -> int:
+    return LINHAS_DISCURSIVA_ENADE if eh_prova_enade(prova) else LINHAS_DISCURSIVA_PADRAO
+
 
 def _linhas(texto: str) -> int:
     """Linhas estimadas de um texto na coluna (cada parágrafo ocupa ao menos uma linha)."""

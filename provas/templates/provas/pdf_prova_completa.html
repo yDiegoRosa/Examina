@@ -8,6 +8,9 @@
 </head>
 <body>
 
+  {# Rodapé de todas as páginas (print_prova.css): a versão identifica folhas soltas. #}
+  <div class="rodape-documento"><span class="rodape-versao">{{ identificador_display|default:"Versão única" }}</span> • {{ prova.titulo|truncatechars:80 }}</div>
+
   {% if incluir_capa %}
   <!-- ═══════════════════════════════════════════════════════════
        CAPA OFICIAL (PÁGINA 1)
@@ -213,40 +216,27 @@
     {% with q=item.questao %}
     <div class="questao-bloco">
 
-      <!-- Cabeçalho da Questão: Numeração, Pontuação, Tópico e Origem -->
+      <!-- Cabeçalho da Questão: só número e pontuação ("Questão 17 (0,33 pts)"). Tópico,
+           origem e tipo ficam no gabarito do professor, não no caderno do aluno. -->
       <div class="questao-header">
         <div class="questao-header-esq">
-          <span class="questao-numero-badge">{{ item.rotulo }}</span>
-          {% if item.pontuacao %}
-          <span class="questao-peso-badge">[{{ item.pontuacao }} pt{{ item.pontuacao|pluralize }}]</span>
-          {% endif %}
-          {% if q.topico %}
-          <span class="questao-topico-badge">{{ q.topico.nome }}</span>
-          {% endif %}
-        </div>
-        <div class="questao-header-dir">
-          {% if q.origem %}
-          <span class="questao-origem-badge">
-            {{ q.origem }}{% if q.numero_questao %} • Q{{ q.numero_questao }}{% endif %}
-          </span>
-          {% endif %}
-          <span class="questao-tipo-badge">{{ q.get_tipo_display }}</span>
+          <span class="questao-numero-badge">{{ item.rotulo }}{% if item.pontuacao %} <span class="questao-peso-badge">({{ item.pontuacao }} pt{{ item.pontuacao|pluralize }})</span>{% endif %}</span>
         </div>
       </div>
 
-      <!-- Texto Auxiliar / Contextualização (se houver) -->
+      <!-- Texto Auxiliar / Contextualização (se houver). Sem ícones: a fonte do servidor
+           (Liberation) não tem emoji e o PDF mostraria um quadradinho. -->
       {% if q.texto_auxiliar %}
       <div class="questao-texto-auxiliar">
-        <div class="texto-auxiliar-label">&#128196; Texto de Apoio / Contextualização:</div>
+        <div class="texto-auxiliar-label">Texto de apoio:</div>
         <div class="texto-auxiliar-conteudo">{{ q.texto_auxiliar|linebreaksbr }}</div>
       </div>
       {% endif %}
 
-      <!-- Imagem de Apoio (se houver) -->
+      <!-- Imagem de Apoio (se houver); sem legenda, o título da questão já a identifica. -->
       {% if q.imagem %}
       <div class="questao-imagem">
         <img src="{{ q.imagem.url }}" alt="Figura de apoio — {{ item.rotulo }}">
-        <div class="questao-imagem-legenda">Figura de apoio — {{ item.rotulo }}</div>
       </div>
       {% endif %}
 
@@ -290,13 +280,13 @@
           <span>Espaço de Resposta Definitiva</span>
           <span style="font-weight: normal; font-size: 7.5pt; color: #64748B;">(Escreva com letra legível)</span>
         </div>
+        {# 15 linhas em prova ENADE, 6 nas demais (caderno_layout.linhas_da_discursiva). #}
         <div class="linhas-pautadas-wrapper">
-          <div class="linha-pautada-item"><span class="linha-pautada-num">01</span><span class="linha-pautada-traco"></span></div>
-          <div class="linha-pautada-item"><span class="linha-pautada-num">02</span><span class="linha-pautada-traco"></span></div>
-          <div class="linha-pautada-item"><span class="linha-pautada-num">03</span><span class="linha-pautada-traco"></span></div>
-          <div class="linha-pautada-item"><span class="linha-pautada-num">04</span><span class="linha-pautada-traco"></span></div>
-          <div class="linha-pautada-item"><span class="linha-pautada-num">05</span><span class="linha-pautada-traco"></span></div>
-          <div class="linha-pautada-item"><span class="linha-pautada-num">06</span><span class="linha-pautada-traco"></span></div>
+          {% with total_linhas=linhas_discursiva|default:6 %}
+          {% for _ in ""|center:total_linhas %}
+          <div class="linha-pautada-item"><span class="linha-pautada-num">{{ forloop.counter|stringformat:"02d" }}</span><span class="linha-pautada-traco"></span></div>
+          {% endfor %}
+          {% endwith %}
         </div>
       </div>
       {% endif %}

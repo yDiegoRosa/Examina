@@ -8,6 +8,9 @@
 </head>
 <body class="gabarito-doc-body">
 
+  {# Rodapé de todas as páginas (print_prova.css): a versão identifica folhas soltas. #}
+  <div class="rodape-documento">Gabarito — <span class="rodape-versao">{{ identificador_display|default:"Versão única" }}</span> • {{ prova.titulo|truncatechars:80 }}</div>
+
   <!-- ═══════════════════════════════════════════════════════════
        CABEÇALHO INSTITUCIONAL DO GABARITO
        ═══════════════════════════════════════════════════════════ -->
@@ -166,7 +169,7 @@
             <span class="gabarito-alt-letra">({{ alt.letra }})</span>
             <span class="gabarito-alt-texto">{{ alt.texto }}</span>
             {% if alt.correta %}
-            <span class="gabarito-alt-check">&#10004; Resposta Correta</span>
+            <span class="gabarito-alt-check">Resposta correta</span>{# sem símbolo de check: a fonte do servidor não o tem #}
             {% endif %}
           </div>
           {% endfor %}
