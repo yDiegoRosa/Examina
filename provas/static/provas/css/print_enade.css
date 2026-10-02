@@ -26,6 +26,11 @@
     padding-bottom: 3mm;
   }
 
+  /* Versão + título da prova em todas as páginas (elemento .rodape-documento do template). */
+  @bottom-left {
+    content: element(rodape-documento);
+  }
+
   @bottom-right {
     content: "Página " counter(page) " de " counter(pages);
     font-family: Arial, Helvetica, sans-serif;
@@ -38,6 +43,18 @@
 @page :first {
   @top-left { content: none; }
   @top-right { content: none; }
+}
+
+.rodape-documento {
+  position: running(rodape-documento);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 7.5pt;
+  color: #64748B;
+}
+
+.rodape-versao {
+  font-weight: bold;
+  color: #002B49;
 }
 
 * {
@@ -261,20 +278,7 @@ body {
   text-align: center;
 }
 
-/* --- Divisor de seção (COMPONENTE ESPECÍFICO) --------------------------- */
-.enade-secao {
-  background-color: #002B49;
-  color: #FFFFFF;
-  font-size: 12pt;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 1.5pt;
-  text-align: center;
-  padding: 7pt 0;
-  border-radius: 3pt;
-  margin: 6pt 0 14pt 0;
-}
-
+/* --- Subtítulo de seção ("Questões Objetivas") -------------------------- */
 .enade-subsecao {
   font-size: 9.5pt;
   font-weight: bold;
@@ -284,6 +288,9 @@ body {
   border-bottom: 1.5pt solid #002B49;
   padding-bottom: 3pt;
   margin: 10pt 0 10pt 0;
+  /* Junto da questão seguinte: sozinho no pé da página, desperdiçava espaço. */
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 /* --- Questões ----------------------------------------------------------- */

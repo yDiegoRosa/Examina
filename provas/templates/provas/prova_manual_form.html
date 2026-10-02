@@ -2,6 +2,13 @@
 
 {% block title %}Montagem Manual de Prova — Examina FAETERJ-Rio{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* Pontos de questão não marcada: esmaecido (o campo não é enviado). */
+  .input-pontuacao:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="hero-card mb-4">
   <div>
@@ -106,6 +113,11 @@
           <div>
             <span class="font-bold text-main">Composição da Avaliação:</span>
             <span id="resumo-composicao" class="text-muted small ms-2">Nenhuma questão marcada ainda</span>
+            <div class="small text-muted mt-1">
+              <i class="bi bi-calculator"></i> Pontuação total: <strong id="total-pontos">0,00</strong> pts
+              — ajuste os pontos de cada questão na coluna "Pontos". A nota final é proporcional aos pontos obtidos,
+              na escala de 0 a {{ escala_nota|floatformat:"-2" }}.
+            </div>
           </div>
           <div class="flex gap-2">
             <button type="button" class="btn btn-outline small" id="btn-marcar-todas" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
@@ -161,13 +173,14 @@
               <th style="width: 100px;" class="text-center">Dificuldade</th>
               <th style="width: 85px;" class="text-center">Tipo</th>
               <th style="width: 120px;">Origem</th>
+              <th style="width: 95px;" class="text-center" title="Pontuação da questão na prova (padrão 1,00)">Pontos</th>
             </tr>
           </thead>
           <tbody>
             {% for q in questoes_disponiveis %}
             <tr class="questao-row" data-topico-id="{{ q.topico_id|default:'' }}" data-dificuldade="{{ q.dificuldade }}" data-tipo="{{ q.tipo }}" data-texto="{{ q.enunciado|lower }} {{ q.origem|default:''|lower }}">
               <td class="text-center">
-                <input type="checkbox" name="questoes_selecionadas" value="{{ q.pk }}" class="form-checkbox checkbox-questao" data-dificuldade="{{ q.dificuldade }}" data-topico="{{ q.topico.nome|default:'Sem tópico' }}">
+                <input type="checkbox" name="questoes_selecionadas" value="{{ q.pk }}" class="form-checkbox checkbox-questao" data-dificuldade="{{ q.dificuldade }}" data-topico="{{ q.topico.nome|default:'Sem tópico' }}"{% if q.selecionada %} checked{% endif %}>
               </td>
               <td class="font-mono font-bold text-muted small">Q{{ q.pk }}</td>
               <td>
@@ -205,6 +218,13 @@
                 {% else %}
                 <span class="text-muted">—</span>
                 {% endif %}
+              </td>
+              <td class="text-center">
+                {# Só vale para a questão marcada: desmarcada, o campo fica desabilitado e não é enviado. #}
+                <input type="number" name="pontuacao_{{ q.pk }}" value="{{ q.pontuacao_informada }}"
+                       min="0.01" max="999.99" step="0.01" required
+                       class="form-input small input-pontuacao" style="padding: 0.3rem 0.4rem; width: 80px; text-align: right;"
+                       aria-label="Pontuação da questão Q{{ q.pk }}"{% if not q.selecionada %} disabled{% endif %}>
               </td>
             </tr>
             {% endfor %}
@@ -285,21 +305,35 @@
   }
 
   // Recalcular contador e resumo de composição com validação de meta
+  function campoPontuacao(cb) {
+    const linha = cb.closest('tr');
+    return linha ? linha.querySelector('.input-pontuacao') : null;
+  }
+
   function atualizarResumoSelecao() {
     let total = 0;
     let facil = 0;
     let medio = 0;
     let dificil = 0;
+    let totalPontos = 0;
 
     checkboxes.forEach(function(cb) {
+      // O campo de pontos só vale (e só é enviado) para a questão marcada.
+      const campo = campoPontuacao(cb);
+      if (campo) campo.disabled = !cb.checked;
       if (cb.checked) {
         total++;
         const dif = cb.dataset.dificuldade;
         if (dif === 'F') facil++;
         else if (dif === 'M') medio++;
         else if (dif === 'D') dificil++;
+        const pontos = campo ? parseFloat(String(campo.value || '1').replace(',', '.')) : 1;
+        if (!isNaN(pontos)) totalPontos += pontos;
       }
     });
+
+    const totalPontosEl = document.getElementById('total-pontos');
+    if (totalPontosEl) totalPontosEl.textContent = totalPontos.toFixed(2).replace('.', ',');
 
     if (badgeContador) {
       if (metaMascara !== null && metaMascara > 0) {
@@ -340,6 +374,9 @@
 
   checkboxes.forEach(function(cb) {
     cb.addEventListener('change', atualizarResumoSelecao);
+  });
+  document.querySelectorAll('.input-pontuacao').forEach(function(campo) {
+    campo.addEventListener('input', atualizarResumoSelecao);
   });
 
   // Validação no submit do cliente

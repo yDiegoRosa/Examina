@@ -1,5 +1,6 @@
 import logging
 from collections import Counter
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -17,6 +18,29 @@ class ProvaManualError(ValidationError):
     """Exceção levantada quando a montagem manual de prova é inválida."""
 
 
+PONTUACAO_PADRAO = Decimal('1.00')
+PONTUACAO_MAXIMA = Decimal('999.99')  # limite de ProvaQuestao.pontuacao (5 dígitos, 2 decimais)
+
+
+def validar_pontuacao(valor) -> Decimal:
+    """
+    Pontuação de uma questão da prova: aceita número ou texto com vírgula/ponto ("1,5").
+    Deve ser maior que zero e caber em ``ProvaQuestao.pontuacao``; arredonda para 2 casas.
+
+    :raises ProvaManualError: valor vazio, inválido, zero/negativo ou acima do limite.
+    """
+    try:
+        pontuacao = Decimal(str(valor).strip().replace(',', '.'))
+    except (InvalidOperation, ValueError) as exc:
+        raise ProvaManualError(f'Pontuação inválida: "{valor}".') from exc
+    if not pontuacao.is_finite() or pontuacao <= 0:
+        raise ProvaManualError(f'A pontuação de cada questão deve ser maior que zero (recebido: "{valor}").')
+    pontuacao = pontuacao.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    if pontuacao <= 0 or pontuacao > PONTUACAO_MAXIMA:
+        raise ProvaManualError(f'A pontuação de cada questão deve ficar entre 0,01 e {PONTUACAO_MAXIMA} pontos.')
+    return pontuacao
+
+
 def criar_prova_manual(
     titulo: str,
     disciplina: Disciplina | None = None,
@@ -24,6 +48,7 @@ def criar_prova_manual(
     autor=None,
     numero_caderno: int = 1,
     mascara: Mascara | None = None,
+    pontuacoes: dict[int, Decimal | str] | None = None,
 ) -> Prova:
     """
     Cria e persiste uma avaliação por montagem 100% manual (seleção livre no acervo),
@@ -44,6 +69,8 @@ def criar_prova_manual(
         autor: Usuário autenticado que criou a prova.
         numero_caderno: Número do caderno da avaliação (padrão 1).
         mascara: Instância opcional de Mascara de Avaliação guia.
+        pontuacoes: Pontuação por ID de questão, definida pelo docente na montagem. Questão
+            sem valor informado vale ``PONTUACAO_PADRAO`` (1,00).
 
     Returns:
         Instância de Prova criada e persistida.
@@ -94,6 +121,12 @@ def criar_prova_manual(
                 f'A questão Q{q.pk} pertence à disciplina "{q.disciplina.nome}", '
                 f'mas a avaliação exige "{disciplina.nome}".',
             )
+
+    # 5. Pontuação de cada questão (definida pelo docente; sem valor, PONTUACAO_PADRAO)
+    pontuacoes = pontuacoes or {}
+    pontuacao_por_questao = {
+        qid: validar_pontuacao(pontuacoes[qid]) if qid in pontuacoes else PONTUACAO_PADRAO for qid in ids_unicos
+    }
 
     # Ordena as instâncias de questão conforme a ordem fornecida em ids_unicos
     questoes_map = {q.pk: q for q in questoes}
@@ -213,7 +246,7 @@ def criar_prova_manual(
                     questao=q,
                     numero=numero,
                     ordem=idx,
-                    pontuacao=1.00,
+                    pontuacao=pontuacao_por_questao[q.pk],
                     snapshot_questao=construir_snapshot_questao(q),
                 )
             )
