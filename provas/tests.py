@@ -4310,6 +4310,53 @@ class QuantidadeCadernosTest(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['quantidade_versoes'], 3)
 
+    def test_simulado_enade_e_sempre_caderno_unico(self):
+        from provas.services.version_generator import gerar_versoes_prova, quantidade_versoes_da_prova
+
+        # Máscara ENADE "editada" para 3 cadernos (direto no banco, sem passar pelo formulário).
+        mascara = self._mascara(titulo='Simulado ENADE — teste', priorizar_enade=True, quantidade_versoes=3)
+        prova = mascara.gerar_prova(autor=self.user)
+        self.assertEqual(list(prova.versoes.values_list('identificador', flat=True)), ['A'])
+
+        prova.snapshot_mascara = {**prova.snapshot_mascara, 'quantidade_versoes': 3}
+        self.assertEqual(quantidade_versoes_da_prova(prova), 1)
+        for kwargs in ({'quantidade_versoes': 3}, {'identificadores': ['A', 'B', 'C']}):
+            with self.subTest(**kwargs):
+                self.assertEqual([v.identificador for v in gerar_versoes_prova(prova, **kwargs)], ['A'])
+
+        # Nem um POST pedindo 3 versões gera mais de uma.
+        self.client.post(reverse('provas:prova_gerar_versoes', args=[prova.pk]), {'quantidade_versoes': '3'})
+        self.assertEqual(list(prova.versoes.values_list('identificador', flat=True)), ['A'])
+
+        # Fora do ENADE, a quantidade da máscara continua valendo.
+        comum = self._mascara(titulo='AV1 ENADE-like sem prioridade', quantidade_versoes=3).gerar_prova(autor=self.user)
+        self.assertEqual(comum.versoes.count(), 3)
+
+    def test_formulario_recusa_mais_de_um_caderno_no_simulado_enade(self):
+        base = {
+            'titulo': 'Simulado ENADE — Form',
+            'priorizar_enade': 'on',
+            'disciplina': self.disc.pk,
+            'quantidade_questoes': 10,
+            'modalidade': 'OBJ',
+            'quantidade_objetivas': 10,
+            'quantidade_discursivas': 0,
+            'percentual_facil': 30,
+            'percentual_medio': 50,
+            'percentual_dificil': 20,
+            'valor_total': '10.00',
+            'tempo_estimado_minutos': 60,
+        }
+        form = MascaraForm(data={**base, 'quantidade_versoes': 3})
+        self.assertIn('caderno único', form.errors['quantidade_versoes'][0])
+
+        form = MascaraForm(data=base)  # campo omitido: assume 1, sem erro
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['quantidade_versoes'], 1)
+
+        form = MascaraForm(data={**base, 'priorizar_enade': '', 'quantidade_versoes': 3})  # sem prioridade ENADE
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_migracao_ajusta_so_mascaras_enade_existentes(self):
         migracao = import_module('provas.migrations.0013_mascara_quantidade_versoes')
         enade = self._mascara(titulo='Simulado ENADE — Componente Específico (ADS)')
@@ -4801,15 +4848,8 @@ class AtaAvaliacaoTest(TestCase):
         self.assertEqual([linha['nome'] for linha in linhas], ['Ana Souza', 'Bruno Silva', 'Carla Dias'])
         self.assertEqual([linha['numero'] for linha in linhas], [1, 2, 3])
         self.assertEqual([linha['matricula'] for linha in linhas], ['A2', 'B2', 'C2'])
-        self.assertEqual({linha['versao'] for linha in linhas}, {''})  # versões ainda não distribuídas
-        self.assertTrue(all('nota' not in linha for linha in linhas))  # nota sempre em branco
-
-    def test_versao_do_cartao_prevalece_sobre_a_distribuicao(self):
-        atribuir_versoes(self.aplicacao)  # round-robin: Ana A, Bruno B, Carla A
-        ana = self.matriculas['Ana Souza'].aluno
-        FolhaResposta.objects.create(prova_aplicacao=self.aplicacao, aluno=ana, prova_versao=self.versoes[1])
-
-        self.assertEqual([linha['versao'] for linha in self._linhas()], ['B', 'B', 'A'])
+        # Só nº, matrícula e nome: nota sempre em branco e sem versão (pedido de 2026-10-02).
+        self.assertTrue(all(set(linha) == {'numero', 'matricula', 'nome'} for linha in linhas))
 
     def test_aluno_com_cartao_que_saiu_da_turma_continua_na_ata(self):
         carla = self.matriculas['Carla Dias']
@@ -4820,7 +4860,6 @@ class AtaAvaliacaoTest(TestCase):
         linhas = self._linhas()
         self.assertEqual(len(linhas), 3)
         self.assertEqual(linhas[2]['nome'], 'Carla Dias')
-        self.assertEqual(linhas[2]['versao'], 'A')
 
     def test_html_tem_cabecalho_e_colunas_do_modelo(self):
         from django.template.loader import render_to_string
@@ -4839,7 +4878,6 @@ class AtaAvaliacaoTest(TestCase):
             'AV1 Ata',
             '10/11/2026',
             'ANA SOUZA',
-            '>Versão</th>',
             'Ass. Presença',
             'Ass. Recebido',
             '>Nota</th>',
@@ -4857,15 +4895,20 @@ class AtaAvaliacaoTest(TestCase):
         self.aplicacao.refresh_from_db()
         self.assertEqual(contexto_ata_avaliacao(self.aplicacao)['turno'], '')
 
-    def test_caderno_unico_omite_a_coluna_versao(self):
+    def test_ata_sem_coluna_versao_mesmo_com_varias_versoes_distribuidas(self):
+        import re
+
         from django.template.loader import render_to_string
 
         from provas.services.ata_service import contexto_ata_avaliacao
 
-        self.versoes[1].delete()
-        contexto = contexto_ata_avaliacao(self.aplicacao)
-        self.assertFalse(contexto['mostrar_versao'])
-        self.assertNotIn('>Versão</th>', render_to_string('provas/pdf_ata_avaliacao.html', contexto))
+        atribuir_versoes(self.aplicacao)  # prova com versões A e B distribuídas
+        html = render_to_string('provas/pdf_ata_avaliacao.html', contexto_ata_avaliacao(self.aplicacao))
+        self.assertNotIn('Versão', html)
+        self.assertEqual(
+            re.findall(r'<th[^>]*>([^<]+)</th>', html.split('class="ata-lista"')[1]),
+            ['Nº', 'Matrícula', 'Nome do Aluno', 'Ass. Presença', 'Ass. Recebido', 'Nota'],
+        )
 
     def test_view_entrega_o_pdf_sem_gerar_cartoes(self):
         resp = self.client.get(reverse('provas:aplicacao_ata_pdf', args=[self.aplicacao.pk]))

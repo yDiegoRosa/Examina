@@ -35,10 +35,14 @@ LINHAS_DISCURSIVA_PADRAO = 6
 LINHAS_DISCURSIVA_ENADE = 15
 
 
-def eh_prova_enade(prova) -> bool:
-    """Prova de Simulado ENADE: máscara com prioridade ENADE e "ENADE" no título (critério do layout ENADE)."""
-    mascara = getattr(prova, 'mascara', None)
+def eh_mascara_enade(mascara) -> bool:
+    """Máscara de Simulado ENADE: prioridade ENADE e "ENADE" no título (critério do layout ENADE)."""
     return bool(mascara and getattr(mascara, 'priorizar_enade', False) and 'ENADE' in (mascara.titulo or '').upper())
+
+
+def eh_prova_enade(prova) -> bool:
+    """Prova de Simulado ENADE: gerada (ou montada) a partir de uma máscara de Simulado ENADE."""
+    return eh_mascara_enade(getattr(prova, 'mascara', None))
 
 
 def linhas_da_discursiva(prova) -> int:

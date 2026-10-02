@@ -17,6 +17,7 @@ from .caderno_layout import (
     GRUPO_DISCURSIVA,
     GRUPO_OBJETIVA_CURTA,
     GRUPO_OBJETIVA_LONGA,
+    eh_prova_enade,
     grupo_do_item,
     numeros_por_tipo,
 )
@@ -40,7 +41,11 @@ def quantidade_versoes_da_prova(prova: Prova) -> int:
     Quantos cadernos (versões) gerar para a prova: o valor congelado no snapshot da
     máscara no momento da geração; na falta dele (prova antiga), o da máscara atual;
     sem máscara (montagem manual livre), o padrão de 3 (A/B/C).
+
+    Simulado ENADE é sempre caderno único (1), qualquer que seja o valor gravado.
     """
+    if eh_prova_enade(prova):
+        return 1
     candidatos = [(prova.snapshot_mascara or {}).get('quantidade_versoes')]
     if prova.mascara_id:
         candidatos.append(prova.mascara.quantidade_versoes)
@@ -186,6 +191,12 @@ def gerar_versoes_prova(
 
     if embaralhar_alternativas is None:
         embaralhar_alternativas = _embaralhar_alternativas_padrao(prova)
+
+    if eh_prova_enade(prova):
+        # Simulado ENADE: caderno único, sempre — vale para qualquer caminho (máscara editada,
+        # botão "Gerar versões", POST manipulado, ZIP).
+        quantidade_versoes = 1
+        identificadores = (identificadores or list(LETRAS_PADRAO))[:1]
 
     if not identificadores:
         identificadores = list(LETRAS_PADRAO[:quantidade_versoes])
