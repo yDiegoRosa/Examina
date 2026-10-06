@@ -53,8 +53,13 @@
           <div class="flex items-center gap-2">
             <i class="bi bi-exclamation-circle-fill" style="color: var(--color-danger); font-size: 1.2rem;"></i>
             <div>
+              {% if form.login_bloqueado %}
+              <div class="font-bold small" style="color: var(--color-danger);">Acesso temporariamente bloqueado</div>
+              <div class="small text-muted">{{ form.non_field_errors.0 }}</div>
+              {% else %}
               <div class="font-bold small" style="color: var(--color-danger);">Credenciais Inválidas</div>
               <div class="small text-muted">Usuário ou senha incorretos. Por favor, verifique seus dados.</div>
+              {% endif %}
             </div>
           </div>
         </div>

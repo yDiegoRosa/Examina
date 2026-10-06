@@ -211,6 +211,13 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'banco_questoes:questao_list'
 LOGOUT_REDIRECT_URL = 'login'
 
+# Limite de tentativas de login (banco_questoes.seguranca_login): depois de
+# LOGIN_MAX_TENTATIVAS senhas erradas do mesmo usuário em LOGIN_BLOQUEIO_MINUTOS, o login
+# desse usuário fica bloqueado até a janela passar (também no /admin/).
+AUTHENTICATION_BACKENDS = ['banco_questoes.auth_backends.ModelBackendComLimite']
+LOGIN_MAX_TENTATIVAS = env.int('LOGIN_MAX_TENTATIVAS', default=5)
+LOGIN_BLOQUEIO_MINUTOS = env.int('LOGIN_BLOQUEIO_MINUTOS', default=15)
+
 # ---------------------------------------------------------------------------
 # CSRF trusted origins (required when behind a reverse proxy)
 # ---------------------------------------------------------------------------

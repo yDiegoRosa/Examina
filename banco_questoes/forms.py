@@ -1,8 +1,52 @@
 from django import forms
 from django.conf import settings
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
 
 from .models import Alternativa, Disciplina, Questao, Topico
+from .seguranca_login import minutos_de_bloqueio
+
+
+# ---------------------------------------------------------------------------
+# Autenticação
+# ---------------------------------------------------------------------------
+class LoginForm(AuthenticationForm):
+    """
+    Login com o limite de tentativas (``seguranca_login``): usuário bloqueado recebe o aviso
+    com o tempo de espera, inclusive na tentativa que atinge o limite.
+    """
+
+    login_bloqueado = False
+
+    def _recusar_se_bloqueado(self, username):
+        minutos = minutos_de_bloqueio(username)
+        if minutos:
+            self.login_bloqueado = True
+            raise ValidationError(
+                f'Muitas tentativas de login sem sucesso. Tente novamente em {minutos} minuto(s).',
+                code='login_bloqueado',
+            )
+
+    def clean(self):
+        username = self.cleaned_data.get('username')
+        self._recusar_se_bloqueado(username)
+        try:
+            return super().clean()
+        except ValidationError:
+            # A tentativa errada que acabou de ser registrada pode ter atingido o limite.
+            self._recusar_se_bloqueado(username)
+            raise
+
+
+class AlterarSenhaForm(PasswordChangeForm):
+    """Troca de senha pelo próprio usuário, com os campos no estilo do sistema."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for campo in self.fields.values():
+            campo.widget.attrs['class'] = 'form-input'
+
 
 # ---------------------------------------------------------------------------
 # Extensões e magic bytes aceitos para importação

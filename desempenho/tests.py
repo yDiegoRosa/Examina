@@ -67,6 +67,19 @@ class DesempenhoModelTest(TestCase):
         self.assertTrue(d.acertou)
         self.assertIn('marcou B', str(d))
 
+    def test_historico_guarda_cada_alteracao_da_nota(self):
+        professor = get_user_model().objects.create_user(username='prof_hist', password='segredo123')  # noqa: S106
+        d = Desempenho.objects.create(folha_resposta=self.folha, questao=self.questao, nota=Decimal('5.00'))
+        d.nota = Decimal('7.50')
+        d.tipo_correcao = Desempenho.TipoCorrecao.MANUAL
+        d.corrigido_por = professor
+        d.save()
+
+        historico = list(d.history.order_by('history_date'))
+        self.assertEqual([h.nota for h in historico], [Decimal('5.00'), Decimal('7.50')])
+        self.assertEqual(historico[-1].history_type, '~')  # alteração
+        self.assertEqual(historico[-1].corrigido_por, professor)
+
 
 class TaxaErroAnaliseTest(TestCase):
     """Agregações de taxa de erro por tópico e por dificuldade (base do RF13/14)."""

@@ -91,6 +91,15 @@
     <p class="small text-muted mb-3">
       {{ total_folhas }} cartão(ões) gerado(s) — um por aluno, com nome, matrícula e QR para a leitura óptica.
     </p>
+    {% if alunos_sem_cartao %}
+    <div class="small p-3 mb-3" role="status" style="background: var(--color-warning-bg); border: 1px solid var(--fae-gold); border-radius: var(--radius-sm);">
+      <i class="bi bi-person-plus-fill" aria-hidden="true" style="color: var(--fae-gold);"></i>
+      {{ alunos_sem_cartao }} aluno(s) entraram na turma depois e ainda estão sem cartão. Use
+      <strong>Gerar/atualizar cartões</strong>: eles recebem a versão do bloco alfabético de cada um, sem
+      mudar a dos outros. O cartão e o caderno de cada aluno ficam na
+      <a href="{% url 'provas:aplicacao_folhas' aplicacao.pk %}">lista de alunos</a>.
+    </div>
+    {% endif %}
     <div class="flex flex-wrap gap-2">
       <form method="post" action="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" style="margin: 0;">
         {% csrf_token %}

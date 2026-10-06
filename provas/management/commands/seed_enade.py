@@ -52,9 +52,23 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             if options.get('limpar'):
-                removidas = Questao.objects.filter(origem=ORIGEM).count()
-                Questao.objects.filter(origem=ORIGEM).delete()
+                # Questões já usadas em provas (ou com notas) são protegidas (PROTECT): ficam no
+                # acervo e entram na contagem do estoque; só as demais são removidas.
+                do_simulado = Questao.objects.filter(origem=ORIGEM)
+                usadas = do_simulado.filter(
+                    Q(utilizacoes_provas__isnull=False) | Q(desempenhos__isnull=False)
+                ).values_list('pk', flat=True)
+                removiveis = do_simulado.exclude(pk__in=list(usadas))
+                removidas = removiveis.count()
+                mantidas = do_simulado.count() - removidas
+                removiveis.delete()
                 self.stdout.write(self.style.WARNING(f'Removidas {removidas} questões do simulado anterior.'))
+                if mantidas:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'Mantidas {mantidas} questões que já estão em provas (não podem ser apagadas).'
+                        )
+                    )
 
             criados_obj = 0
             criados_dis = 0

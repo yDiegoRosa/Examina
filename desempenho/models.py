@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class Desempenho(models.Model):
@@ -65,6 +66,10 @@ class Desempenho(models.Model):
 
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
+
+    # Histórico de cada alteração (quem, quando e o valor anterior): notas lançadas e
+    # corrigidas à mão ficam rastreáveis num pedido de revisão. Consulta pelo admin.
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['folha_resposta', 'questao']

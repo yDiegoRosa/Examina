@@ -747,8 +747,9 @@ class AtribuicaoVersao(models.Model):
 
     Gerada em blocos (ver ``provas.services.version_assigner``): na ordem alfabética,
     cada versão recebe uma faixa contínua de alunos, com faixas de tamanho equilibrado.
-    ``sequencia`` é a posição do aluno nessa ordem (o rótulo do campo ainda cita o
-    round-robin, regra anterior; trocá-lo exige migration).
+    ``sequencia`` é a posição do aluno nessa ordem; quem entra na turma depois recebe as
+    sequências seguintes (``incluir_alunos_novos``). O rótulo do campo ainda cita o
+    round-robin, regra anterior; trocá-lo exige migration.
     """
 
     aplicacao = models.ForeignKey(
