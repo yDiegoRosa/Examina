@@ -1,0 +1,19 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Senha alterada — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-key-fill"></i> Minha conta</span>
+    </div>
+    <h1 class="mb-1">Senha alterada</h1>
+    <p class="text-secondary" style="max-width: 620px;">
+      Sua senha foi alterada com sucesso. Use a nova senha no próximo acesso.
+    </p>
+  </div>
+</div>
+
+<a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-primary"><i class="bi bi-arrow-left"></i> Voltar ao sistema</a>
+{% endblock %}

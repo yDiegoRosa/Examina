@@ -91,6 +91,14 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
     inlines = [AtribuicaoVersaoInline]
     actions = ['acao_atribuir_versoes', 'acao_exportar_folhas', 'acao_upload_folhas']
 
+    def get_readonly_fields(self, request, obj=None):
+        # Com cartões gerados, trocar a prova ou a turma deixaria cartões, versões e notas
+        # apontando para outra avaliação: os dois campos ficam travados.
+        campos = list(super().get_readonly_fields(request, obj))
+        if obj is not None and obj.folhas.exists():
+            campos += ['prova', 'turma']
+        return campos
+
     @admin.display(description='Atribuições')
     def total_atribuicoes(self, obj):
         return obj.atribuicoes.count()

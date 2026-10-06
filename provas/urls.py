@@ -47,6 +47,8 @@ urlpatterns = [
     ),
     path('aplicacoes/<int:pk>/folhas/', views.aplicacao_folhas, name='aplicacao_folhas'),
     path('folhas/<int:pk>/lancamento/', views.folha_lancamento_manual, name='folha_lancamento_manual'),
+    path('folhas/<int:pk>/cartao-pdf/', views.folha_cartao_pdf, name='folha_cartao_pdf'),
+    path('folhas/<int:pk>/caderno-pdf/', views.folha_caderno_pdf, name='folha_caderno_pdf'),
     path('itens/<int:item_pk>/candidatas/', views.item_candidatas_substituicao, name='item_candidatas_substituicao'),
     path('itens/<int:item_pk>/substituir/', views.item_substituir_questao, name='item_substituir_questao'),
     # AJAX / APIs

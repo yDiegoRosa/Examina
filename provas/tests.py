@@ -76,7 +76,12 @@ from .services.omr import (
     localizar_folha,
 )
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
-from .services.version_assigner import atribuir_versoes, indices_em_blocos, resumo_distribuicao
+from .services.version_assigner import (
+    atribuir_versoes,
+    incluir_alunos_novos,
+    indices_em_blocos,
+    resumo_distribuicao,
+)
 from .views import prova_list
 
 
@@ -3098,6 +3103,44 @@ class AtribuicaoVersaoServiceTest(TestCase):
         self.assertEqual((resumo['B']['total'], resumo['B']['primeiro']), (1, 'Bruno'))
         self.assertEqual((resumo['C']['total'], resumo['C']['primeiro']), (0, ''))
 
+    def test_aluno_novo_entra_no_bloco_alfabetico_sem_mexer_nos_outros(self):
+        for i, nome in enumerate(['Ana', 'Bruno', 'Diego', 'Eva', 'Gil', 'Hugo']):
+            self._matricular(nome, f'M{i}')
+        atribuir_versoes(self.aplicacao)  # A: Ana, Bruno | B: Diego, Eva | C: Gil, Hugo
+        antes = {a.aluno_id: (a.versao_id, a.sequencia) for a in self.aplicacao.atribuicoes.all()}
+
+        self._matricular('Zeca', 'N3')  # depois do último bloco (C)
+        self._matricular('Carla', 'N2')  # entre Bruno (A) e Diego (B)
+        self._matricular('Bia', 'N1')  # dentro do bloco A
+        criadas = incluir_alunos_novos(self.aplicacao)
+
+        # Em ordem alfabética: Bia → A (vizinhos A); Carla → B (A já tem 3, B tem 2); Zeca → C.
+        letras = {v.pk: v.identificador for v in self.versoes}
+        self.assertEqual(
+            [(a.aluno.nome, letras[a.versao_id], a.sequencia) for a in criadas],
+            [('Bia', 'A', 7), ('Carla', 'B', 8), ('Zeca', 'C', 9)],
+        )
+        depois = {a.aluno_id: (a.versao_id, a.sequencia) for a in self.aplicacao.atribuicoes.all()}
+        self.assertTrue(all(depois[aluno_id] == valor for aluno_id, valor in antes.items()))
+
+        # As faixas continuam contínuas na ordem alfabética.
+        faixas = [(r['versao'], r['total'], r['primeiro'], r['ultimo']) for r in resumo_distribuicao(self.aplicacao)]
+        self.assertEqual(faixas, [('A', 3, 'Ana', 'Bruno'), ('B', 3, 'Carla', 'Eva'), ('C', 3, 'Gil', 'Zeca')])
+        self.assertEqual(incluir_alunos_novos(self.aplicacao), [])  # ninguém mais sem versão
+
+    def test_aluno_novo_em_distribuicao_alternada_vai_para_a_versao_com_menos_alunos(self):
+        alunos = [self._matricular(nome, f'M{i}') for i, nome in enumerate(['Ana', 'Bruno', 'Carla', 'Davi'])]
+        for sequencia, (aluno, versao) in enumerate(zip(alunos, [0, 1, 2, 0], strict=True), start=1):
+            AtribuicaoVersao.objects.create(
+                aplicacao=self.aplicacao, aluno=aluno, versao=self.versoes[versao], sequencia=sequencia
+            )
+        self._matricular('Beto', 'N1')
+
+        criadas = incluir_alunos_novos(self.aplicacao)
+
+        # A tem 2 alunos; B e C têm 1 — empate resolvido pela menor versão (B).
+        self.assertEqual([(a.aluno.nome, a.versao_id) for a in criadas], [('Beto', self.versoes[1].pk)])
+
     def test_ignora_nao_matriculados_e_inativos(self):
         self._matricular('Ativo Um', 'A1')
         self._matricular('Trancado', 'T1', situacao=Matricula.Situacao.TRANCADO)
@@ -3318,6 +3361,47 @@ class FolhaRespostaTest(TestCase):
                 self.assertNotIn('Assinatura:', html)
                 self.assertNotIn('Modalidade:', html)
                 self.assertNotIn('Somente Objetivas', html)
+
+    def test_gerar_folhas_inclui_aluno_que_entrou_depois_sem_mexer_nos_outros(self):
+        antes = {f.aluno_id: (f.qr_token, f.prova_versao_id) for f in gerar_folhas_da_aplicacao(self.aplicacao)}
+        carlos = Aluno.objects.create(nome='Carlos', matricula='C1')
+        Matricula.objects.create(aluno=carlos, turma=self.turma)
+
+        folhas = gerar_folhas_da_aplicacao(self.aplicacao)
+
+        self.assertEqual(len(folhas), 3)
+        for folha in folhas:
+            if folha.aluno_id in antes:
+                self.assertEqual((folha.qr_token, folha.prova_versao_id), antes[folha.aluno_id])
+        folha_carlos = next(folha for folha in folhas if folha.aluno_id == carlos.pk)
+        self.assertEqual(folha_carlos.prova_versao, self.versoes[1])  # depois de Bruno (bloco B)
+
+    def test_cartao_e_caderno_individuais_em_pdf(self):
+        from unittest import mock
+
+        folha = next(f for f in gerar_folhas_da_aplicacao(self.aplicacao) if f.aluno == self.ana)
+        self.client.login(username='coord_f', password='segredo123')  # noqa: S106
+        with mock.patch.object(PDFGeneratorService, 'render_pdf_from_template', return_value=b'%PDF-teste') as render:
+            cartao = self.client.get(reverse('provas:folha_cartao_pdf', args=[folha.pk]))
+            caderno = self.client.get(reverse('provas:folha_caderno_pdf', args=[folha.pk]))
+
+        self.assertEqual((cartao.status_code, cartao['Content-Type']), (200, 'application/pdf'))
+        self.assertIn('cartao-a1-ana-versao-a.pdf', cartao['Content-Disposition'])
+        self.assertEqual((caderno.status_code, caderno['Content-Type']), (200, 'application/pdf'))
+        self.assertIn('caderno-a1-ana-versao-a.pdf', caderno['Content-Disposition'])
+        templates = [chamada.args[0] for chamada in render.call_args_list]
+        self.assertEqual(templates, ['provas/pdf_folha_resposta.html', 'provas/pdf_prova_completa.html'])
+        self.assertEqual(render.call_args_list[1].args[1]['aluno_nome'], 'Ana')
+
+        # A lista de alunos leva aos PDFs individuais.
+        lista = self.client.get(reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk]))
+        self.assertContains(lista, reverse('provas:folha_cartao_pdf', args=[folha.pk]))
+        self.assertContains(lista, reverse('provas:folha_caderno_pdf', args=[folha.pk]))
+
+    def test_pdfs_individuais_exigem_login(self):
+        folha = gerar_folhas_da_aplicacao(self.aplicacao)[0]
+        for rota in ('provas:folha_cartao_pdf', 'provas:folha_caderno_pdf'):
+            self.assertEqual(self.client.get(reverse(rota, args=[folha.pk])).status_code, 302)
 
     def test_render_cadernos_nominais_gera_pdf(self):
         from .services.caderno_service import render_cadernos_nominais
@@ -4244,6 +4328,35 @@ class AplicacaoTelasTest(TestCase):
         resp = self.client.post(reverse('provas:aplicacao_atribuir_versoes', args=[aplicacao.pk]), follow=True)
         self.assertContains(resp, 'Não foi possível distribuir as versões')
 
+    def test_painel_avisa_quem_entrou_depois_dos_cartoes(self):
+        aplicacao = self._aplicacao()
+        atribuir_versoes(aplicacao)
+        for aluno in self.alunos:
+            FolhaResposta.objects.create(prova_aplicacao=aplicacao, aluno=aluno, prova_versao=self.versoes[0])
+        url = reverse('provas:aplicacao_detail', args=[aplicacao.pk])
+        self.assertEqual(self.client.get(url).context['alunos_sem_cartao'], 0)
+
+        novo = Aluno.objects.create(nome='Caio', matricula='C1')
+        Matricula.objects.create(aluno=novo, turma=self.turma)
+        resp = self.client.get(url)
+        self.assertEqual(resp.context['alunos_sem_cartao'], 1)
+        self.assertContains(resp, 'entraram na turma depois')
+
+    def test_admin_trava_prova_e_turma_de_aplicacao_com_cartoes(self):
+        from django.contrib import admin as django_admin
+        from django.test import RequestFactory
+
+        model_admin = django_admin.site._registry[ProvaAplicacao]
+        request = RequestFactory().get('/admin/')
+        aplicacao = self._aplicacao()
+        self.assertNotIn('prova', model_admin.get_readonly_fields(request, aplicacao))
+        self.assertNotIn('prova', model_admin.get_readonly_fields(request, None))
+
+        FolhaResposta.objects.create(prova_aplicacao=aplicacao, aluno=self.alunos[0], prova_versao=self.versoes[0])
+        campos = model_admin.get_readonly_fields(request, aplicacao)
+        self.assertIn('prova', campos)
+        self.assertIn('turma', campos)
+
     def test_menu_e_revisao_da_prova_levam_as_aplicacoes(self):
         resp = self.client.get(reverse('provas:prova_revisao', args=[self.prova.pk]))
         self.assertContains(resp, f'{reverse("provas:aplicacao_create")}?prova={self.prova.pk}')
@@ -4893,6 +5006,123 @@ class CadernoPadraoLayoutTest(SimpleTestCase):
         self.assertGreater(caixas['linha-pautada-traco'][0].style['border_bottom_width'], 0)
         colunas = {round(bloco.position_x) for bloco in caixas['questao-bloco'] if bloco.element_tag == 'div'}
         self.assertEqual(len(colunas), 2)  # objetivas curtas lado a lado
+
+
+class PdfsAvulsosEnadeTest(TestCase):
+    """Pacote ZIP e "Apenas capa" usam o layout ENADE em Simulado ENADE."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='doc_avulsos', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.client.force_login(self.user)
+        self.disc = Disciplina.objects.create(nome='Disc Avulsos')
+
+    def _prova(self, titulo, priorizar_enade):
+        mascara = Mascara.objects.create(
+            titulo=titulo,
+            disciplina=self.disc,
+            quantidade_questoes=1,
+            percentual_facil=100,
+            percentual_medio=0,
+            percentual_dificil=0,
+            priorizar_enade=priorizar_enade,
+            autor=self.user,
+        )
+        prova = Prova.objects.create(titulo=titulo, mascara=mascara, disciplina=self.disc)
+        questao = Questao.objects.create(disciplina=self.disc, tipo='DIS', dificuldade='F', enunciado='Disserte.')
+        pq = ProvaQuestao.objects.create(
+            prova=prova, questao=questao, numero=1, ordem=1, snapshot_questao={'tipo': 'DIS'}
+        )
+        versao = ProvaVersao.objects.create(prova=prova, identificador='A', numero_versao=1)
+        ProvaVersaoItem.objects.create(versao=versao, prova_questao=pq, numero=1, ordem=1)
+        return prova
+
+    def _renderizados(self, rota, prova):
+        from unittest import mock
+
+        with mock.patch.object(PDFGeneratorService, 'render_pdf_from_template', return_value=b'%PDF-teste') as render:
+            resposta = self.client.get(reverse(rota, kwargs={'pk': prova.pk}))
+        self.assertEqual(resposta.status_code, 200)
+        return [(chamada.kwargs['template_name'], chamada.kwargs['context']) for chamada in render.call_args_list]
+
+    def test_pacote_zip_usa_o_caderno_enade_no_simulado(self):
+        enade = self._renderizados('provas:prova_pacote_zip', self._prova('Simulado ENADE — teste', True))
+        self.assertEqual(
+            [template for template, _ in enade], ['provas/pdf_prova_enade.html', 'provas/pdf_gabarito_versao.html']
+        )
+        self.assertEqual(enade[0][1]['linhas_discursiva'], 15)
+
+        comum = self._renderizados('provas:prova_pacote_zip', self._prova('AV1 Comum', False))
+        self.assertEqual(
+            [template for template, _ in comum], ['provas/pdf_prova_completa.html', 'provas/pdf_gabarito_versao.html']
+        )
+
+    def test_capa_avulsa_do_simulado_e_a_capa_enade(self):
+        [(template, contexto)] = self._renderizados(
+            'provas:prova_capa_pdf', self._prova('Simulado ENADE — teste', True)
+        )
+        self.assertEqual(template, 'provas/pdf_prova_enade.html')
+        self.assertTrue(contexto['somente_capa'])
+
+        [(template, _)] = self._renderizados('provas:prova_capa_pdf', self._prova('AV1 Comum', False))
+        self.assertEqual(template, 'provas/pdf_capa_prova.html')
+
+    def test_template_enade_somente_capa_omite_as_questoes(self):
+        from django.template.loader import render_to_string
+
+        from .services.caderno_service import contexto_caderno
+
+        prova = self._prova('Simulado ENADE — teste', True)
+        template, contexto = contexto_caderno(prova, prova.versoes.first(), incluir_gabarito=True)
+        completo = render_to_string(template, contexto)
+        so_capa = render_to_string(template, {**contexto, 'somente_capa': True})
+
+        self.assertIn('Disserte.', completo)
+        self.assertIn('Identificação do(a) Estudante', so_capa)
+        self.assertNotIn('Disserte.', so_capa)
+        self.assertNotIn('enade-gabarito', so_capa)
+
+    def test_seed_enade_limpar_mantem_as_questoes_usadas_em_provas(self):
+        from io import StringIO
+        from unittest import mock
+
+        from django.core.management import call_command
+
+        from .management.commands.seed_enade import ORIGEM
+
+        usada = Questao.objects.create(
+            disciplina=self.disc, tipo='DIS', dificuldade='F', enunciado='Usada', origem=ORIGEM
+        )
+        livre = Questao.objects.create(
+            disciplina=self.disc, tipo='DIS', dificuldade='F', enunciado='Livre', origem=ORIGEM
+        )
+        prova = Prova.objects.create(titulo='Prova Seed', disciplina=self.disc)
+        ProvaQuestao.objects.create(prova=prova, questao=usada, numero=1, ordem=1, snapshot_questao={'tipo': 'DIS'})
+
+        saida = StringIO()
+        with mock.patch('provas.management.commands.seed_enade.ENADE_AREAS', {}):  # sem reabastecer
+            call_command('seed_enade', limpar=True, stdout=saida)
+
+        self.assertTrue(Questao.objects.filter(pk=usada.pk).exists())
+        self.assertFalse(Questao.objects.filter(pk=livre.pk).exists())
+        self.assertIn('Removidas 1 questões', saida.getvalue())
+        self.assertIn('Mantidas 1 questões', saida.getvalue())
+
+    def test_capas_mantem_valor_e_tempo_numa_linha_e_selo_dourado_existe(self):
+        from django.template.loader import render_to_string
+
+        from .services.caderno_service import contexto_caderno
+
+        prova = self._prova('Simulado ENADE — teste', True)
+        for layout in ('', 'padrao'):
+            template, contexto = contexto_caderno(prova, prova.versoes.first(), layout=layout)
+            html = render_to_string(template, {**contexto, 'valor_total': '10,00', 'tempo_minutos': 180})
+            self.assertIn('<span class="sem-quebra">10,00 ponto(s)</span>', html)
+        for css in ('provas/css/print_prova.css', 'provas/css/print_enade.css'):
+            self.assertIn('.sem-quebra', Path(finders.find(css)).read_text(encoding='utf-8'))
+        self.assertIn(
+            '.badge-pill-gold', Path(finders.find('banco_questoes/css/custom.css')).read_text(encoding='utf-8')
+        )
 
 
 class LinhasDiscursivaViewTest(TestCase):

@@ -55,7 +55,7 @@
           <th style="width: 110px;">Versão</th>
           <th style="width: 130px;">Status</th>
           <th style="width: 160px;">Corrigidas</th>
-          <th style="width: 150px;"></th>
+          <th style="width: 330px;"></th>
         </tr>
       </thead>
       <tbody>
@@ -72,9 +72,18 @@
           </td>
           <td class="small text-muted">{{ l.acertos }} acerto(s) / {{ l.total }} corrigida(s)</td>
           <td>
-            <a href="{% url 'provas:folha_lancamento_manual' l.folha.pk %}" class="btn btn-primary small">
-              <i class="bi bi-pencil-square"></i> Lançar notas
-            </a>
+            <div class="flex flex-wrap gap-2">
+              <a href="{% url 'provas:folha_lancamento_manual' l.folha.pk %}" class="btn btn-primary small">
+                <i class="bi bi-pencil-square"></i> Lançar notas
+              </a>
+              {# Material individual — por exemplo, de quem entrou na turma depois. #}
+              <a href="{% url 'provas:folha_cartao_pdf' l.folha.pk %}" class="btn btn-outline small" target="_blank" rel="noopener" title="Cartão-resposta deste aluno (PDF)">
+                <i class="bi bi-file-earmark-person"></i> Cartão
+              </a>
+              <a href="{% url 'provas:folha_caderno_pdf' l.folha.pk %}" class="btn btn-outline small" target="_blank" rel="noopener" title="Caderno nominal deste aluno (PDF)">
+                <i class="bi bi-journal-text"></i> Caderno
+              </a>
+            </div>
           </td>
         </tr>
         {% empty %}

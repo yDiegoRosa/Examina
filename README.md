@@ -1,120 +1,111 @@
 # Examina
 
-> Plataforma de gestão de banco de questões, geração inteligente de provas e análise de desempenho pedagógico.
+> Plataforma de gestão de banco de questões, geração de provas, correção por cartão-resposta e análise de desempenho pedagógico — FAETERJ-Rio.
 
 ## Sobre o projeto
 
-O Examina centraliza o ciclo completo de avaliação de uma instituição de ensino: cadastro e organização de um acervo de questões, montagem de provas alinhadas a critérios pedagógicos (dificuldade, conteúdo, tópico), correção — incluindo leitura óptica automatizada — e análise de desempenho dos alunos para apoiar decisões da coordenação e do corpo docente.
+O Examina centraliza o ciclo completo de avaliação da instituição: cadastro e organização do acervo de questões, montagem de provas alinhadas a critérios pedagógicos (dificuldade, tópico, tipo), aplicação às turmas com cadernos e cartões-resposta nominais, correção por leitura óptica e análise do desempenho dos alunos.
 
-Projeto de uso interno institucional (instituição única, sem suporte a multi-tenant).
-
-## Status atual
-
-🚧 **Em desenvolvimento — Módulos 1 a 3 em andamento; base do Módulo 4 iniciada.**
-
-| Módulo | Descrição | Status |
-|---|---|---|
-| 1 — Banco de Questões | Cadastro, importação em lote e organização das questões | 🚧 Em andamento |
-| 2 — Geração de Provas | Montagem automática/manual de avaliações por máscara, versões A/B/C e exportação em PDF | 🚧 Em andamento |
-| 3 — Correção e Reconhecimento (OMR) | Cadastros acadêmicos, folha-resposta nominal com QR, upload de folhas e leitura óptica (QR + deskew) | 🚧 Em andamento |
-| 4 — Análise de Desempenho | Registro de resultados por questão (base) → dashboards e psicometria | 🚧 Base iniciada |
+Projeto de uso interno institucional (instituição única, sem multi-tenant). Usam o sistema os professores (grupo **Docente**), a coordenação (grupo **Coordenador**) e o administrador.
 
 ## Funcionalidades
 
 **Módulo 1 — Banco de Questões**
-- Cadastro manual de questões objetivas e discursivas, com taxonomia obrigatória (disciplina, tópico, dificuldade, tipo)
-- Importação em lote via CSV/Excel, com validação e relatório de inconsistências (ver [formato de importação](docs/importacao-questoes.md))
-- Busca, edição, inativação e versionamento do acervo
+- Cadastro de questões objetivas (A–E) e discursivas, com disciplina, tópico, dificuldade e histórico de alterações.
+- Importação em lote por CSV/XLSX no modelo de 15 colunas, com relatório de inconsistências ([formato de importação](docs/importacao-questoes.md)).
+- Busca, filtros, edição e inativação do acervo.
 
 **Módulo 2 — Geração de Provas**
-- Definição de "máscara" de prova (quantidade, distribuição por dificuldade e tópico)
-- Seleção automática por máscara + seleção manual complementar
-- Versões/cadernos A/B/C com embaralhamento de questões e alternativas
-- Exportação em PDF com folha de rosto e gabarito do docente
+- Máscaras de prova: quantidade, distribuição por dificuldade e tópico, modalidade e número de cadernos (versões).
+- Montagem automática por máscara ou manual (seleção livre no acervo, com pontos por questão).
+- Simulado ENADE do Componente Específico (27 objetivas + 3 discursivas, 5 áreas, caderno único).
+- Versões A/B/C… com embaralhamento de questões e alternativas; cadernos em blocos (discursivas primeiro, objetivas longas em largura total e curtas em duas colunas).
+- PDFs do caderno (layout institucional ou ENADE), da capa e do gabarito do docente; pacote ZIP com todas as versões.
 
-**Cadastros Acadêmicos** *(app `academico` — base para correção e desempenho)*
-- CRUD de Alunos e Turmas (turma escopada por período letivo)
-- Tela de matrícula (matricular/desmatricular alunos numa turma, preservando o histórico)
+**Cadastros acadêmicos**
+- Alunos, turmas (período, nome e turno) e matrículas.
 
-**Módulo 3 — Correção e Reconhecimento (OMR)**
-- Aplicação de uma prova a uma turma numa data (`ProvaAplicacao`)
-- Atribuição round-robin das versões (A/B/C) por aluno matriculado, evitando vizinhos com a mesma prova
-- Folha-resposta **nominal por aluno**, com marcadores fiduciais (ArUco) e QR único (token) — layout de coordenadas fixas para leitura óptica
-- Exportação de **uma folha individual por aluno** (ZIP), além da folha de rosto/gabarito do docente
-- Upload em lote de folhas escaneadas (foto de celular ou digitalização)
-- Leitura óptica: **decodificação do QR** (identifica a folha) e **correção de perspectiva/deskew** via ArUco — *amostragem das bolhas e lançamento das notas em desenvolvimento*
+**Módulo 3 — Aplicação e correção**
+- Aplicação de uma prova a uma turma numa data, com distribuição das versões em **blocos alfabéticos equilibrados** ("de Ana a Diego, versão A").
+- **Cadernos nominais** (nome, matrícula, turma, turno e data na capa) e **cartões-resposta nominais** com QR, em ZIP ou individualmente; quem entra na turma depois recebe material próprio sem alterar o dos demais.
+- Ata de avaliação (lista de presença) no modelo do sistema acadêmico.
+- Envio das fotos/digitalizações dos cartões, leitura óptica (QR + marcadores ArUco + bolhas) e correção automática das objetivas, com fila de revisão manual.
+- Lançamento manual de notas das discursivas (e das objetivas sem cartão), com histórico de cada alteração.
 
-**Módulo 4 — Análise de Desempenho** *(app `desempenho` — base iniciada)*
-- Modelo de resultado por questão (`Desempenho`: acerto, resposta marcada, nota, correção automática/manual)
-- Relatórios de fragilidades/pontos fortes da turma *(planejado)*
-- Indicadores de psicometria básica — dificuldade e discriminação por questão *(planejado)*
+**Módulo 4 — Desempenho**
+- Notas finais da turma (proporcionais aos pontos de cada questão), com exportação XLSX/CSV.
+- Dashboard de fragilidades por tópico e dificuldade (filtros por turma, aplicação e período).
+- Psicometria básica: índice de facilidade por questão e itens fora do esperado (CSV/PDF).
 
-## Arquitetura e stack tecnológica
+**Segurança e conta**
+- Acesso por perfil (Docente/Coordenador/administrador); mídia enviada só para usuários autenticados.
+- Troca de senha pelo próprio usuário (ícone de chave no menu).
+- Limite de tentativas de login: 5 senhas erradas em 15 minutos bloqueiam o usuário por 15 minutos (configurável).
+
+## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Backend | Python + Django |
-| Banco de dados | MySQL |
-| Frontend | Django templates + design system CSS próprio (tema claro/escuro) + Bootstrap Icons; Chart.js para dashboards *(planejado)* |
-| Importação/validação de dados | openpyxl + csv |
-| Geração de PDF e QR Code | WeasyPrint + qrcode |
-| Processamento de imagem (OMR) | OpenCV (QRCodeDetector + marcadores ArUco); pyzbar opcional |
-| Processamento assíncrono | Celery + Redis *(planejado)* |
-| Infraestrutura | Docker + GitHub Actions (CI) |
-| Testes | pytest + Django test client |
+| Backend | Python 3.11 + Django 5.2 |
+| Banco de dados | MySQL 8.0 (SQLite como alternativa local) |
+| Frontend | Django templates + design system CSS próprio (tema claro/escuro) + Bootstrap Icons; Chart.js nos dashboards |
+| PDF e QR Code | WeasyPrint + qrcode |
+| Leitura óptica | OpenCV (QRCodeDetector + marcadores ArUco) |
+| Importação | openpyxl + csv |
+| Histórico | django-simple-history |
+| Produção | Docker, gunicorn + WhiteNoise, atrás de um proxy HTTPS |
+| Qualidade | pytest + pytest-django, coverage (mínimo 80%), ruff, GitHub Actions |
 
 ## Estrutura do repositório
 
 ```
 Examina/
-├── Examina/             # configuração do projeto (settings, urls, wsgi/asgi)
-├── banco_questoes/      # Módulo 1 — banco de questões
-├── provas/              # Módulos 2 e 3 — provas (máscaras, versões, PDF), aplicação,
-│                        #   folha-resposta/QR, upload e leitor OMR (services/omr.py)
-├── academico/           # Cadastros acadêmicos — alunos, turmas e matrículas
-├── desempenho/          # Módulo 4 — resultado da correção por questão (base)
-├── docs/                # runbooks operacionais (ex.: backup-restore)
-├── scripts/             # scripts de backup/restore MySQL
-├── requirements.txt
-└── manage.py
+├── Examina/          # configuração (settings, urls, wsgi) e a view de mídia protegida
+├── banco_questoes/   # Módulo 1, login/senha, permissões e o design system (base.html, custom.css)
+├── provas/           # Módulos 2 e 3: máscaras, provas, versões, PDFs, aplicações, cartões, OMR
+├── academico/        # alunos, turmas e matrículas
+├── desempenho/       # Módulo 4: resultados por questão, notas, dashboards e psicometria
+├── docs/             # guias: deploy, backup/restore, importação de questões
+├── scripts/          # backup/restore do MySQL
+├── Dockerfile, docker-compose.yml (desenvolvimento), docker-compose.prod.yml (produção)
+├── gunicorn.conf.py
+└── requirements.txt
 ```
 
 ## Como rodar localmente
 
-```bash
-# clonar o repositório
-git clone <url-do-repositorio>
-cd examina
+Pré-requisitos: Python 3.11, MySQL 8.0 (ou SQLite para testes rápidos) e, no Windows, o GTK3 runtime (dependências nativas do WeasyPrint para gerar PDFs).
 
-# criar e ativar ambiente virtual (pasta .venv)
+```bash
 python -m venv .venv
 # Windows (PowerShell): .venv\Scripts\Activate.ps1
-# Windows (cmd):        .venv\Scripts\activate
 # Linux/macOS:          source .venv/bin/activate
-
-# instalar dependências
 pip install -r requirements.txt
 
-# configurar variáveis de ambiente (banco de dados, secret key etc.)
-cp .env.example .env
-
-# aplicar migrações
+cp .env.example .env        # ajuste SECRET_KEY e DATABASE_URL
 python manage.py migrate
-
-# subir o servidor de desenvolvimento
+python manage.py createsuperuser
 python manage.py runserver
 ```
 
-> Instruções sujeitas a ajuste conforme o projeto avança — este README será atualizado a cada fase.
+No `.env`, o `DATABASE_URL` aponta para o banco que o `runserver` usa (ex.: `mysql://usuario:senha@127.0.0.1:3306/examina`). Sem `DATABASE_URL`, o Django usa SQLite.
 
-## Roadmap
+**Com Docker (desenvolvimento):** `docker compose up --build` sobe o MySQL e o `runserver` com o código montado. Se já houver um MySQL local na porta 3306, defina `MYSQL_HOST_PORT=3307` no `.env`; dentro do compose o Django sempre usa `db:3306`.
 
-| Fase | Escopo |
-|---|---|
-| Fase 0 — Fundação | Autenticação, perfis de acesso, modelagem de dados |
-| Fase 1 — MVP | Módulo 1 completo + Módulo 2 sem versões múltiplas |
-| Fase 2 — Diagnóstico básico | Módulo 4 com lançamento manual de notas + dashboard simples |
-| Fase 3 — Correção automática | Módulo 3 (QR Code + leitura óptica) |
-| Fase 4 — Refinamento | Psicometria avançada, versões múltiplas de prova |
+**Dados de apoio:** `python manage.py seed_topicos` (tópicos das disciplinas) e `python manage.py seed_enade` (acervo para o Simulado ENADE; `--limpar` remove antes as questões do simulado que não estão em provas).
+
+## Testes e qualidade
+
+```bash
+python -m pytest                  # suíte completa (não use "manage.py test")
+coverage run -m pytest && coverage report
+ruff check . && ruff format --check .
+```
+
+Com o `.env` apontando para MySQL, o pytest cria o banco `test_<nome>`: não rode duas execuções ao mesmo tempo.
+
+## Produção
+
+Ver o [guia de deploy](docs/deploy.md) e o [runbook de backup e restauração](docs/backup-restore.md).
 
 Projeto conduzido sob orientação da supervisão acadêmica/institucional.

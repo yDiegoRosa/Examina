@@ -179,3 +179,22 @@ class Alternativa(models.Model):
 
     def __str__(self):
         return f'{self.letra}) {self.texto[:50]}'
+
+
+class TentativaLogin(models.Model):
+    """
+    Login malsucedido, base do limite de tentativas (ver ``banco_questoes.seguranca_login``).
+    Apagar os registros de um usuário no admin o desbloqueia na hora.
+    """
+
+    username = models.CharField('usuário', max_length=150, db_index=True)
+    ip = models.GenericIPAddressField('IP', null=True, blank=True)
+    criado_em = models.DateTimeField('data', auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+        verbose_name = 'tentativa de login malsucedida'
+        verbose_name_plural = 'tentativas de login malsucedidas'
+
+    def __str__(self):
+        return f'{self.username} em {self.criado_em:%d/%m/%Y %H:%M}'

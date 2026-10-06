@@ -6,6 +6,9 @@ aplicação: na lista de alunos em ordem alfabética, cada versão recebe uma fa
 ("da Ana ao Diego, versão A"), e as faixas têm o mesmo tamanho — quando a divisão não é
 exata, as primeiras versões recebem um aluno a mais. Assim o professor confere a
 distribuição pela ata e separa os cadernos nominais em pilhas por versão.
+
+Quem entra na turma depois da distribuição recebe versão por ``incluir_alunos_novos``,
+sem alterar a dos demais (os cartões já impressos continuam valendo).
 """
 
 from __future__ import annotations
@@ -85,6 +88,85 @@ def atribuir_versoes(aplicacao: ProvaAplicacao) -> list[AtribuicaoVersao]:
     return criadas
 
 
+def _chave_alfabetica(aluno) -> tuple[str, str]:
+    return (aluno.nome, aluno.matricula)
+
+
+def _versoes_em_blocos(versoes_na_ordem: list[int]) -> bool:
+    """Cada versão aparece numa faixa só da lista alfabética (distribuição em blocos)."""
+    vistas: set[int] = set()
+    anterior = None
+    for versao_id in versoes_na_ordem:
+        if versao_id != anterior:
+            if versao_id in vistas:
+                return False
+            vistas.add(versao_id)
+            anterior = versao_id
+    return True
+
+
+def incluir_alunos_novos(aplicacao: ProvaAplicacao) -> list[AtribuicaoVersao]:
+    """
+    Dá versão aos alunos matriculados que ainda não têm (entraram na turma depois da
+    distribuição), sem mexer em nenhuma atribuição existente — vale mesmo com os cartões já
+    gerados.
+
+    Na distribuição em blocos, o aluno entra no bloco alfabético onde o nome dele cai; entre
+    dois blocos, no que tem menos alunos (empate: o anterior). Assim a faixa "de Ana a Diego"
+    continua valendo. Em distribuição antiga (versões alternadas), vai para a versão com
+    menos alunos.
+
+    :return: as ``AtribuicaoVersao`` criadas (sequência a partir da maior existente).
+    """
+    import bisect
+    from collections import Counter
+
+    from academico.models import Matricula
+    from provas.models import AtribuicaoVersao
+
+    versoes = list(aplicacao.prova.versoes.order_by('numero_versao'))
+    existentes = list(aplicacao.atribuicoes.select_related('aluno'))
+    if not versoes:
+        return []
+
+    com_versao = {atribuicao.aluno_id for atribuicao in existentes}
+    novos = [
+        matricula.aluno
+        for matricula in Matricula.objects.filter(
+            turma=aplicacao.turma,
+            situacao=Matricula.Situacao.MATRICULADO,
+            aluno__ativo=True,
+        )
+        .exclude(aluno_id__in=com_versao)
+        .select_related('aluno')
+        .order_by('aluno__nome', 'aluno__matricula')
+    ]
+    if not novos:
+        return []
+
+    ordem = sorted((_chave_alfabetica(a.aluno), a.versao_id) for a in existentes)
+    em_blocos = bool(ordem) and _versoes_em_blocos([versao_id for _, versao_id in ordem])
+    contagem = Counter(versao_id for _, versao_id in ordem)
+    sequencia = max((a.sequencia for a in existentes), default=0)
+
+    criadas: list[AtribuicaoVersao] = []
+    for aluno in novos:
+        chave = _chave_alfabetica(aluno)
+        if em_blocos:
+            posicao = bisect.bisect(ordem, chave, key=lambda item: item[0])
+            vizinhos = [ordem[i][1] for i in (posicao - 1, posicao) if 0 <= i < len(ordem)]
+            versao_id = min(dict.fromkeys(vizinhos), key=lambda pk: contagem[pk])
+        else:
+            versao_id = min((versao.pk for versao in versoes), key=lambda pk: contagem[pk])
+        sequencia += 1
+        criadas.append(AtribuicaoVersao(aplicacao=aplicacao, aluno=aluno, versao_id=versao_id, sequencia=sequencia))
+        contagem[versao_id] += 1
+        bisect.insort(ordem, (chave, versao_id), key=lambda item: item[0])
+
+    AtribuicaoVersao.objects.bulk_create(criadas)
+    return criadas
+
+
 def resumo_distribuicao(aplicacao: ProvaAplicacao) -> list[dict]:
     """
     Quantos alunos receberam cada versão e, quando a versão forma uma faixa contínua na
@@ -93,20 +175,23 @@ def resumo_distribuicao(aplicacao: ProvaAplicacao) -> list[dict]:
     Aplicações distribuídas antes da regra em blocos (versões alternadas) mostram só a
     quantidade: ``primeiro``/``ultimo`` ficam vazios.
     """
-    por_versao: dict[int, list] = {}
-    for atribuicao in aplicacao.atribuicoes.select_related('aluno').order_by('sequencia'):
-        por_versao.setdefault(atribuicao.versao_id, []).append(atribuicao)
+    atribuicoes = sorted(
+        aplicacao.atribuicoes.select_related('aluno'), key=lambda atribuicao: _chave_alfabetica(atribuicao.aluno)
+    )
+    posicoes: dict[int, list[int]] = {}
+    for posicao, atribuicao in enumerate(atribuicoes):
+        posicoes.setdefault(atribuicao.versao_id, []).append(posicao)
 
     resumo = []
     for versao in aplicacao.prova.versoes.order_by('numero_versao'):
-        atribuicoes = por_versao.get(versao.pk, [])
-        continua = bool(atribuicoes) and (atribuicoes[-1].sequencia - atribuicoes[0].sequencia + 1 == len(atribuicoes))
+        da_versao = posicoes.get(versao.pk, [])
+        continua = bool(da_versao) and da_versao[-1] - da_versao[0] + 1 == len(da_versao)
         resumo.append(
             {
                 'versao': versao.identificador,
-                'total': len(atribuicoes),
-                'primeiro': atribuicoes[0].aluno.nome if continua else '',
-                'ultimo': atribuicoes[-1].aluno.nome if continua else '',
+                'total': len(da_versao),
+                'primeiro': atribuicoes[da_versao[0]].aluno.nome if continua else '',
+                'ultimo': atribuicoes[da_versao[-1]].aluno.nome if continua else '',
             }
         )
     return resumo

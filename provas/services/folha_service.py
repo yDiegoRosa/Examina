@@ -72,16 +72,19 @@ def gerar_folhas_da_aplicacao(aplicacao: ProvaAplicacao) -> list[FolhaResposta]:
     Cria (idempotentemente) uma ``FolhaResposta`` por aluno matriculado da aplicação.
 
     A versão de cada folha vem da ``AtribuicaoVersao``. Se ainda não houver atribuições,
-    executa o round-robin automaticamente. O ``qr_token`` de folhas já existentes é
-    preservado; a versão só é atualizada (caso a atribuição tenha mudado) enquanto a
+    distribui as versões em blocos; se houver, dá versão a quem entrou na turma depois
+    (``incluir_alunos_novos``), sem mexer nos demais. O ``qr_token`` de folhas já existentes
+    é preservado; a versão só é atualizada (caso a atribuição tenha mudado) enquanto a
     folha não tiver sido corrigida — folha lida ou com notas mantém a versão original.
     """
     from provas.models import FolhaResposta
-    from provas.services.version_assigner import atribuir_versoes
+    from provas.services.version_assigner import atribuir_versoes, incluir_alunos_novos
 
     atribuicoes = list(aplicacao.atribuicoes.select_related('aluno', 'versao').order_by('sequencia'))
     if not atribuicoes:
         atribuicoes = atribuir_versoes(aplicacao)
+    elif incluir_alunos_novos(aplicacao):
+        atribuicoes = list(aplicacao.atribuicoes.select_related('aluno', 'versao').order_by('sequencia'))
 
     folhas: list[FolhaResposta] = []
     for atrib in atribuicoes:

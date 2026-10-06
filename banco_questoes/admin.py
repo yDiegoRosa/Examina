@@ -1,7 +1,7 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Alternativa, Disciplina, Questao, Topico
+from .models import Alternativa, Disciplina, Questao, TentativaLogin, Topico
 
 
 # ---------------------------------------------------------------------------
@@ -52,3 +52,18 @@ class AlternativaAdmin(admin.ModelAdmin):
     list_display = ['questao', 'letra', 'correta']
     list_filter = ['correta']
     list_select_related = ['questao']
+
+
+@admin.register(TentativaLogin)
+class TentativaLoginAdmin(admin.ModelAdmin):
+    """Consulta das tentativas de login erradas. Apagar as de um usuário o desbloqueia."""
+
+    list_display = ['username', 'ip', 'criado_em']
+    search_fields = ['username', 'ip']
+    readonly_fields = ['username', 'ip', 'criado_em']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

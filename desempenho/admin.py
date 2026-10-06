@@ -1,12 +1,13 @@
 """Admin do Módulo 4 (Desempenho)."""
 
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import Desempenho
 
 
 @admin.register(Desempenho)
-class DesempenhoAdmin(admin.ModelAdmin):
+class DesempenhoAdmin(SimpleHistoryAdmin):
     list_display = (
         'folha_resposta',
         'questao',

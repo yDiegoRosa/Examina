@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
   <!-- Design System Vanilla CSS (Zero Bootstrap) -->
-  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20260923.1">
+  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20261006.2">
 
   {% block extra_css %}{% endblock %}
 </head>
@@ -84,6 +84,14 @@
             </a>
           </li>
           {% endif %}
+          {% if user.is_authenticated %}
+          {# No celular a chave sai da barra (não cabe) e a troca de senha entra no menu. #}
+          <li class="nav-item-conta">
+            <a class="nav-item-link {% if request.resolver_match.url_name == 'password_change' %}active{% endif %}" href="{% url 'password_change' %}">
+              <i class="bi bi-key"></i> Alterar senha
+            </a>
+          </li>
+          {% endif %}
         </ul>
 
         <div class="flex items-center gap-3">
@@ -96,6 +104,9 @@
             <i class="bi bi-person-fill-check text-warning" style="color: var(--fae-gold);"></i>
             <span>{{ user.username }}</span>
           </div>
+          <a href="{% url 'password_change' %}" class="btn btn-outline nav-conta" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" title="Alterar senha" aria-label="Alterar senha">
+            <i class="bi bi-key" aria-hidden="true"></i>
+          </a>
           <form method="post" action="{% url 'logout' %}" style="display: inline; margin: 0;">
             {% csrf_token %}
             <button type="submit" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Encerrar Sessão">

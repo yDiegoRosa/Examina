@@ -52,7 +52,7 @@
           </td>
           <td class="capa-info-label">Data:</td>
           <td class="capa-info-value">
-            {{ data_aplicacao|default:"____/____/________" }}
+            <span class="sem-quebra">{{ data_aplicacao|default:"____/____/________" }}</span>
           </td>
         </tr>
         <tr>
@@ -73,7 +73,7 @@
           <td class="capa-info-label">Valor:</td>
           <td class="capa-info-value">
             {% if valor_total %}
-              {{ valor_total }} ponto(s)
+              <span class="sem-quebra">{{ valor_total }} ponto(s)</span>
             {% else %}
               —
             {% endif %}

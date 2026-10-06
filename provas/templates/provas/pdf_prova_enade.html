@@ -38,19 +38,19 @@
             <td class="enade-info-label">Curso / Área:</td>
             <td class="enade-info-value" style="width: 55%;">{{ disciplina_nome|default:"Análise e Desenvolvimento de Sistemas" }}</td>
             <td class="enade-info-label">Data:</td>
-            <td class="enade-info-value">{{ data_aplicacao|default:"____/____/________" }}</td>
+            <td class="enade-info-value"><span class="sem-quebra">{{ data_aplicacao|default:"____/____/________" }}</span></td>
           </tr>
           <tr>
             <td class="enade-info-label">Docente:</td>
             <td class="enade-info-value">{{ docente_nome|default:"—" }}</td>
             <td class="enade-info-label">Tempo:</td>
-            <td class="enade-info-value">{% if tempo_minutos %}{{ tempo_minutos }} minutos{% else %}—{% endif %}</td>
+            <td class="enade-info-value">{% if tempo_minutos %}<span class="sem-quebra">{{ tempo_minutos }} minutos</span>{% else %}—{% endif %}</td>
           </tr>
           <tr>
             <td class="enade-info-label">Turma / Turno:</td>
             <td class="enade-info-value">{{ turma|default:"—" }}{% if turno %} • {{ turno }}{% endif %}</td>
             <td class="enade-info-label">Valor:</td>
-            <td class="enade-info-value">{% if valor_total %}{{ valor_total }} ponto(s){% else %}—{% endif %}</td>
+            <td class="enade-info-value">{% if valor_total %}<span class="sem-quebra">{{ valor_total }} ponto(s)</span>{% else %}—{% endif %}</td>
           </tr>
           <tr>
             <td class="enade-info-label">Nº de Questões:</td>
@@ -123,8 +123,11 @@
       Documento gerado automaticamente pelo Sistema Examina — FAETERJ-Rio • {{ identificador_display }}
     </div>
   </div>
-  <div class="page-break"></div>
+  {% if not somente_capa %}<div class="page-break"></div>{% endif %}
   {% endif %}
+
+  {# Capa avulsa ("Apenas capa" da prova ENADE): só a capa, sem questões nem gabarito. #}
+  {% if not somente_capa %}
 
   <!-- ═══════════════════════════════════════════════════════════
        CADERNO — COMPONENTE ESPECÍFICO
@@ -256,6 +259,7 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
   {% endif %}
 
 </body>

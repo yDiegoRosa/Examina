@@ -157,6 +157,9 @@ body {
   width: 18%;
 }
 
+/* Valores curtos da capa ("180 minutos", "10,00 ponto(s)") numa linha só. */
+.sem-quebra { white-space: nowrap; }
+
 .enade-info-value {
   color: #1E293B;
   padding: 3pt 10pt 3pt 4pt;

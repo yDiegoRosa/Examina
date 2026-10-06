@@ -20,19 +20,35 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from banco_questoes.forms import AlterarSenhaForm, LoginForm
+
 from .views import media_protegida
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path(
         'login/',
-        auth_views.LoginView.as_view(template_name='registration/login.html'),
+        auth_views.LoginView.as_view(template_name='registration/login.html', authentication_form=LoginForm),
         name='login',
     ),
     path(
         'logout/',
         auth_views.LogoutView.as_view(),
         name='logout',
+    ),
+    # Troca de senha pelo próprio usuário (templates com nome próprio: os padrões
+    # "registration/password_change_*" do admin teriam precedência).
+    path(
+        'senha/alterar/',
+        auth_views.PasswordChangeView.as_view(
+            template_name='registration/alterar_senha.html', form_class=AlterarSenhaForm
+        ),
+        name='password_change',
+    ),
+    path(
+        'senha/alterada/',
+        auth_views.PasswordChangeDoneView.as_view(template_name='registration/alterar_senha_ok.html'),
+        name='password_change_done',
     ),
     path('academico/', include('academico.urls')),
     path('provas/', include('provas.urls')),

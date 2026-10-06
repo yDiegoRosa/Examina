@@ -31,12 +31,7 @@ from .models import (
 from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
-from .services.caderno_layout import (
-    linhas_da_discursiva,
-    numerar_por_tipo,
-    ordenar_como_caderno,
-    organizar_caderno,
-)
+from .services.caderno_layout import eh_prova_enade, numerar_por_tipo, ordenar_como_caderno
 from .services.caderno_service import contexto_caderno
 from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
@@ -1068,6 +1063,59 @@ def aplicacao_cadernos_zip(request, pk):
     return response
 
 
+def _pdf_da_folha(folha, tipo: str, gerar_pdf) -> HttpResponse:
+    """PDF individual (cartão ou caderno) de um aluno, exibido no navegador."""
+    from django.utils.text import slugify
+
+    try:
+        pdf_bytes = gerar_pdf()
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Erro ao gerar o %s da folha pk=%s: %s', tipo, folha.pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Não foi possível gerar o {tipo}: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+    nome = slugify(f'{tipo} {folha.aluno.matricula} {folha.aluno.nome} versao {folha.prova_versao.identificador}')
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{nome[:120] or tipo}.pdf"'
+    return response
+
+
+def _folha_da_aplicacao(pk):
+    return get_object_or_404(
+        FolhaResposta.objects.select_related(
+            'aluno',
+            'prova_versao',
+            'prova_aplicacao__turma',
+            'prova_aplicacao__prova__mascara',
+            'prova_aplicacao__prova__disciplina',
+            'prova_aplicacao__prova__autor',
+        ),
+        pk=pk,
+    )
+
+
+@login_required
+@docente_ou_coordenador_required
+def folha_cartao_pdf(request, pk):
+    """Cartão-resposta de um aluno só — por exemplo, de quem entrou na turma depois."""
+    from .services.folha_service import render_folha_pdf
+
+    folha = _folha_da_aplicacao(pk)
+    return _pdf_da_folha(folha, 'cartao', lambda: render_folha_pdf(folha))
+
+
+@login_required
+@docente_ou_coordenador_required
+def folha_caderno_pdf(request, pk):
+    """Caderno nominal de um aluno só, na versão do cartão dele."""
+    from .services.caderno_service import render_cadernos_nominais
+
+    folha = _folha_da_aplicacao(pk)
+    return _pdf_da_folha(folha, 'caderno', lambda: next(render_cadernos_nominais(folha.prova_aplicacao, [folha]))[1])
+
+
 @login_required
 @docente_ou_coordenador_required
 def aplicacao_ata_pdf(request, pk):
@@ -1527,10 +1575,25 @@ def prova_capa_pdf(request, pk):
         'total_questoes': total_questoes,
         'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
     }
+    template_capa = 'provas/pdf_capa_prova.html'
+
+    # Simulado ENADE: a capa avulsa é a capa do caderno ENADE (mesmo template, só a capa).
+    layout = (request.GET.get('layout') or '').lower()
+    if layout == 'enade' or (layout == '' and eh_prova_enade(prova)):
+        template_capa, context = contexto_caderno(
+            prova,
+            versao,
+            layout='enade',
+            turma=request.GET.get('turma') or '',
+            turno=request.GET.get('turno') or '',
+            data_aplicacao=request.GET.get('data') or '',
+            instrucoes_extras=request.GET.get('instrucoes_extras') or '',
+        )
+        context['somente_capa'] = True
 
     try:
         pdf_bytes = PDFGeneratorService.render_pdf_from_template(
-            template_name='provas/pdf_capa_prova.html',
+            template_name=template_capa,
             context=context,
         )
     except Exception as exc:  # noqa: BLE001
@@ -1870,17 +1933,15 @@ def prova_pacote_zip(request, pk):
     mascara = prova.mascara
     snap = prova.snapshot_mascara or {}
 
+    # Dados do gabarito do docente (o caderno vem de caderno_service.contexto_caderno).
     valor_total = None
-    tempo_minutos = None
     modalidade = None
 
     if mascara:
         valor_total = mascara.valor_total
-        tempo_minutos = mascara.tempo_estimado_minutos
         modalidade = mascara.get_modalidade_display()
     elif snap:
         valor_total = snap.get('valor_total')
-        tempo_minutos = snap.get('tempo_estimado_minutos')
         modalidade_code = snap.get('modalidade', '')
         _modalidade_map = {
             'OBJ': 'Somente Objetivas',
@@ -1903,7 +1964,6 @@ def prova_pacote_zip(request, pk):
                 'prova_questao__questao__disciplina',
             ).order_by('ordem')
 
-            itens_render = []
             resumo_itens = []
             itens_detalhados = []
 
@@ -1928,17 +1988,6 @@ def prova_pacote_zip(request, pk):
                             break
                 else:
                     letra_correta = 'DIS'
-
-                itens_render.append(
-                    {
-                        'numero': iv.numero,
-                        'ordem': iv.ordem,
-                        'pontuacao': iv.pontuacao,
-                        'questao': q,
-                        'snapshot_questao': snap_q,
-                        'alternativas_versao': alternativas_lista,
-                    }
-                )
 
                 resumo_itens.append(
                     {
@@ -1967,32 +2016,19 @@ def prova_pacote_zip(request, pk):
                 )
 
             identificador_display = f'Versão {versao.identificador}'
-            # Caderno em blocos e gabarito na mesma ordem/numeração (ver services.caderno_layout).
-            itens_render, blocos = organizar_caderno(itens_render)
+            # Gabarito na mesma ordem/numeração do caderno (ver services.caderno_layout).
             resumo_itens = ordenar_como_caderno(resumo_itens)
             itens_detalhados = ordenar_como_caderno(itens_detalhados)
 
-            context_prova = {
-                'prova': prova,
-                'versao': versao,
-                'identificador_display': identificador_display,
-                'itens': itens_render,
-                'itens_render': itens_render,
-                'blocos': blocos,
-                'disciplina_nome': disciplina.nome if disciplina else None,
-                'docente_nome': docente_nome,
-                'turma': snap.get('turma') or request.GET.get('turma') or '',
-                'turno': snap.get('turno') or request.GET.get('turno') or '',
-                'data_aplicacao': request.GET.get('data') or '',
-                'valor_total': valor_total,
-                'tempo_minutos': tempo_minutos,
-                'modalidade': modalidade,
-                'total_questoes': len(itens_render),
-                'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
-                'incluir_capa': True,
-                'incluir_gabarito': False,
-                'linhas_discursiva': linhas_da_discursiva(prova),
-            }
+            # Caderno no layout certo (ENADE em Simulado ENADE), igual ao PDF avulso da prova.
+            template_caderno, context_prova = contexto_caderno(
+                prova,
+                versao,
+                turma=request.GET.get('turma') or '',
+                turno=request.GET.get('turno') or '',
+                data_aplicacao=request.GET.get('data') or '',
+                instrucoes_extras=request.GET.get('instrucoes_extras') or '',
+            )
 
             context_gabarito = {
                 'prova': prova,
@@ -2012,7 +2048,7 @@ def prova_pacote_zip(request, pk):
 
             try:
                 pdf_prova = PDFGeneratorService.render_pdf_from_template(
-                    template_name='provas/pdf_prova_completa.html',
+                    template_name=template_caderno,
                     context=context_prova,
                 )
                 zf.writestr(f'Caderno_Versao_{versao.identificador}.pdf', pdf_prova)
@@ -2117,6 +2153,13 @@ def aplicacao_detail(request, pk):
     ).count()
     dig_erro = digitalizacoes_por_status.get(FolhaDigitalizada.Status.ERRO, 0)
     total_folhas = sum(folhas_por_status.values())
+    matriculas_ativas = Matricula.objects.filter(
+        turma=aplicacao.turma, situacao=Matricula.Situacao.MATRICULADO, aluno__ativo=True
+    )
+    # Quem entrou na turma depois de gerados os cartões (recebe versão ao gerar/atualizar).
+    sem_cartao = (
+        matriculas_ativas.exclude(aluno_id__in=aplicacao.folhas.values('aluno_id')).count() if total_folhas else 0
+    )
 
     return render(
         request,
@@ -2124,9 +2167,8 @@ def aplicacao_detail(request, pk):
         {
             'aplicacao': aplicacao,
             'versoes': aplicacao.prova.versoes.order_by('numero_versao'),
-            'matriculados': Matricula.objects.filter(
-                turma=aplicacao.turma, situacao=Matricula.Situacao.MATRICULADO, aluno__ativo=True
-            ).count(),
+            'matriculados': matriculas_ativas.count(),
+            'alunos_sem_cartao': sem_cartao,
             'total_atribuicoes': aplicacao.atribuicoes.count(),
             'resumo_versoes': resumo_distribuicao(aplicacao),
             'total_folhas': total_folhas,
