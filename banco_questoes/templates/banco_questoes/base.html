@@ -5,12 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {# Define o tema (claro/escuro) antes da pintura para evitar flash (FOUC). #}
+  {# Padrão claro; o escuro só vale quando o usuário o escolhe no botão de tema. #}
   <script>
     (function () {
       try {
         var t = localStorage.getItem('examina-theme');
         if (t !== 'light' && t !== 'dark') {
-          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          t = 'light';
         }
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) { /* localStorage indisponível: mantém o tema padrão */ }

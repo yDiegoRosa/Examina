@@ -60,8 +60,17 @@
     <p class="small text-muted mb-3">
       Versões da prova:
       {% for versao in versoes %}<strong>{{ versao.identificador }}</strong>{% if not forloop.last %}, {% endif %}{% empty %}<strong>nenhuma</strong>{% endfor %}.
-      {{ total_atribuicoes }} de {{ matriculados }} aluno(s) com versão atribuída (round-robin, sem vizinhos com a mesma versão).
+      {{ total_atribuicoes }} de {{ matriculados }} aluno(s) com versão atribuída (em blocos na ordem alfabética, com quantidades equilibradas).
     </p>
+    {% if total_atribuicoes %}
+    <ul class="small text-secondary mb-3" style="padding-left: 1.1rem;" aria-label="Distribuição por versão">
+      {% for item in resumo_versoes %}
+      <li>
+        <strong>Versão {{ item.versao }}</strong> — {{ item.total }} aluno(s){% if item.primeiro %}: {{ item.primeiro }}{% if item.ultimo != item.primeiro %} → {{ item.ultimo }}{% endif %}{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
     {% if not versoes %}
     <a href="{% url 'provas:prova_revisao' aplicacao.prova.pk %}" class="btn btn-outline"><i class="bi bi-layers"></i> Gerar versões na prova</a>
     {% elif redistribuicao_bloqueada %}
@@ -78,7 +87,7 @@
 
   {# 2. Cartões-resposta #}
   <section class="card-surface p-4" aria-labelledby="etapa-folhas">
-    <h2 class="font-bold text-main mb-1" id="etapa-folhas" style="font-size: 1.05rem;"><i class="bi bi-2-circle-fill"></i> Cartões-resposta nominais</h2>
+    <h2 class="font-bold text-main mb-1" id="etapa-folhas" style="font-size: 1.05rem;"><i class="bi bi-2-circle-fill"></i> Cartões e cadernos nominais</h2>
     <p class="small text-muted mb-3">
       {{ total_folhas }} cartão(ões) gerado(s) — um por aluno, com nome, matrícula e QR para a leitura óptica.
     </p>
@@ -89,9 +98,18 @@
         <button type="submit" class="btn btn-outline"><i class="bi bi-arrow-repeat"></i> Gerar/atualizar cartões</button>
       </form>
       <a href="{% url 'provas:aplicacao_folhas_zip' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-file-earmark-zip"></i> Baixar cartões para impressão (ZIP)</a>
+      <a href="{% url 'provas:aplicacao_cadernos_zip' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-journal-text"></i> Baixar cadernos nominais (ZIP)</a>
       <a href="{% url 'provas:aplicacao_ata_pdf' aplicacao.pk %}" class="btn btn-outline" target="_blank" rel="noopener"><i class="bi bi-file-earmark-person"></i> Ata de avaliação (PDF)</a>
     </div>
+    {% if versoes|length > 1 %}
     <p class="small text-muted mt-2 mb-0">
+      Cadernos de uma versão só:
+      {% for versao in versoes %}<a href="{% url 'provas:aplicacao_cadernos_zip' aplicacao.pk %}?versao={{ versao.identificador }}">Versão {{ versao.identificador }}</a>{% if not forloop.last %} • {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+    <p class="small text-muted mt-2 mb-0">
+      Cada caderno sai com o nome e a matrícula do aluno na capa, na versão do cartão dele; os arquivos seguem a ordem
+      alfabética, já agrupados por versão. Baixar os cadernos gera os cartões que faltarem e trava a redistribuição.
       A ata lista os alunos em ordem alfabética e traz as colunas de assinatura e de nota em branco para preencher em sala.
     </p>
   </section>

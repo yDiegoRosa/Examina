@@ -119,7 +119,7 @@ class ProvaAplicacaoAdmin(admin.ModelAdmin):
         aplicacao = queryset.first()
         return HttpResponseRedirect(reverse('provas:aplicacao_upload_folhas', args=[aplicacao.pk]))
 
-    @admin.action(description='Atribuir versões (round-robin)')
+    @admin.action(description='Atribuir versões (em blocos)')
     def acao_atribuir_versoes(self, request, queryset):
         total_ok = 0
         for aplicacao in queryset:

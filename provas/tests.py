@@ -76,7 +76,7 @@ from .services.omr import (
     localizar_folha,
 )
 from .services.pdf_generator import PDFGenerationError, PDFGeneratorService, resolve_static_media_url
-from .services.version_assigner import atribuir_versoes
+from .services.version_assigner import atribuir_versoes, indices_em_blocos, resumo_distribuicao
 from .views import prova_list
 
 
@@ -2393,6 +2393,61 @@ class MontagemManualProvaTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'exige exatamente 3 questão(ões)')
 
+    def test_criar_prova_manual_com_mascara_sem_disciplina_rejeitada(self):
+        """Máscara sem disciplina (ex.: Simulado ENADE) não guia a montagem manual: erro de validação."""
+        from provas.models import Mascara
+        from provas.services.manual_generator import ProvaManualError, criar_prova_manual
+
+        mascara = Mascara.objects.create(
+            titulo='Simulado ENADE Sem Disciplina',
+            disciplina=None,
+            quantidade_questoes=2,
+            percentual_facil=50,
+            percentual_medio=50,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        with self.assertRaises(ProvaManualError) as ctx:
+            criar_prova_manual(
+                titulo='AV Sem Disciplina',
+                disciplina=self.disc,
+                mascara=mascara,
+                questoes_ids=[self.q1.pk, self.q2.pk],
+                autor=self.user,
+            )
+        self.assertIn('não está vinculada a uma disciplina', str(ctx.exception))
+        self.assertFalse(Prova.objects.filter(titulo='AV Sem Disciplina').exists())
+
+    def test_view_prova_manual_create_com_mascara_sem_disciplina_exibe_erro(self):
+        """POST com máscara sem disciplina mostra a mensagem de validação em vez de erro 500."""
+        from provas.models import Mascara
+
+        mascara = Mascara.objects.create(
+            titulo='Simulado ENADE Sem Disciplina',
+            disciplina=None,
+            quantidade_questoes=2,
+            percentual_facil=50,
+            percentual_medio=50,
+            percentual_dificil=0,
+            autor=self.user,
+        )
+
+        response = self.client.post(
+            reverse('provas:prova_manual_create'),
+            {
+                'titulo': 'Exame Sem Disciplina',
+                'disciplina': str(self.disc.pk),
+                'mascara': str(mascara.pk),
+                'questoes_selecionadas': [str(self.q1.pk), str(self.q2.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'não está vinculada a uma disciplina')
+        self.assertFalse(Prova.objects.filter(titulo='Exame Sem Disciplina').exists())
+
     def test_view_prova_manual_create_vazio_post_exibe_erro(self):
         """Verifica que tentar salvar uma prova sem questões exibe mensagem de erro."""
         url = reverse('provas:prova_manual_create')
@@ -2995,20 +3050,53 @@ class AtribuicaoVersaoServiceTest(TestCase):
         )
         return aluno
 
-    def test_round_robin_distribui_e_evita_vizinhos_iguais(self):
-        # 7 alunos, nomes em ordem controlada (A..G) para checar adjacência.
-        for i, letra in enumerate('ABCDEFG'):
+    def test_distribui_em_blocos_continuos_e_equilibrados(self):
+        # 7 alunos, nomes em ordem controlada (A..G); cadastrados fora de ordem.
+        for i, letra in enumerate('GCAFBED'):
             self._matricular(f'{letra} Aluno', f'M{i:02d}')
 
         atribuicoes = atribuir_versoes(self.aplicacao)
         self.assertEqual(len(atribuicoes), 7)
 
-        # Ordenadas por sequência; nenhum par adjacente com a mesma versão.
+        # Na ordem alfabética, cada versão é uma faixa contínua; a sobra vai para a primeira.
         ordenadas = sorted(atribuicoes, key=lambda a: a.sequencia)
-        letras = [a.versao.identificador for a in ordenadas]
-        self.assertEqual(letras[:3], ['A', 'B', 'C'])  # round-robin
-        for anterior, atual in zip(letras, letras[1:], strict=False):
-            self.assertNotEqual(anterior, atual)
+        self.assertEqual([a.aluno.nome[0] for a in ordenadas], list('ABCDEFG'))
+        self.assertEqual([a.versao.identificador for a in ordenadas], list('AAABBCC'))
+
+    def test_indices_em_blocos_equilibra_as_faixas(self):
+        self.assertEqual(indices_em_blocos(7, 3), [0, 0, 0, 1, 1, 2, 2])
+        self.assertEqual([indices_em_blocos(31, 3).count(v) for v in range(3)], [11, 10, 10])
+        self.assertEqual(indices_em_blocos(6, 3), [0, 0, 1, 1, 2, 2])
+        self.assertEqual(indices_em_blocos(2, 3), [0, 1])  # menos alunos que versões
+        self.assertEqual(indices_em_blocos(4, 1), [0, 0, 0, 0])  # caderno único
+        self.assertEqual(indices_em_blocos(0, 3), [])
+
+    def test_resumo_mostra_a_faixa_de_cada_versao(self):
+        for i, letra in enumerate('ABCDEFG'):
+            self._matricular(f'{letra} Aluno', f'M{i:02d}')
+        atribuir_versoes(self.aplicacao)
+
+        self.assertEqual(
+            resumo_distribuicao(self.aplicacao),
+            [
+                {'versao': 'A', 'total': 3, 'primeiro': 'A Aluno', 'ultimo': 'C Aluno'},
+                {'versao': 'B', 'total': 2, 'primeiro': 'D Aluno', 'ultimo': 'E Aluno'},
+                {'versao': 'C', 'total': 2, 'primeiro': 'F Aluno', 'ultimo': 'G Aluno'},
+            ],
+        )
+
+    def test_resumo_sem_faixa_quando_a_distribuicao_e_alternada(self):
+        # Aplicação distribuída antes da regra em blocos (A, B, A): a versão A não é contínua.
+        alunos = [self._matricular(nome, f'M{i}') for i, nome in enumerate(['Ana', 'Bruno', 'Carla'])]
+        for sequencia, (aluno, versao) in enumerate(zip(alunos, [0, 1, 0], strict=True), start=1):
+            AtribuicaoVersao.objects.create(
+                aplicacao=self.aplicacao, aluno=aluno, versao=self.versoes[versao], sequencia=sequencia
+            )
+
+        resumo = {item['versao']: item for item in resumo_distribuicao(self.aplicacao)}
+        self.assertEqual((resumo['A']['total'], resumo['A']['primeiro']), (2, ''))
+        self.assertEqual((resumo['B']['total'], resumo['B']['primeiro']), (1, 'Bruno'))
+        self.assertEqual((resumo['C']['total'], resumo['C']['primeiro']), (0, ''))
 
     def test_ignora_nao_matriculados_e_inativos(self):
         self._matricular('Ativo Um', 'A1')
@@ -3148,6 +3236,96 @@ class FolhaRespostaTest(TestCase):
         url = reverse('provas:aplicacao_folhas_zip', args=[self.aplicacao.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)
+
+    def _baixar_cadernos(self, **params):
+        """GET do ZIP de cadernos com o PDF simulado; devolve a resposta e os contextos renderizados."""
+        from unittest import mock
+
+        self.client.login(username='coord_f', password='segredo123')  # noqa: S106
+        url = reverse('provas:aplicacao_cadernos_zip', args=[self.aplicacao.pk])
+        with mock.patch.object(PDFGeneratorService, 'render_pdf_from_template', return_value=b'%PDF-teste') as render:
+            resp = self.client.get(url, params)
+        return resp, [chamada.args[1] for chamada in render.call_args_list]
+
+    def test_export_cadernos_zip_um_caderno_nominal_por_aluno(self):
+        import io
+        import zipfile
+
+        resp, contextos = self._baixar_cadernos()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/zip')
+        self.assertIn('cadernos_aplicacao_', resp['Content-Disposition'])
+        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+            self.assertEqual(zf.namelist(), ['01_versao_A_a1_ana.pdf', '02_versao_B_b1_bruno.pdf'])
+
+        # Capa nominal: aluno, turma, turno e data da aplicação; sem gabarito.
+        ana = contextos[0]
+        self.assertEqual((ana['aluno_nome'], ana['aluno_matricula']), ('Ana', 'A1'))
+        self.assertEqual((ana['turma'], ana['data_aplicacao']), ('MAC Noite / 2026.2', '10/11/2026'))
+        self.assertTrue(ana['incluir_capa'])
+        self.assertFalse(ana['incluir_gabarito'])
+        self.assertEqual(ana['versao'], self.versoes[0])
+        self.assertEqual(contextos[1]['versao'], self.versoes[1])
+
+        # A versão do caderno é a do cartão: os cartões foram gerados e a redistribuição travou.
+        self.assertEqual(FolhaResposta.objects.filter(prova_aplicacao=self.aplicacao).count(), 2)
+        with self.assertRaises(ValueError):
+            atribuir_versoes(self.aplicacao)
+
+    def test_export_cadernos_zip_de_uma_versao(self):
+        import io
+        import zipfile
+
+        resp, contextos = self._baixar_cadernos(versao='b')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('_versao_B.zip', resp['Content-Disposition'])
+        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+            self.assertEqual(zf.namelist(), ['02_versao_B_b1_bruno.pdf'])  # mantém o nº da ordem alfabética
+        self.assertEqual([c['aluno_nome'] for c in contextos], ['Bruno'])
+
+    def test_export_cadernos_zip_versao_sem_alunos_retorna_400(self):
+        resp, contextos = self._baixar_cadernos(versao='Z')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(contextos, [])
+
+    def test_export_cadernos_zip_login_obrigatorio(self):
+        resp = self.client.get(reverse('provas:aplicacao_cadernos_zip', args=[self.aplicacao.pk]))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_caderno_nominal_preenche_a_capa_nos_dois_layouts(self):
+        from django.template.loader import render_to_string
+
+        from .services.caderno_service import contexto_caderno
+
+        for layout in ('', 'enade'):
+            template_name, contexto = contexto_caderno(self.prova, self.versoes[0], layout=layout)
+            html = render_to_string(template_name, {**contexto, 'aluno_nome': 'Ana Teste', 'aluno_matricula': 'MAT-77'})
+            self.assertIn('<strong>Ana Teste</strong>', html)
+            self.assertIn('<strong>MAT-77</strong>', html)
+            # Sem aluno (caderno genérico), os campos continuam em branco.
+            self.assertNotIn('<strong></strong>', render_to_string(template_name, contexto))
+
+    def test_capa_do_aluno_sem_assinatura_e_sem_modalidade(self):
+        from django.template.loader import render_to_string
+
+        from .services.caderno_service import contexto_caderno
+
+        for layout in ('', 'enade'):
+            template_name, contexto = contexto_caderno(self.prova, self.versoes[0], layout=layout)
+            for template in (template_name, 'provas/pdf_capa_prova.html'):
+                html = render_to_string(template, {**contexto, 'modalidade': 'Somente Objetivas'})
+                self.assertIn('Matrícula:', html)
+                self.assertNotIn('Assinatura:', html)
+                self.assertNotIn('Modalidade:', html)
+                self.assertNotIn('Somente Objetivas', html)
+
+    def test_render_cadernos_nominais_gera_pdf(self):
+        from .services.caderno_service import render_cadernos_nominais
+
+        folhas = gerar_folhas_da_aplicacao(self.aplicacao)
+        gerados = list(render_cadernos_nominais(self.aplicacao, folhas[:1]))
+        self.assertEqual(len(gerados), 1)
+        self.assertTrue(gerados[0][1].startswith(b'%PDF'))
 
 
 def _imagem_png(nome='folha.png'):
@@ -4040,6 +4218,7 @@ class AplicacaoTelasTest(TestCase):
         for rota in (
             'aplicacao_atribuir_versoes',
             'aplicacao_folhas_zip',
+            'aplicacao_cadernos_zip',
             'aplicacao_upload_folhas',
             'aplicacao_notas',
         ):
@@ -4049,6 +4228,9 @@ class AplicacaoTelasTest(TestCase):
         self.assertRedirects(resp, url_painel)
         self.assertEqual(aplicacao.atribuicoes.count(), 2)
         self.assertContains(resp, '2 aluno(s) receberam versão')
+        # Resumo por versão (blocos na ordem alfabética: Ana → A, Bruno → B).
+        self.assertContains(resp, '<strong>Versão A</strong> — 1 aluno(s): Ana')
+        self.assertContains(resp, '<strong>Versão B</strong> — 1 aluno(s): Bruno')
 
     def test_redistribuicao_bloqueada_apos_folhas(self):
         aplicacao = self._aplicacao()

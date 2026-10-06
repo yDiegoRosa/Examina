@@ -34,6 +34,7 @@ urlpatterns = [
     ),
     path('aplicacoes/<int:pk>/notas/', views.aplicacao_notas, name='aplicacao_notas'),
     path('aplicacoes/<int:pk>/folhas-zip/', views.aplicacao_folhas_zip, name='aplicacao_folhas_zip'),
+    path('aplicacoes/<int:pk>/cadernos-zip/', views.aplicacao_cadernos_zip, name='aplicacao_cadernos_zip'),
     path('aplicacoes/<int:pk>/ata/', views.aplicacao_ata_pdf, name='aplicacao_ata_pdf'),
     path('aplicacoes/<int:pk>/upload-folhas/', views.aplicacao_upload_folhas, name='aplicacao_upload_folhas'),
     path('aplicacoes/<int:pk>/corrigir-folhas/', views.aplicacao_corrigir_folhas, name='aplicacao_corrigir_folhas'),

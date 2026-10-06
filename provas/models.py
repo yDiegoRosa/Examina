@@ -745,8 +745,10 @@ class AtribuicaoVersao(models.Model):
     """
     Versão (caderno A/B/C…) atribuída a um aluno numa aplicação de prova.
 
-    Gerada por round-robin (ver ``provas.services.version_assigner``) de modo que
-    alunos adjacentes na lista não recebam a mesma versão.
+    Gerada em blocos (ver ``provas.services.version_assigner``): na ordem alfabética,
+    cada versão recebe uma faixa contínua de alunos, com faixas de tamanho equilibrado.
+    ``sequencia`` é a posição do aluno nessa ordem (o rótulo do campo ainda cita o
+    round-robin, regra anterior; trocá-lo exige migration).
     """
 
     aplicacao = models.ForeignKey(

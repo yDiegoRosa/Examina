@@ -80,25 +80,21 @@
           </td>
         </tr>
         <tr>
-          <td class="capa-info-label">Modalidade:</td>
-          <td class="capa-info-value">
-            {% if modalidade %}{{ modalidade }}{% else %}—{% endif %}
-          </td>
-          <td class="capa-info-label">Tempo:</td>
-          <td class="capa-info-value">
-            {% if tempo_minutos %}
-              {{ tempo_minutos }} minutos
-            {% else %}
-              —
-            {% endif %}
-          </td>
-        </tr>
-        <tr>
           <td class="capa-info-label">Nº de Questões:</td>
           <td class="capa-info-value">{{ total_questoes|default:"—" }}</td>
           <td class="capa-info-label">Caderno:</td>
           <td class="capa-info-value capa-caderno-destaque">
             {{ identificador_display|default:"Versão única" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="capa-info-label">Tempo:</td>
+          <td class="capa-info-value" colspan="3">
+            {% if tempo_minutos %}
+              {{ tempo_minutos }} minutos
+            {% else %}
+              —
+            {% endif %}
           </td>
         </tr>
       </tbody>
@@ -120,8 +116,6 @@
         </tr>
         <tr>
           <td class="capa-aluno-label">Matrícula:</td>
-          <td class="capa-aluno-field"></td>
-          <td class="capa-aluno-label">Assinatura:</td>
           <td class="capa-aluno-field"></td>
         </tr>
       </tbody>

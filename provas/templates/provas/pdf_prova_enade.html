@@ -69,16 +69,15 @@
       <table class="enade-aluno-table">
         <tbody>
           <tr>
+            {# Caderno nominal (cadernos da aplicação): nome e matrícula já preenchidos. #}
             <td class="enade-aluno-label">Nome completo:</td>
-            <td class="enade-aluno-field" style="width: 62%;"></td>
+            <td class="enade-aluno-field" style="width: 62%;">{% if aluno_nome %}<strong>{{ aluno_nome }}</strong>{% endif %}</td>
             <td class="enade-aluno-label">Nota:</td>
             <td class="enade-aluno-field enade-nota-field"></td>
           </tr>
           <tr>
             <td class="enade-aluno-label">Matrícula:</td>
-            <td class="enade-aluno-field"></td>
-            <td class="enade-aluno-label">Assinatura:</td>
-            <td class="enade-aluno-field"></td>
+            <td class="enade-aluno-field">{% if aluno_matricula %}<strong>{{ aluno_matricula }}</strong>{% endif %}</td>
           </tr>
         </tbody>
       </table>
