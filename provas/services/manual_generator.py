@@ -83,6 +83,12 @@ def criar_prova_manual(
 
     if mascara:
         disciplina = mascara.disciplina
+        # Máscara sem disciplina (ex.: Simulado ENADE) não guia a montagem manual: o acervo
+        # da tela é carregado por disciplina, e a máscara não indica qual.
+        if not disciplina:
+            raise ProvaManualError(
+                f'A máscara "{mascara.titulo}" não está vinculada a uma disciplina e não pode guiar a montagem manual.',
+            )
     elif not disciplina:
         raise ProvaManualError('A disciplina da avaliação é obrigatória.')
 

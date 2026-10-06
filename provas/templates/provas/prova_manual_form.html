@@ -6,6 +6,9 @@
 <style>
   /* Pontos de questão não marcada: esmaecido (o campo não é enviado). */
   .input-pontuacao:disabled { opacity: 0.4; cursor: not-allowed; }
+  /* Banner da máscara guia: tom âmbar legível nos dois temas. */
+  .banner-mascara-guia { background: var(--color-warning-bg); color: #78350F; }
+  :root[data-theme="dark"] .banner-mascara-guia { color: #FCD34D; }
 </style>
 {% endblock %}
 
@@ -44,7 +47,7 @@
 
   {% if mascara_guia %}
   <!-- Banner de Máscara Guia Vinculada -->
-  <div class="p-3 mb-4 flex items-center justify-between flex-wrap gap-2" style="background: #FFFBEB; border: 1px solid var(--fae-gold); border-radius: var(--radius-sm); color: #78350F;">
+  <div class="banner-mascara-guia p-3 mb-4 flex items-center justify-between flex-wrap gap-2" style="border: 1px solid var(--fae-gold); border-radius: var(--radius-sm);">
     <div class="flex items-center gap-2">
       <i class="bi bi-card-checklist" style="font-size: 1.4rem; color: var(--fae-gold);"></i>
       <div>
@@ -131,7 +134,7 @@
       </div>
 
       <!-- Barra de Filtros Rápidos no Acervo -->
-      <div class="grid grid-cols-12 gap-2 mb-3 p-2" style="background: #FFFFFF; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+      <div class="grid grid-cols-12 gap-2 mb-3 p-2" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
         <div class="col-span-4">
           <input type="text" id="filtro-busca" class="form-input small" placeholder="Buscar por enunciado ou origem..." style="padding: 0.4rem 0.75rem;">
         </div>
@@ -232,7 +235,7 @@
         </table>
       </div>
       {% else %}
-      <div class="p-4 text-center text-muted" style="background: #F8FAFC; border: 1px dashed var(--border-color); border-radius: var(--radius-sm);">
+      <div class="p-4 text-center text-muted" style="background: var(--bg-subtle); border: 1px dashed var(--border-color); border-radius: var(--radius-sm);">
         <i class="bi bi-journal-x mb-2" style="font-size: 2rem; display: block; opacity: 0.4;"></i>
         Nenhuma questão ativa encontrada para esta disciplina. Cadastre questões no acervo antes de realizar a montagem.
       </div>

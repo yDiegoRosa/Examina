@@ -1697,7 +1697,7 @@ a:hover {
 }
 
 /* ==========================================================================
-   18. Tema Escuro — data-theme="dark" (definido via JS: preferência ou SO)
+   18. Tema Escuro — data-theme="dark" (definido via JS: escolha salva; padrão claro)
    -------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
   --bg-app: #0B1220;

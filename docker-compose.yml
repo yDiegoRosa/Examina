@@ -15,7 +15,9 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_aqui}
     ports:
       # Apenas na interface local: o MySQL não fica exposto à rede.
-      - "127.0.0.1:3306:3306"
+      # Se já houver um MySQL local na 3306, defina MYSQL_HOST_PORT=3307 no .env
+      # (o Django continua usando db:3306 pela rede interna do compose).
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -37,6 +39,10 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # Dentro da rede do compose o MySQL é sempre db:3306. Isso sobrescreve o
+      # DATABASE_URL do .env, que aponta para 127.0.0.1 (runserver fora do Docker).
+      DATABASE_URL: mysql://${MYSQL_USER:-examina_user}:${MYSQL_PASSWORD:-sua_senha_aqui}@db:3306/${MYSQL_DATABASE:-examina_db}
     networks:
       - examina_net
     depends_on:

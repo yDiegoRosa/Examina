@@ -73,21 +73,17 @@
             </td>
           </tr>
           <tr>
-            <td class="capa-info-label">Modalidade:</td>
-            <td class="capa-info-value">
-              {% if modalidade %}{{ modalidade }}{% else %}—{% endif %}
-            </td>
-            <td class="capa-info-label">Tempo:</td>
-            <td class="capa-info-value">
-              {% if tempo_minutos %}{{ tempo_minutos }} minutos{% else %}—{% endif %}
-            </td>
-          </tr>
-          <tr>
             <td class="capa-info-label">Nº de Questões:</td>
             <td class="capa-info-value">{{ total_questoes }}</td>
             <td class="capa-info-label">Caderno:</td>
             <td class="capa-info-value capa-caderno-destaque">
               {{ identificador_display|default:"Versão única" }}
+            </td>
+          </tr>
+          <tr>
+            <td class="capa-info-label">Tempo:</td>
+            <td class="capa-info-value" colspan="3">
+              {% if tempo_minutos %}{{ tempo_minutos }} minutos{% else %}—{% endif %}
             </td>
           </tr>
         </tbody>
@@ -99,16 +95,15 @@
       <table class="capa-aluno-table">
         <tbody>
           <tr>
+            {# Caderno nominal (cadernos da aplicação): nome e matrícula já preenchidos. #}
             <td class="capa-aluno-label">Nome completo:</td>
-            <td class="capa-aluno-field" style="width: 65%;"></td>
+            <td class="capa-aluno-field" style="width: 65%;">{% if aluno_nome %}<strong>{{ aluno_nome }}</strong>{% endif %}</td>
             <td class="capa-aluno-label">Nota:</td>
             <td class="capa-aluno-field capa-nota-field"></td>
           </tr>
           <tr>
             <td class="capa-aluno-label">Matrícula:</td>
-            <td class="capa-aluno-field"></td>
-            <td class="capa-aluno-label">Assinatura:</td>
-            <td class="capa-aluno-field"></td>
+            <td class="capa-aluno-field">{% if aluno_matricula %}<strong>{{ aluno_matricula }}</strong>{% endif %}</td>
           </tr>
         </tbody>
       </table>
@@ -189,10 +184,10 @@
       </div>
       <div class="header-row">
         <div class="header-cell">
-          <span class="header-cell-label">Aluno(a):</span> <span class="header-field-line" style="width: 250pt;"></span>
+          <span class="header-cell-label">Aluno(a):</span> <span class="header-field-line" style="width: 250pt;">{{ aluno_nome }}</span>
         </div>
         <div class="header-cell">
-          <span class="header-cell-label">Matrícula:</span> <span class="header-field-line" style="width: 90pt;"></span>
+          <span class="header-cell-label">Matrícula:</span> <span class="header-field-line" style="width: 90pt;">{{ aluno_matricula }}</span>
         </div>
       </div>
     </div>

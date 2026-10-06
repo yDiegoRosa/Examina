@@ -32,12 +32,12 @@ from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
 from .services.caderno_layout import (
-    eh_prova_enade,
     linhas_da_discursiva,
     numerar_por_tipo,
     ordenar_como_caderno,
     organizar_caderno,
 )
+from .services.caderno_service import contexto_caderno
 from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
@@ -939,7 +939,7 @@ def aplicacao_folhas_zip(request, pk):
     Gera e entrega em ZIP uma folha-resposta nominal (PDF) por aluno matriculado da
     turma da aplicação — cada folha com nome/matrícula e o QR do seu ``qr_token``.
 
-    Se a aplicação ainda não tiver versões atribuídas, o round-robin é executado
+    Se a aplicação ainda não tiver versões atribuídas, a distribuição em blocos é executada
     automaticamente antes de gerar as folhas.
     """
     import io
@@ -982,6 +982,87 @@ def aplicacao_folhas_zip(request, pk):
 
     zip_buffer.seek(0)
     filename = f'cartoes_aplicacao_{aplicacao.pk}.zip'
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@docente_ou_coordenador_required
+def aplicacao_cadernos_zip(request, pk):
+    """
+    Cadernos nominais da aplicação em ZIP: um PDF por aluno, com nome e matrícula na capa,
+    na versão do seu cartão-resposta. ``?versao=A`` limita o ZIP aos alunos dessa versão.
+
+    Gera os cartões-resposta que faltarem (mesma regra do ZIP de cartões): a versão de cada
+    caderno é a do cartão, e a redistribuição das versões fica travada a partir daqui.
+    Os arquivos são numerados na ordem alfabética (``01_versao_A_…``); como as versões são
+    distribuídas em blocos, a numeração já agrupa os cadernos por versão.
+    """
+    import io
+    import zipfile
+
+    from django.utils.text import slugify
+
+    from .services.caderno_service import render_cadernos_nominais
+    from .services.folha_service import gerar_folhas_da_aplicacao
+    from .services.pdf_generator import PDFGenerationError
+
+    aplicacao = get_object_or_404(
+        ProvaAplicacao.objects.select_related(
+            'prova', 'prova__mascara', 'prova__mascara__disciplina', 'prova__disciplina', 'prova__autor', 'turma'
+        ),
+        pk=pk,
+    )
+
+    try:
+        folhas = gerar_folhas_da_aplicacao(aplicacao)
+    except ValueError as exc:
+        return HttpResponse(
+            f'Não foi possível gerar os cadernos: {exc}',
+            status=400,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    if not folhas:
+        return HttpResponse(
+            'Nenhum aluno matriculado (ativo) nesta turma para gerar cadernos.',
+            status=400,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    folhas.sort(key=lambda folha: (folha.aluno.nome, folha.aluno.matricula))
+    digitos = max(2, len(str(len(folhas))))
+    numero_da_folha = {folha.pk: numero for numero, folha in enumerate(folhas, start=1)}
+
+    versao_ident = (request.GET.get('versao') or '').strip().upper()
+    if versao_ident:
+        folhas = [folha for folha in folhas if folha.prova_versao.identificador.upper() == versao_ident]
+        if not folhas:
+            return HttpResponse(
+                f'Nenhum aluno desta aplicação recebeu a versão {versao_ident}.',
+                status=400,
+                content_type='text/plain; charset=utf-8',
+            )
+
+    zip_buffer = io.BytesIO()
+    try:
+        with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for folha, pdf_bytes in render_cadernos_nominais(aplicacao, folhas):
+                numero = str(numero_da_folha[folha.pk]).zfill(digitos)
+                slug = slugify(folha.aluno.nome) or 'aluno'
+                matricula = slugify(folha.aluno.matricula) or str(folha.aluno.pk)
+                zf.writestr(f'{numero}_versao_{folha.prova_versao.identificador}_{matricula}_{slug}.pdf', pdf_bytes)
+    except PDFGenerationError as exc:
+        logger.error('Erro ao gerar os cadernos nominais da aplicação pk=%s: %s', pk, exc, exc_info=True)
+        return HttpResponse(
+            f'Erro ao gerar os cadernos: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )
+
+    sufixo = f'_versao_{versao_ident}' if versao_ident else ''
+    filename = f'cadernos_aplicacao_{aplicacao.pk}{sufixo}.zip'
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
@@ -1494,126 +1575,22 @@ def prova_pdf(request, pk):
     elif prova.versoes.exists():
         versao = prova.versoes.order_by('numero_versao').first()
 
-    # Prepara itens da versão ou itens base da prova
-    if versao:
-        itens_versao_qs = versao.itens.select_related(
-            'prova_questao__questao',
-            'prova_questao__questao__topico',
-            'prova_questao__questao__disciplina',
-        ).order_by('ordem')
-        itens_render = []
-        for iv in itens_versao_qs:
-            q = iv.prova_questao.questao
-            snap_q = iv.prova_questao.snapshot_questao or {}
-            # Usa alternativas embaralhadas persistidas na versão
-            alts_versao = iv.alternativas_embaralhadas
-            itens_render.append(
-                {
-                    'numero': iv.numero,
-                    'ordem': iv.ordem,
-                    'pontuacao': iv.pontuacao,
-                    'questao': q,
-                    'snapshot_questao': snap_q,
-                    'alternativas_versao': alts_versao,
-                }
-            )
-    else:
-        itens_qs = (
-            prova.itens.select_related('questao', 'questao__topico', 'questao__disciplina')
-            .prefetch_related('questao__alternativas')
-            .order_by('ordem')
-        )
-        itens_render = []
-        for it in itens_qs:
-            itens_render.append(
-                {
-                    'numero': it.numero,
-                    'ordem': it.ordem,
-                    'pontuacao': it.pontuacao,
-                    'questao': it.questao,
-                    'snapshot_questao': it.snapshot_questao,
-                    'alternativas_versao': [
-                        {'letra': a.letra, 'texto': a.texto, 'correta': a.correta}
-                        for a in it.questao.alternativas.all()
-                    ],
-                }
-            )
+    incluir_capa = request.GET.get('incluir_capa', '1') in ('1', 'true', 'True')
+    incluir_gabarito = request.GET.get('incluir_gabarito', '0') in ('1', 'true', 'True')
 
-    disciplina = prova.disciplina_efetiva
-    mascara = prova.mascara
-    snap = prova.snapshot_mascara or {}
-
-    valor_total = None
-    tempo_minutos = None
-    modalidade = None
-
-    if mascara:
-        valor_total = mascara.valor_total
-        tempo_minutos = mascara.tempo_estimado_minutos
-        modalidade = mascara.get_modalidade_display()
-    elif snap:
-        valor_total = snap.get('valor_total')
-        tempo_minutos = snap.get('tempo_estimado_minutos')
-        modalidade_code = snap.get('modalidade', '')
-        _modalidade_map = {
-            'OBJ': 'Somente Objetivas',
-            'DIS': 'Somente Discursivas',
-            'MISTA': 'Mista (Objetivas e Discursivas)',
-        }
-        modalidade = _modalidade_map.get(modalidade_code, modalidade_code)
-
-    docente_nome = None
-    if prova.autor:
-        docente_nome = prova.autor.get_full_name() or prova.autor.username
-
-    param_capa = request.GET.get('incluir_capa', '1')
-    incluir_capa = param_capa in ('1', 'true', 'True')
-
-    param_gabarito = request.GET.get('incluir_gabarito', '0')
-    incluir_gabarito = param_gabarito in ('1', 'true', 'True')
-
-    identificador_display = f'Versão {versao.identificador}' if versao else 'Versão única'
-
-    # Seleção do layout: caderno estilo ENADE (discursivas antes das objetivas)
-    # ou o layout institucional FAETERJ padrão. Pode ser forçado por ?layout=enade
-    # ou detectado automaticamente para máscaras de Simulado ENADE.
-    layout = (request.GET.get('layout') or '').lower()
-    usar_layout_enade = layout == 'enade' or (layout == '' and eh_prova_enade(prova))
-
-    # Caderno em blocos (os dois layouts): discursivas primeiro, numeradas à parte; objetivas
-    # longas em largura total e curtas em duas colunas — ver services.caderno_layout.
-    itens_render, blocos = organizar_caderno(itens_render)
-    itens_discursivas = [it for it in itens_render if it['tipo'] != Questao.Tipo.OBJETIVA]
-    itens_objetivas = [it for it in itens_render if it['tipo'] == Questao.Tipo.OBJETIVA]
-
-    context = {
-        'prova': prova,
-        'versao': versao,
-        'identificador_display': identificador_display,
-        'itens': itens_render,
-        'itens_render': itens_render,
-        'blocos': blocos,
-        'blocos_objetivas': [bloco for bloco in blocos if bloco['formato'] != 'discursivas'],
-        'itens_discursivas': itens_discursivas,
-        'itens_objetivas': itens_objetivas,
-        'disciplina_nome': disciplina.nome if disciplina else None,
-        'docente_nome': docente_nome,
-        'turma': snap.get('turma') or request.GET.get('turma') or '',
-        'turno': snap.get('turno') or request.GET.get('turno') or '',
-        'data_aplicacao': request.GET.get('data') or '',
-        'valor_total': valor_total,
-        'tempo_minutos': tempo_minutos,
-        'modalidade': modalidade,
-        'total_questoes': len(itens_render),
-        'total_objetivas': len(itens_objetivas),
-        'total_discursivas': len(itens_discursivas),
-        'instrucoes_extras': request.GET.get('instrucoes_extras') or '',
-        'incluir_capa': incluir_capa,
-        'incluir_gabarito': incluir_gabarito,
-        'linhas_discursiva': linhas_da_discursiva(prova),  # 15 só em prova ENADE, em qualquer layout
-    }
-
-    template_pdf = 'provas/pdf_prova_enade.html' if usar_layout_enade else 'provas/pdf_prova_completa.html'
+    # Layout ENADE (discursivas antes das objetivas) forçado por ?layout=enade ou detectado
+    # para máscaras de Simulado ENADE; senão, o layout institucional FAETERJ padrão.
+    template_pdf, context = contexto_caderno(
+        prova,
+        versao,
+        incluir_capa=incluir_capa,
+        incluir_gabarito=incluir_gabarito,
+        layout=request.GET.get('layout') or '',
+        turma=request.GET.get('turma') or '',
+        turno=request.GET.get('turno') or '',
+        data_aplicacao=request.GET.get('data') or '',
+        instrucoes_extras=request.GET.get('instrucoes_extras') or '',
+    )
 
     try:
         pdf_bytes = PDFGeneratorService.render_pdf_from_template(
@@ -2127,6 +2104,8 @@ def aplicacao_detail(request, pk):
     """
     from desempenho.models import Desempenho
 
+    from .services.version_assigner import resumo_distribuicao
+
     aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
 
     folhas_por_status = dict(aplicacao.folhas.values_list('status').annotate(total=Count('id')))
@@ -2149,6 +2128,7 @@ def aplicacao_detail(request, pk):
                 turma=aplicacao.turma, situacao=Matricula.Situacao.MATRICULADO, aluno__ativo=True
             ).count(),
             'total_atribuicoes': aplicacao.atribuicoes.count(),
+            'resumo_versoes': resumo_distribuicao(aplicacao),
             'total_folhas': total_folhas,
             'folhas_lidas': folhas_por_status.get(FolhaResposta.Status.LIDA, 0),
             'dig_pendentes': digitalizacoes_por_status.get(FolhaDigitalizada.Status.PENDENTE, 0),
@@ -2165,7 +2145,7 @@ def aplicacao_detail(request, pk):
 @login_required
 @docente_ou_coordenador_required
 def aplicacao_atribuir_versoes(request, pk):
-    """Distribui as versões (round-robin) aos alunos matriculados — bloqueado após gerar as folhas."""
+    """Distribui as versões em blocos aos alunos matriculados — bloqueado após gerar as folhas."""
     from .services.version_assigner import atribuir_versoes
 
     aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
@@ -2175,7 +2155,7 @@ def aplicacao_atribuir_versoes(request, pk):
         messages.error(request, f'Não foi possível distribuir as versões: {exc}')
     else:
         if atribuicoes:
-            messages.success(request, f'{len(atribuicoes)} aluno(s) receberam versão (round-robin).')
+            messages.success(request, f'{len(atribuicoes)} aluno(s) receberam versão (em blocos, na ordem alfabética).')
         else:
             messages.warning(request, 'Nenhum aluno matriculado (ativo) nesta turma para receber versão.')
     return redirect('provas:aplicacao_detail', pk=aplicacao.pk)
