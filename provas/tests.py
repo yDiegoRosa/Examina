@@ -2898,6 +2898,18 @@ class FolhaRespostaGeometryTest(SimpleTestCase):
                 letras = sorted(b.option for b in geo.answer_bubbles if b.question == q)
                 self.assertEqual(letras, ['A', 'B', 'C', 'D', 'E'])
 
+    def test_disco_lido_cabe_nas_bolhas_dos_cartoes_ja_impressos(self):
+        """
+        As bolhas cresceram de 1,9 para 2,4 mm sem mudar os centros. O leitor mede só o disco
+        interno (INNER_R_FRAC × raio atual): ele precisa caber dentro da bolha antiga, sem
+        tocar a borda impressa (0,3 mm), para os cartões já impressos continuarem legíveis.
+        """
+        from .services.omr import INNER_R_FRAC
+
+        raio_antigo, borda = 1.9, 0.3
+        for bolha in build_layout(num_questoes=57).answer_bubbles:
+            self.assertLess(bolha.r * INNER_R_FRAC, raio_antigo - borda / 2)
+
     def test_numero_de_alternativas_variavel(self):
         geo = build_layout(num_questoes=10, num_alternativas=4)
         self.assertEqual(geo.option_labels, ['A', 'B', 'C', 'D'])
