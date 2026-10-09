@@ -76,6 +76,9 @@ ANS_PITCH_Y = 8.0  # passo vertical entre questões
 # 1,49 mm), que ainda cabe dentro da bolha antiga: cartões impressos com 1,9 continuam
 # legíveis, por isso o SCHEMA_VERSION não mudou. Não passe de ~2,8 mm sem rever isso.
 ANS_BUBBLE_R = 2.4
+# Raio dos cartões impressos antes de 2026-10-06: o ajuste fino do leitor (omr) também
+# procura anéis deste tamanho, para os cartões antigos continuarem bem lidos em fotos.
+ANS_BUBBLE_R_ANTERIOR = 1.9
 ANS_ALT_PITCH_X = 6.0  # passo horizontal entre alternativas
 ANS_COL_WIDTH = 60.0  # passo horizontal entre colunas de questões
 ANS_FIRST_COL_X0 = 18.0  # borda esquerda (x0) da 1ª coluna

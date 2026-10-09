@@ -70,8 +70,10 @@ from .services.omr import (
     OmrError,
     corrigir_perspectiva,
     decodificar_qr,
+    detectar_marcadores_com_largura,
     extrair_qr_token,
     identificar_folha,
+    ler_qr_da_folha,
     ler_respostas,
     localizar_folha,
 )
@@ -3471,6 +3473,18 @@ class UploadFolhasViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)  # reexibe o form com erro
         self.assertEqual(FolhaDigitalizada.objects.count(), 0)
 
+    def test_foto_heic_recusada_com_orientacao(self):
+        self.client.login(username='coord_up', password='segredo123')  # noqa: S106
+        cabecalho_heic = b'\x00\x00\x00\x18ftypheic' + b'\x00' * 64
+        # Pela extensão e, renomeada para .jpg, pela assinatura do arquivo.
+        for nome in ('20261007_113607.heic', 'foto.jpg'):
+            arquivo = SimpleUploadedFile(nome, cabecalho_heic, content_type='image/heic')
+            resp = self.client.post(self.url, {'imagens': [arquivo]})
+            self.assertEqual(resp.status_code, 200)
+            self.assertContains(resp, 'formato HEIC/HEIF')
+            self.assertContains(resp, 'câmera do próprio sistema')
+        self.assertEqual(FolhaDigitalizada.objects.count(), 0)
+
 
 class FolhaDigitalizadaModelTest(TestCase):
     def test_status_default_pendente(self):
@@ -3578,6 +3592,41 @@ class OmrReaderTest(TestCase):
         with self.assertRaises(OmrError):
             corrigir_perspectiva(branco)
 
+    def test_marcadores_em_foto_de_celular_ruidosa_em_resolucao_cheia(self):
+        """
+        Foto real 3000×4000 (teste de campo de 2026-10-07): o detector com os parâmetros padrão
+        não achava os marcadores. Aqui, 14 px/mm com ruído forte de sensor reproduz a falha:
+        a detecção na imagem original perde um canto e a reduzida (1500 px) acha os 4.
+        """
+        canvas = _canvas_omr(self.payload, px=14)
+        ruido = np.random.default_rng(5).normal(0, 70, canvas.shape[:2]).astype(np.float32)[:, :, None]
+        foto = np.clip(canvas.astype(np.float32) * 0.8 + 20 + ruido, 0, 255).astype(np.uint8)
+
+        centros, largura = detectar_marcadores_com_largura(cv2.cvtColor(foto, cv2.COLOR_BGR2GRAY))
+        self.assertEqual(sorted(centros), [0, 1, 2, 3])
+        self.assertEqual(largura, 1500)  # fechou só com a imagem reduzida
+        self.assertEqual(
+            corrigir_perspectiva(foto).shape[:2], (int(round(PAGE_H * PX_POR_MM)), int(round(PAGE_W * PX_POR_MM)))
+        )
+
+    def test_qr_lido_no_recorte_endireitado_quando_a_foto_inteira_falha(self):
+        from unittest import mock
+
+        from .services import omr
+
+        canvas = _canvas_omr(self.payload)
+        original = omr.decodificar_qr
+        chamadas = []
+
+        def falha_na_foto_inteira(imagem):
+            chamadas.append(imagem.shape)
+            return None if len(chamadas) == 1 else original(imagem)
+
+        with mock.patch.object(omr, 'decodificar_qr', side_effect=falha_na_foto_inteira):
+            self.assertEqual(ler_qr_da_folha(canvas), (self.payload, 'recorte'))
+            self.assertEqual(identificar_folha(canvas), self.folha)
+        self.assertEqual(ler_qr_da_folha(canvas), (self.payload, 'imagem'))
+
 
 def _canvas_bolhas(pares, num_questoes=6, qr_payload=None, px=PX_POR_MM):
     """
@@ -3632,6 +3681,56 @@ class OmrLerRespostasTest(SimpleTestCase):
         leituras = ler_respostas(canvas, geo.answer_bubbles)
         self.assertEqual(leituras[1].status, 'ambigua')
         self.assertIsNone(leituras[1].marcada)
+
+    def test_sem_aneis_impressos_nao_ha_ajuste(self):
+        canvas, geo = _canvas_bolhas({(1, 'A'), (2, 'C')}, num_questoes=3)
+        leituras = ler_respostas(canvas, geo.answer_bubbles)
+        self.assertTrue(all(leitura.deslocamento_mm == (0.0, 0.0) for leitura in leituras.values()))
+
+    @staticmethod
+    def _cartao_curvado(raio_impresso_mm, marcadas, deslocamento_por_coluna_px):
+        """
+        Imagem canônica com o anel impresso de cada bolha e as marcadas preenchidas, todas
+        deslocadas por coluna — como uma folha curvada fotografada na mão (na foto real de
+        2026-10-07: +0,5/+2,2 mm, −0,4/+2,1 mm e −2,0/+1,6 mm).
+        """
+        geo = build_layout(num_questoes=15, num_alternativas=5, id_digits=0, columns=3)
+        canvas = np.full((int(round(PAGE_H * PX_POR_MM)), int(round(PAGE_W * PX_POR_MM)), 3), 255, np.uint8)
+        r = int(round(raio_impresso_mm * PX_POR_MM))
+        for b in geo.answer_bubbles:
+            coluna = (b.question - 1) // 5
+            dx, dy = deslocamento_por_coluna_px[coluna]
+            centro = (int(round(b.cx * PX_POR_MM + dx)), int(round(b.cy * PX_POR_MM + dy)))
+            cv2.circle(canvas, centro, r, (65, 85, 51), 3)  # borda impressa (#334155)
+            if (b.question, b.option) in marcadas:
+                cv2.circle(canvas, centro, int(r * 0.85), (90, 40, 20), -1)  # caneta azul
+        return canvas, geo
+
+    def test_ajuste_fino_le_folha_curvada(self):
+        from unittest import mock
+
+        from .services import omr
+
+        marcadas = {(q, 'ABCDE'[q % 5]) for q in range(1, 16)}
+        deslocamentos = [(5, 22), (-4, 21), (-20, 16)]
+        for raio in (2.4, 1.9):  # cartão atual e cartões impressos antes de 2026-10-06
+            canvas, geo = self._cartao_curvado(raio, marcadas, deslocamentos)
+            leituras = ler_respostas(canvas, geo.answer_bubbles)
+            self.assertEqual({q: leitura.marcada for q, leitura in leituras.items()}, dict(marcadas), raio)
+            self.assertEqual(leituras[1].deslocamento_mm, (0.5, 2.2))
+            self.assertEqual(leituras[11].deslocamento_mm, (-2.0, 1.6))
+
+            # Sem o ajuste fino, a marcação fica com menos margem; na bolha antiga (1,9 mm, a da
+            # foto real) a folha nem é lida. A bolha atual, maior, tolera mais deslocamento.
+            with mock.patch.object(omr, '_deslocamento_da_questao', return_value=(0.0, 0.0)):
+                sem_ajuste = ler_respostas(canvas, geo.answer_bubbles)
+
+            def menor_marcada(lidas):
+                return min(lidas[q].preenchimentos[letra] for q, letra in marcadas)
+
+            self.assertGreater(menor_marcada(leituras), menor_marcada(sem_ajuste))
+            if raio == 1.9:
+                self.assertNotEqual({q: leitura.marcada for q, leitura in sem_ajuste.items()}, dict(marcadas))
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
