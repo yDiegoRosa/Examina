@@ -274,6 +274,7 @@ a:hover {
   border-radius: var(--radius-pill);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  white-space: nowrap; /* "FAETERJ-RIO" numa linha só */
 }
 
 .nav-links {
@@ -309,18 +310,25 @@ a:hover {
   box-shadow: 0 0 14px rgba(0, 128, 255, 0.28);
 }
 
+/* Botão da conta (leva a "Alterar senha"): redondo como o do tema, com o nome no title.
+   Com o nome escrito, a barra não cabia em 1170 px ao lado dos 6 links. */
 .user-capsule {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #FFFFFF;
-  font-size: 0.825rem;
-  font-weight: 600;
-  padding: 0.35rem 0.9rem;
-  border-radius: var(--radius-pill);
+  color: var(--fae-gold);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  justify-content: center;
+  font-size: 1.1rem;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: var(--transition);
 }
+
+.user-capsule:hover { background: rgba(255, 255, 255, 0.18); transform: translateY(-1px); }
 
 .mobile-toggle {
   display: none;
@@ -350,12 +358,12 @@ a:hover {
   .nav-links.open { display: flex; }
 }
 
-/* "Alterar senha": ícone de chave na barra; no celular, item do menu (a chave não cabe). */
+/* "Alterar senha": botão da conta na barra; no celular, item do menu (o botão não cabe). */
 .nav-links .nav-item-conta { display: none; }
 
 @media (max-width: 600px) {
   .glass-nav { padding: 0.75rem; gap: 0.5rem; }
-  .glass-nav .brand-badge, .glass-nav .user-capsule, .glass-nav .nav-conta { display: none; }
+  .glass-nav .brand-badge, .glass-nav .user-capsule { display: none; }
   .nav-links .nav-item-conta { display: list-item; }
 }
 
