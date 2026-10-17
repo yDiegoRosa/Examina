@@ -23,12 +23,14 @@
     <a href="{% url 'provas:mascara_create' %}" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-plus-circle-fill"></i> Nova Máscara
     </a>
+    {% if perfil_admin %}{# Simulado ENADE: só o administrador gera #}
     <form method="post" action="{% url 'provas:mascara_enade_create' %}" style="display: inline;">
       {% csrf_token %}
       <button type="submit" class="btn btn-outline flex items-center gap-2" style="background: rgba(255,255,255,0.85); font-weight: 700;" title="Cria e distribui automaticamente um Simulado ENADE — Componente Específico (30 questões: 27 objetivas + 3 discursivas) nas 5 grandes áreas">
         <i class="bi bi-mortarboard-fill" style="color: var(--fae-blue-primary);"></i> Simulado ENADE
       </button>
     </form>
+    {% endif %}
     <a href="{% url 'provas:prova_manual_create' %}" class="btn btn-outline flex items-center gap-2" style="background: rgba(255,255,255,0.85); font-weight: 700;">
       <i class="bi bi-hand-index-thumb-fill" style="color: var(--fae-blue-primary);"></i> Nova Prova Manual
     </a>
@@ -159,6 +161,7 @@
               <a href="{% url 'provas:mascara_detail' pk=m.pk %}" class="btn-table-action" title="Visualizar Critérios e Diagnóstico">
                 <i class="bi bi-eye"></i>
               </a>
+              {% if perfil_admin or m.autor_id == request.user.id %}
               <a href="{% url 'provas:mascara_update' pk=m.pk %}" class="btn-table-action" title="Editar Máscara">
                 <i class="bi bi-pencil-square"></i>
               </a>
@@ -168,6 +171,7 @@
                   <i class="bi {% if m.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}"></i>
                 </button>
               </form>
+              {% endif %}
             </div>
           </td>
         </tr>

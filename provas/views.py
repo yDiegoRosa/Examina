@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
@@ -13,9 +13,18 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from academico.acesso import (
+    autor_do_acervo,
+    disciplinas_permitidas,
+    eh_administrador,
+    mascaras_visiveis,
+    no_acervo_de,
+    provas_visiveis,
+    ve_tudo,
+)
 from academico.models import Matricula, Turma
 from banco_questoes.models import Disciplina, Questao, Topico
-from banco_questoes.permissions import docente_ou_coordenador_required
+from banco_questoes.permissions import administrador_required, docente_ou_coordenador_required
 from banco_questoes.utils import parse_pk
 
 from .forms import MascaraProvaForm, MascaraTopicoFormSet, ProvaAplicacaoForm, ProvaManualForm, UploadFolhasForm
@@ -31,7 +40,7 @@ from .models import (
 from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
-from .services.caderno_layout import eh_prova_enade, numerar_por_tipo, ordenar_como_caderno
+from .services.caderno_layout import eh_mascara_enade, eh_prova_enade, numerar_por_tipo, ordenar_como_caderno
 from .services.caderno_service import contexto_caderno
 from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
@@ -47,14 +56,39 @@ from .services.version_generator import quantidade_versoes_da_prova, tipo_do_ite
 logger = logging.getLogger(__name__)
 
 
+def _alteravel(request, objeto, campo_autor='autor_id'):
+    """Só o autor (ou o administrador) altera; quem só vê (coordenador) recebe 403."""
+    if not (eh_administrador(request.user) or getattr(objeto, campo_autor) == request.user.pk):
+        raise PermissionDenied('Só o autor (ou o administrador) pode alterar.')
+    return objeto
+
+
+def _prova_alteravel(request, pk, queryset=None):
+    """Prova do usuário (404 se ele nem a vê; 403 se vê mas não pode alterar)."""
+    return _alteravel(request, get_object_or_404(provas_visiveis(request.user, queryset), pk=pk))
+
+
+def _mascara_alteravel(request, pk, queryset=None):
+    """Máscara do usuário (404 se ele nem a vê; 403 se vê mas não pode alterar)."""
+    return _alteravel(request, get_object_or_404(mascaras_visiveis(request.user, queryset), pk=pk))
+
+
+def _bloquear_simulado_enade(request, mascara):
+    """O Simulado ENADE é gerado só pelo administrador (decisão do Diego, 2026-10-17)."""
+    if mascara is not None and eh_mascara_enade(mascara) and not eh_administrador(request.user):
+        raise PermissionDenied('Só o administrador gera o Simulado ENADE.')
+
+
 @login_required
 @docente_ou_coordenador_required
 def prova_list(request):
-    """Lista as provas persistidas, inclusive montagens manuais sem máscara."""
-    provas = Prova.objects.select_related('disciplina', 'mascara__disciplina', 'autor').annotate(
-        total_itens=Count('itens', distinct=True), total_versoes=Count('versoes', distinct=True)
+    """Lista as provas persistidas, inclusive montagens manuais sem máscara (professor: só as dele)."""
+    provas = (
+        provas_visiveis(request.user)
+        .select_related('disciplina', 'mascara__disciplina', 'autor')
+        .annotate(total_itens=Count('itens', distinct=True), total_versoes=Count('versoes', distinct=True))
     )
-    metricas = Prova.objects.aggregate(
+    metricas = provas_visiveis(request.user).aggregate(
         total=Count('pk'),
         manuais=Count('pk', filter=Q(tipo_geracao=Prova.TipoGeracao.MANUAL)),
         automaticas=Count('pk', filter=Q(tipo_geracao=Prova.TipoGeracao.AUTOMATICA)),
@@ -90,7 +124,11 @@ def prova_list(request):
             'busca': busca,
             'tipo_selecionado': tipo,
             'disciplina_selecionada': disciplina_id,
-            'disciplinas': Disciplina.objects.order_by('nome'),
+            'disciplinas': (
+                Disciplina.objects.order_by('nome')
+                if ve_tudo(request.user)
+                else disciplinas_permitidas(request.user).order_by('nome')
+            ),
         },
     )
 
@@ -103,9 +141,9 @@ def prova_list(request):
 def mascara_list(request):
     """Exibe o painel de Máscaras de Prova cadastradas com métricas, filtros e paginação."""
     mascaras_qs = (
-        MascaraProva.objects.select_related('disciplina', 'autor')
+        mascaras_visiveis(request.user)
+        .select_related('disciplina', 'autor')
         .prefetch_related('topicos_distribuicao__topico')
-        .all()
     )
 
     disciplina_pk = parse_pk(request.GET.get('disciplina'))
@@ -113,7 +151,7 @@ def mascara_list(request):
     if disciplina_pk:
         mascaras_qs = mascaras_qs.filter(disciplina_id=disciplina_pk)
 
-    disciplinas = Disciplina.objects.filter(ativo=True)
+    disciplinas = disciplinas_permitidas(request.user)
 
     metricas = {
         'total': mascaras_qs.count(),
@@ -155,7 +193,7 @@ def mascara_list(request):
 def mascara_create(request):
     """Cria uma nova Máscara de Avaliação com matriz de dificuldade e tópicos."""
     if request.method == 'POST':
-        form = MascaraProvaForm(request.POST)
+        form = MascaraProvaForm(request.POST, usuario=request.user)
         disc_id = parse_pk(request.POST.get('disciplina'))
         disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else None
         formset = MascaraTopicoFormSet(request.POST, disciplina=disciplina_post)
@@ -183,11 +221,13 @@ def mascara_create(request):
         disc_param = parse_pk(request.GET.get('disciplina'))
         disciplina_init = Disciplina.objects.filter(pk=disc_param, ativo=True).first() if disc_param else None
 
-        if request.GET.get('preset') == 'enade':
-            # Pré-preenche o formulário com a estrutura de Simulado ENADE (RF — máscara ENADE).
-            form = MascaraProvaForm(initial=preset_enade_initial(disciplina_init))
+        if request.GET.get('preset') == 'enade' and eh_administrador(request.user):
+            # Pré-preenche o formulário com a estrutura de Simulado ENADE (só o administrador).
+            form = MascaraProvaForm(initial=preset_enade_initial(disciplina_init), usuario=request.user)
         else:
-            form = MascaraProvaForm(initial={'disciplina': disciplina_init} if disciplina_init else None)
+            form = MascaraProvaForm(
+                initial={'disciplina': disciplina_init} if disciplina_init else None, usuario=request.user
+            )
 
         formset = MascaraTopicoFormSet(disciplina=disciplina_init)
 
@@ -206,7 +246,7 @@ def mascara_create(request):
 # Criação em um clique do Simulado ENADE (Componente Específico)
 # ---------------------------------------------------------------------------
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 @require_POST
 def mascara_enade_create(request):
     """
@@ -262,11 +302,11 @@ def mascara_enade_create(request):
 @login_required
 @docente_ou_coordenador_required
 def mascara_update(request, pk):
-    """Edita uma Máscara de Avaliação existente."""
-    mascara = get_object_or_404(MascaraProva, pk=pk)
+    """Edita uma Máscara de Avaliação existente (só o autor ou o administrador)."""
+    mascara = _mascara_alteravel(request, pk)
 
     if request.method == 'POST':
-        form = MascaraProvaForm(request.POST, instance=mascara)
+        form = MascaraProvaForm(request.POST, instance=mascara, usuario=request.user)
         disc_id = parse_pk(request.POST.get('disciplina'))
         disciplina_post = Disciplina.objects.filter(pk=disc_id, ativo=True).first() if disc_id else None
         formset = MascaraTopicoFormSet(
@@ -291,7 +331,7 @@ def mascara_update(request, pk):
                 messages.success(request, f'Máscara "{mascara.titulo}" atualizada com sucesso!')
                 return redirect('provas:mascara_detail', pk=mascara.pk)
     else:
-        form = MascaraProvaForm(instance=mascara)
+        form = MascaraProvaForm(instance=mascara, usuario=request.user)
         formset = MascaraTopicoFormSet(
             instance=mascara,
             disciplina=mascara.disciplina,
@@ -317,14 +357,19 @@ def mascara_update(request, pk):
 def mascara_detail(request, pk):
     """Visualiza a matriz de critérios da máscara e realiza diagnóstico de estoque no acervo."""
     mascara = get_object_or_404(
-        MascaraProva.objects.select_related('disciplina', 'autor').prefetch_related('topicos_distribuicao__topico'),
+        mascaras_visiveis(request.user)
+        .select_related('disciplina', 'autor')
+        .prefetch_related('topicos_distribuicao__topico'),
         pk=pk,
     )
+    autor_questoes = autor_do_acervo(request.user)
 
     distribuicao_dif = mascara.calcular_distribuicao_dificuldade()
 
-    # Diagnóstico de estoque real no acervo de questões
+    # Diagnóstico de estoque no acervo que o usuário usa (professor: só as questões dele)
     questoes_base = Questao.objects.filter(ativo=True)
+    if autor_questoes is not None:
+        questoes_base = questoes_base.filter(autor=autor_questoes)
     if mascara.disciplina_id:
         questoes_base = questoes_base.filter(disciplina=mascara.disciplina)
 
@@ -360,11 +405,12 @@ def mascara_detail(request, pk):
     }
 
     matriz_metas = mascara.calcular_matriz_metas()
-    relatorio_estoque = mascara.validar_estoque()
+    relatorio_estoque = mascara.validar_estoque(autor_questoes=autor_questoes)
 
-    # Últimas provas geradas a partir desta máscara
+    # Últimas provas geradas a partir desta máscara (as que o usuário vê)
     provas_recentes = (
-        mascara.provas_geradas.select_related('autor')
+        provas_visiveis(request.user, mascara.provas_geradas.all())
+        .select_related('autor')
         .annotate(total_questoes=Count('itens'))
         .order_by('-criado_em')[:5]
     )
@@ -379,6 +425,8 @@ def mascara_detail(request, pk):
             'diagnostico': diagnostico,
             'relatorio_estoque': relatorio_estoque,
             'provas_recentes': provas_recentes,
+            'pode_alterar': eh_administrador(request.user) or mascara.autor_id == request.user.pk,
+            'pode_gerar': not (eh_mascara_enade(mascara) and not eh_administrador(request.user)),
         },
     )
 
@@ -394,10 +442,12 @@ def mascara_gerar_prova(request, pk):
     Executa a geração e persistência de uma avaliação a partir da máscara.
     Bloqueia a operação e notifica detalhadamente caso haja déficit de estoque no banco.
     """
-    mascara = get_object_or_404(MascaraProva, pk=pk)
+    mascara = get_object_or_404(mascaras_visiveis(request.user), pk=pk)
+    _bloquear_simulado_enade(request, mascara)
 
     try:
-        prova = mascara.gerar_prova(autor=request.user)
+        # Professor: sorteia só entre as próprias questões (academico.acesso.autor_do_acervo).
+        prova = mascara.gerar_prova(autor=request.user, autor_questoes=autor_do_acervo(request.user))
         messages.success(
             request,
             f'Avaliação "{prova.titulo}" gerada com sucesso contendo {prova.itens.count()} questões selecionadas!',
@@ -427,7 +477,7 @@ def prova_manual_create(request):
 
     if mascara_id:
         try:
-            mascara_guia = MascaraProva.objects.select_related('disciplina').get(pk=mascara_id, ativo=True)
+            mascara_guia = mascaras_visiveis(request.user).select_related('disciplina').get(pk=mascara_id, ativo=True)
             disciplina_selecionada = mascara_guia.disciplina
         except (MascaraProva.DoesNotExist, ValueError):
             mascara_guia = None
@@ -437,17 +487,24 @@ def prova_manual_create(request):
         disciplina_selecionada = None
         if disciplina_id:
             try:
-                disciplina_selecionada = Disciplina.objects.get(pk=disciplina_id, ativo=True)
+                disciplina_selecionada = disciplinas_permitidas(request.user).get(pk=disciplina_id)
             except (Disciplina.DoesNotExist, ValueError):
                 disciplina_selecionada = None
 
     questoes_disponiveis = []
     topicos_disciplina = []
+    autor_questoes = autor_do_acervo(request.user)
+    # Máscara guia de disciplina que o professor não leciona: não carrega o acervo.
+    if (
+        disciplina_selecionada
+        and not disciplinas_permitidas(request.user).filter(pk=disciplina_selecionada.pk).exists()
+    ):
+        disciplina_selecionada = None
 
     if disciplina_selecionada:
         topicos_disciplina = list(Topico.objects.filter(disciplina=disciplina_selecionada, ativo=True).order_by('nome'))
         qs = (
-            Questao.objects.filter(disciplina=disciplina_selecionada, ativo=True)
+            no_acervo_de(Questao.objects.filter(disciplina=disciplina_selecionada, ativo=True), autor_questoes)
             .select_related('topico', 'disciplina')
             .prefetch_related('alternativas')
             .order_by('topico__nome', 'dificuldade', 'pk')
@@ -477,7 +534,7 @@ def prova_manual_create(request):
     pontos_informados: dict[int, str] = {}
 
     if request.method == 'POST':
-        form = ProvaManualForm(request.POST)
+        form = ProvaManualForm(request.POST, usuario=request.user)
         questoes_selecionadas_ids = request.POST.getlist('questoes_selecionadas')
         ids_int = [int(qid) for qid in questoes_selecionadas_ids if qid.isdigit()]
         selecionadas = set(ids_int)
@@ -491,6 +548,7 @@ def prova_manual_create(request):
                     disciplina = form.cleaned_data['disciplina']
                     titulo = form.cleaned_data['titulo']
                     mascara_selecionada = form.cleaned_data.get('mascara') or mascara_guia
+                    _bloquear_simulado_enade(request, mascara_selecionada)
 
                     prova = criar_prova_manual(
                         titulo=titulo,
@@ -500,6 +558,7 @@ def prova_manual_create(request):
                         mascara=mascara_selecionada,
                         # Campo em branco = pontuação padrão (1,00).
                         pontuacoes={qid: valor for qid, valor in pontos_informados.items() if valor},
+                        autor_questoes=autor_questoes,
                     )
                     messages.success(
                         request,
@@ -516,7 +575,7 @@ def prova_manual_create(request):
         if mascara_guia:
             initial_data['mascara'] = mascara_guia
             initial_data['titulo'] = f'{mascara_guia.titulo} (Manual)'
-        form = ProvaManualForm(initial=initial_data)
+        form = ProvaManualForm(initial=initial_data, usuario=request.user)
 
     for questao in questoes_disponiveis:
         questao.selecionada = questao.pk in selecionadas
@@ -545,7 +604,7 @@ def prova_manual_create(request):
 def prova_revisao(request, pk):
     """Exibe a tela de revisão da seleção com indicadores meta vs. atual por célula."""
     prova = get_object_or_404(
-        Prova.objects.select_related('mascara', 'mascara__disciplina', 'disciplina', 'autor'),
+        provas_visiveis(request.user).select_related('mascara', 'mascara__disciplina', 'disciplina', 'autor'),
         pk=pk,
     )
     itens = list(
@@ -677,6 +736,7 @@ def prova_revisao(request, pk):
             'versoes': prova.versoes.annotate(total_itens=Count('itens')).order_by('numero_versao', 'identificador'),
             'versoes_distribuidas': prova.versoes_distribuidas,
             'quantidade_versoes': quantidade_versoes_da_prova(prova),
+            'pode_alterar': eh_administrador(request.user) or prova.autor_id == request.user.pk,
         },
     )
 
@@ -692,12 +752,12 @@ def item_candidatas_substituicao(request, item_pk):
     Filtra estritamente pelo mesmo tópico e dificuldade, ordenando por prioridade RF07.
     """
     item = get_object_or_404(
-        ProvaQuestao.objects.select_related(
+        ProvaQuestao.objects.filter(prova__in=provas_visiveis(request.user)).select_related(
             'prova', 'prova__mascara', 'questao', 'questao__topico', 'questao__disciplina'
         ),
         pk=item_pk,
     )
-    candidatas_qs = obter_candidatas_substituicao(item)
+    candidatas_qs = obter_candidatas_substituicao(item, autor_questoes=autor_do_acervo(request.user))
 
     candidatas_data = []
     for q in candidatas_qs:
@@ -750,16 +810,20 @@ def item_substituir_questao(request, item_pk):
     validando integridade da célula e atualizando os snapshots JSON.
     """
     item = get_object_or_404(
-        ProvaQuestao.objects.select_related('prova', 'prova__mascara', 'questao'),
+        ProvaQuestao.objects.filter(prova__in=provas_visiveis(request.user)).select_related(
+            'prova', 'prova__mascara', 'questao'
+        ),
         pk=item_pk,
     )
+    _alteravel(request, item.prova)
     nova_questao_id = parse_pk(request.POST.get('nova_questao_id'))
     if not nova_questao_id:
         return JsonResponse(
             {'success': False, 'error': 'ID da nova questão é obrigatório e deve ser válido.'}, status=400
         )
 
-    nova_questao = get_object_or_404(Questao, pk=nova_questao_id)
+    autor_questoes = autor_do_acervo(request.user)
+    nova_questao = get_object_or_404(no_acervo_de(Questao.objects.all(), autor_questoes), pk=nova_questao_id)
 
     try:
         substituir_questao_prova(item=item, nova_questao=nova_questao, autor=request.user)
@@ -794,8 +858,8 @@ def item_substituir_questao(request, item_pk):
 @login_required
 @docente_ou_coordenador_required
 def mascara_toggle_ativo(request, pk):
-    """Alterna o status ativo/inativo de uma máscara."""
-    mascara = get_object_or_404(MascaraProva, pk=pk)
+    """Alterna o status ativo/inativo de uma máscara (só o autor ou o administrador)."""
+    mascara = _mascara_alteravel(request, pk)
     mascara.ativo = not mascara.ativo
     mascara.save(update_fields=['ativo', 'atualizado_em'])
 
@@ -818,11 +882,14 @@ def api_topicos_e_estoque(request):
     if not disciplina_id:
         return JsonResponse({'error': 'Parâmetro disciplina_id obrigatório (numérico).'}, status=400)
 
-    disciplina = get_object_or_404(Disciplina, pk=disciplina_id, ativo=True)
+    disciplina = get_object_or_404(disciplinas_permitidas(request.user), pk=disciplina_id)
     topicos = Topico.objects.filter(disciplina=disciplina, ativo=True).values('id', 'nome')
 
-    # Contagem de questões no acervo por dificuldade
+    # Contagem de questões no acervo que o usuário usa, por dificuldade
     questoes = Questao.objects.filter(disciplina=disciplina, ativo=True)
+    autor_questoes = autor_do_acervo(request.user)
+    if autor_questoes is not None:
+        questoes = questoes.filter(autor=autor_questoes)
     contagens = questoes.aggregate(
         total=Count('id'),
         facil=Count('id', filter=Q(dificuldade=Questao.Dificuldade.FACIL)),
@@ -1484,7 +1551,7 @@ def prova_gerar_versoes_view(request, pk):
     """
     from provas.services.version_generator import VersoesDistribuidasError, gerar_versoes_prova
 
-    prova = get_object_or_404(Prova.objects.select_related('mascara'), pk=pk)
+    prova = _prova_alteravel(request, pk, Prova.objects.select_related('mascara'))
     qtd = quantidade_versoes_da_prova(prova)
     with contextlib.suppress(TypeError, ValueError):
         qtd = max(1, min(8, int(request.POST.get('quantidade_versoes', qtd))))
@@ -1515,7 +1582,7 @@ def prova_capa_pdf(request, pk):
     Gera o PDF da capa padronizada de uma prova gerada ou de uma versão específica.
     """
     prova = get_object_or_404(
-        Prova.objects.select_related(
+        provas_visiveis(request.user).select_related(
             'mascara',
             'mascara__disciplina',
             'disciplina',
@@ -1622,7 +1689,7 @@ def prova_pdf(request, pk):
     Suporta versões específicas (ex.: ?versao=A, ?versao=B, ?versao=C).
     """
     prova = get_object_or_404(
-        Prova.objects.select_related(
+        provas_visiveis(request.user).select_related(
             'mascara',
             'mascara__disciplina',
             'disciplina',
@@ -1690,7 +1757,7 @@ def prova_gabarito_pdf(request, pk):
     Respeita rigorosamente a permutação de questões e alternativas da versão solicitada.
     """
     prova = get_object_or_404(
-        Prova.objects.select_related(
+        provas_visiveis(request.user).select_related(
             'mascara',
             'mascara__disciplina',
             'disciplina',
@@ -1914,7 +1981,7 @@ def prova_pacote_zip(request, pk):
     import zipfile
 
     prova = get_object_or_404(
-        Prova.objects.select_related(
+        provas_visiveis(request.user).select_related(
             'mascara',
             'mascara__disciplina',
             'disciplina',

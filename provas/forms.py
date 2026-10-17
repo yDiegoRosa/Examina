@@ -69,16 +69,30 @@ class ProvaAplicacaoForm(forms.ModelForm):
     Cadastro de uma aplicação (prova × turma × data) fora do admin.
 
     Só aceita provas que já tenham versões (A/B/C…) — sem elas não há como distribuir
-    cadernos nem gerar folhas-resposta — e turmas ativas.
+    cadernos nem gerar folhas-resposta — e turmas ativas. Com ``usuario``, recorta pelo
+    acesso por perfil: o professor só aplica a própria prova numa turma em que leciona a
+    disciplina dela (``academico.acesso.pode_aplicar``).
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, usuario=None, **kwargs):
+        from academico.acesso import provas_visiveis, turmas_permitidas
+
         super().__init__(*args, **kwargs)
-        self.fields['prova'].queryset = (
-            Prova.objects.filter(versoes__isnull=False).distinct().order_by('-criado_em', '-pk')
-        )
+        self.usuario = usuario
+        provas = Prova.objects.all() if usuario is None else provas_visiveis(usuario)
+        self.fields['prova'].queryset = provas.filter(versoes__isnull=False).distinct().order_by('-criado_em', '-pk')
         self.fields['prova'].help_text = 'Somente provas com versões (cadernos) geradas aparecem na lista.'
-        self.fields['turma'].queryset = Turma.objects.filter(ativo=True).order_by('-periodo', 'nome', 'turno')
+        turmas = Turma.objects.all() if usuario is None else turmas_permitidas(usuario)
+        self.fields['turma'].queryset = turmas.filter(ativo=True).order_by('-periodo', 'nome', 'turno')
+
+    def clean(self):
+        from academico.acesso import pode_aplicar
+
+        cleaned = super().clean()
+        prova, turma = cleaned.get('prova'), cleaned.get('turma')
+        if self.usuario is not None and prova and turma and not pode_aplicar(self.usuario, prova, turma):
+            self.add_error('turma', 'Você só pode aplicar esta prova numa turma em que leciona a disciplina dela.')
+        return cleaned
 
     class Meta:
         model = ProvaAplicacao
@@ -97,6 +111,12 @@ class ProvaAplicacaoForm(forms.ModelForm):
             'nota_corte': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.5', 'min': '0', 'max': '10'}),
             'observacao': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
         }
+
+
+def _eh_administrador(usuario) -> bool:
+    from academico.acesso import eh_administrador
+
+    return eh_administrador(usuario)
 
 
 class MascaraForm(forms.ModelForm):
@@ -191,8 +211,11 @@ class MascaraForm(forms.ModelForm):
             'ativo': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, usuario=None, **kwargs):
+        from academico.acesso import disciplinas_permitidas, ve_tudo
+
         super().__init__(*args, **kwargs)
+        self.usuario = usuario
         self.fields['disciplina'].queryset = Disciplina.objects.filter(ativo=True)
         # Opcional no POST: se omitido, mantém o valor atual (ou o padrão de 3 numa máscara nova).
         self.fields['quantidade_versoes'].required = False
@@ -204,6 +227,12 @@ class MascaraForm(forms.ModelForm):
         ].help_text = (
             'Deixe em branco para criar um simulado integrado e identificar dificuldades por tópico em todo o acervo.'
         )
+        if usuario is not None and not ve_tudo(usuario):
+            # Professor: só as disciplinas que leciona, e a máscara tem que ter uma.
+            self.fields['disciplina'].queryset = disciplinas_permitidas(usuario)
+            self.fields['disciplina'].required = True
+            self.fields['disciplina'].empty_label = 'Selecione a disciplina...'
+            self.fields['disciplina'].help_text = 'Disciplinas em que você leciona (cadastradas pelo administrador).'
 
     def clean_quantidade_versoes(self):
         valor = self.cleaned_data.get('quantidade_versoes')
@@ -227,6 +256,8 @@ class MascaraForm(forms.ModelForm):
 
         # Simulado ENADE é sempre caderno único (a geração também força 1 — version_generator).
         mascara_enade = SimpleNamespace(titulo=cleaned.get('titulo'), priorizar_enade=cleaned.get('priorizar_enade'))
+        if eh_mascara_enade(mascara_enade) and self.usuario is not None and not _eh_administrador(self.usuario):
+            self.add_error('titulo', 'Só o administrador cria o Simulado ENADE (prioridade ENADE e "ENADE" no título).')
         if eh_mascara_enade(mascara_enade):
             if self.data.get(self.add_prefix('quantidade_versoes')) in (None, ''):
                 cleaned['quantidade_versoes'] = 1  # omitido: assume caderno único, sem erro
@@ -363,8 +394,17 @@ BaseMascaraTopicoFormSet = BaseMascaraCriterioTopicoFormSet
 
 class ProvaManualForm(forms.Form):
     """
-    Formulário para parametrização inicial da Montagem 100% Manual de Prova.
+    Formulário para parametrização inicial da Montagem 100% Manual de Prova. Com
+    ``usuario``, oferece só as disciplinas que ele leciona e as máscaras dele.
     """
+
+    def __init__(self, *args, usuario=None, **kwargs):
+        from academico.acesso import disciplinas_permitidas, mascaras_visiveis
+
+        super().__init__(*args, **kwargs)
+        if usuario is not None:
+            self.fields['disciplina'].queryset = disciplinas_permitidas(usuario)
+            self.fields['mascara'].queryset = mascaras_visiveis(usuario).filter(ativo=True)
 
     titulo = forms.CharField(
         label='Título da Avaliação',

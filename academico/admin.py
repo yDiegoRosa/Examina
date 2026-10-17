@@ -2,7 +2,17 @@
 
 from django.contrib import admin
 
-from .models import Aluno, Matricula, Turma
+from .models import Aluno, Docencia, Matricula, Turma
+
+
+@admin.register(Docencia)
+class DocenciaAdmin(admin.ModelAdmin):
+    list_display = ('professor', 'disciplina', 'turma', 'ativo')
+    list_filter = ('ativo', 'turma__periodo', 'disciplina')
+    search_fields = ('professor__username', 'professor__first_name', 'disciplina__nome', 'turma__nome')
+    autocomplete_fields = ('turma',)
+    list_select_related = ('professor', 'disciplina', 'turma')
+    readonly_fields = ('criado_em', 'atualizado_em')
 
 
 @admin.register(Aluno)

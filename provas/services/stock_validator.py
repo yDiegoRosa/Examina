@@ -73,7 +73,7 @@ class EstoqueInsuficienteError(Exception):
         super().__init__(self.mensagem)
 
 
-def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
+def validar_disponibilidade_estoque(mascara, autor_questoes=None) -> RelatorioDiagnosticoEstoque:
     """
     Audita o banco de questões e valida a disponibilidade real para cada balde do
     plano de seleção (Tópico × Dificuldade × Tipo), respeitando o split
@@ -85,6 +85,8 @@ def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
 
     Args:
         mascara: Instância de Mascara de Avaliação.
+        autor_questoes: se informado, usa só as questões desse autor (professor monta provas
+            só com as próprias questões — ``academico.acesso.autor_do_acervo``); ``None`` = acervo todo.
 
     Returns:
         RelatorioDiagnosticoEstoque estruturado.
@@ -92,6 +94,8 @@ def validar_disponibilidade_estoque(mascara) -> RelatorioDiagnosticoEstoque:
     plano = mascara.montar_plano_selecao()
 
     questoes_base = Questao.objects.filter(ativo=True)
+    if autor_questoes is not None:
+        questoes_base = questoes_base.filter(autor=autor_questoes)
     if mascara.disciplina_id:
         questoes_base = questoes_base.filter(disciplina=mascara.disciplina)
 

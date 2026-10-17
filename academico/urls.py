@@ -19,4 +19,7 @@ urlpatterns = [
     path('turmas/<int:pk>/matriculas/', views.turma_matriculas, name='turma_matriculas'),
     path('turmas/<int:pk>/matricular/', views.turma_matricular, name='turma_matricular'),
     path('turmas/<int:pk>/desmatricular/', views.turma_desmatricular, name='turma_desmatricular'),
+    # Docências (professor × disciplina na turma) — só o administrador
+    path('turmas/<int:pk>/docencias/', views.turma_docencias, name='turma_docencias'),
+    path('turmas/<int:pk>/docencias/alternar/', views.turma_docencia_toggle, name='turma_docencia_toggle'),
 ]

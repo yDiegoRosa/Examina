@@ -1734,6 +1734,10 @@ class QuestaoListPaginationTest(TestCase):
 
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_pag', password='secret_password')  # noqa: S106
+        # Panorama do acervo inteiro: administrador (o professor veria só as próprias questões).
+        from django.contrib.auth.models import Group
+
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.login(username='docente_pag', password='secret_password')  # noqa: S106
         self.url = reverse('banco_questoes:questao_list')
 

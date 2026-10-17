@@ -76,7 +76,7 @@ class EntradasInvalidasTest(TestCase):
 
     def setUp(self):
         user = get_user_model().objects.create_user(username='doc_entradas', password='segredo123')  # noqa: S106
-        user.groups.add(Group.objects.get(name='Docente'))
+        user.groups.add(Group.objects.get_or_create(name='Administrador')[0])  # robustez de entrada, não acesso
         self.client.force_login(user)
 
         self.disc = Disciplina.objects.create(nome='Disc Entradas')

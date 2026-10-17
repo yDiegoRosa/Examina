@@ -292,6 +292,7 @@ class Mascara(models.Model):
         tipo=None,
         limite_provas_recentes=5,
         excluir_ids=None,
+        autor_questoes=None,
     ):
         """
         Retorna QuerySet de questões ativas anotadas e ordenadas pela restrição do RF07:
@@ -306,17 +307,18 @@ class Mascara(models.Model):
             tipo=tipo,
             limite_provas_recentes=limite_provas_recentes,
             excluir_ids=excluir_ids,
+            autor_questoes=autor_questoes,
         )
 
-    def validar_estoque(self):
+    def validar_estoque(self, autor_questoes=None):
         """
         Audita o banco de questões e valida a disponibilidade real para cada célula (Tópico × Dificuldade).
         """
         from .services.stock_validator import validar_disponibilidade_estoque
 
-        return validar_disponibilidade_estoque(self)
+        return validar_disponibilidade_estoque(self, autor_questoes=autor_questoes)
 
-    def gerar_prova(self, autor=None, titulo=None, numero_caderno=1, limite_provas_recentes=5):
+    def gerar_prova(self, autor=None, titulo=None, numero_caderno=1, limite_provas_recentes=5, autor_questoes=None):
         """
         Gera uma Prova persistida e vinculada a esta Máscara após validação rigorosa de estoque.
         """
@@ -328,9 +330,10 @@ class Mascara(models.Model):
             titulo=titulo,
             numero_caderno=numero_caderno,
             limite_provas_recentes=limite_provas_recentes,
+            autor_questoes=autor_questoes,
         )
 
-    def selecionar_questoes_automatizada(self, limite_provas_recentes=5):
+    def selecionar_questoes_automatizada(self, limite_provas_recentes=5, autor_questoes=None):
         """
         Executa a seleção automatizada de questões (RF07) para compor a prova,
         respeitando a matriz de metas por célula (tópico x dificuldade) e o histórico de uso.
@@ -340,6 +343,7 @@ class Mascara(models.Model):
         return selecionar_questoes_por_matriz(
             mascara=self,
             limite_provas_recentes=limite_provas_recentes,
+            autor_questoes=autor_questoes,
         )
 
     @property

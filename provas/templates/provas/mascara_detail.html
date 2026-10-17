@@ -21,10 +21,14 @@
     </p>
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
+    {% if pode_alterar %}
     <a href="{% url 'provas:mascara_update' pk=mascara.pk %}" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-pencil-square"></i> Editar Máscara
     </a>
-    {% if relatorio_estoque.esta_valido %}
+    {% endif %}
+    {% if not pode_gerar %}
+    <span class="small text-muted">Só o administrador gera o Simulado ENADE.</span>
+    {% elif relatorio_estoque.esta_valido %}
     <form action="{% url 'provas:mascara_gerar_prova' pk=mascara.pk %}" method="post" style="display: inline-block;">
       {% csrf_token %}
       <button type="submit" class="btn btn-primary flex items-center gap-2" style="background: var(--fae-blue-electric); box-shadow: 0 4px 14px rgba(0, 128, 255, 0.35);">
@@ -36,7 +40,7 @@
       <i class="bi bi-slash-circle"></i> Geração Bloqueada (Faltam {{ relatorio_estoque.total_faltante }})
     </button>
     {% endif %}
-    {% if mascara.disciplina %}
+    {% if mascara.disciplina and pode_gerar %}
     <a href="{% url 'provas:prova_manual_create' %}?mascara={{ mascara.pk }}" class="btn btn-outline flex items-center gap-2" title="Montar a avaliação selecionando as questões manualmente no acervo com base nesta máscara">
       <i class="bi bi-hand-index-thumb"></i> Montar Manualmente
     </a>
