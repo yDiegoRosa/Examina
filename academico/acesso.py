@@ -120,15 +120,19 @@ def aplicacoes_visiveis(user, queryset=None):
 
 
 def pode_aplicar(user, prova, turma) -> bool:
-    """O professor só aplica a própria prova numa turma em que leciona a disciplina dela."""
+    """
+    Quem pode cadastrar a aplicação: o administrador, qualquer uma; o coordenador, a própria
+    prova em qualquer turma; o professor, a própria prova numa turma em que leciona a
+    disciplina dela. (Gerar cartões, corrigir e lançar notas também é do autor da prova.)
+    """
+    if eh_administrador(user):
+        return True
+    if prova.autor_id != user.pk:
+        return False
     if ve_tudo(user):
         return True
     disciplina = prova.disciplina_efetiva
-    return (
-        prova.autor_id == user.pk
-        and disciplina is not None
-        and docencias_do_usuario(user).filter(turma=turma, disciplina=disciplina).exists()
-    )
+    return disciplina is not None and docencias_do_usuario(user).filter(turma=turma, disciplina=disciplina).exists()
 
 
 def filtro_turma_disciplina(user, campo_turma: str, campo_disciplina: str) -> Q | None:

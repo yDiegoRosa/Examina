@@ -76,6 +76,10 @@ class RegrasDeAcessoTest(CenarioAcesso):
         self.assertFalse(pode_aplicar(self.prof_a, prova_a, self.t2))  # não leciona na T2
         self.assertFalse(pode_aplicar(self.prof_b, prova_a, self.t2))  # prova de outro professor
         self.assertTrue(pode_aplicar(self.admin, prova_a, self.t2))
+        # O coordenador vê tudo, mas só aplica as provas dele (em qualquer turma).
+        self.assertFalse(pode_aplicar(self.coord, prova_a, self.t1))
+        prova_coord = Prova.objects.create(titulo='Prova do coordenador', disciplina=self.d2, autor=self.coord)
+        self.assertTrue(pode_aplicar(self.coord, prova_coord, self.t1))
 
     def test_filtro_de_desempenho_pelos_pares_turma_disciplina(self):
         self.assertIsNone(filtro_turma_disciplina(self.coord, 'turma', 'disciplina'))
@@ -317,3 +321,188 @@ class ProvasEMascarasPorPerfilTest(CenarioAcesso):
         self.assertEqual(self.client.post(reverse('provas:mascara_gerar_prova', args=[enade.pk])).status_code, 403)
         self.client.force_login(self.admin)
         self.assertEqual(self.client.post(reverse('provas:mascara_enade_create')).status_code, 302)
+
+
+class AplicacoesPorPerfilTest(CenarioAcesso):
+    """Aplicações: o professor vê as das provas dele; operar é do autor da prova (ou do administrador)."""
+
+    def setUp(self):
+        from datetime import date
+
+        from desempenho.models import Desempenho
+        from provas.models import FolhaResposta, Prova, ProvaAplicacao, ProvaVersao
+
+        def aplicada(autor, disciplina, turma, aluno, questao):
+            prova = Prova.objects.create(titulo=f'Prova de {autor.username}', disciplina=disciplina, autor=autor)
+            versao = ProvaVersao.objects.create(prova=prova, identificador='A', numero_versao=1)
+            aplicacao = ProvaAplicacao.objects.create(prova=prova, turma=turma, data_aplicacao=date(2026, 11, 10))
+            folha = FolhaResposta.objects.create(prova_aplicacao=aplicacao, aluno=aluno, prova_versao=versao)
+            desempenho = Desempenho.objects.create(folha_resposta=folha, questao=questao, resposta_marcada='*')
+            return prova, aplicacao, folha, desempenho
+
+        self.p_a, self.ap_a, self.folha_a, _ = aplicada(
+            self.prof_a, self.d1, self.t1, self.aluno1, self._questao(self.prof_a, tipo='OBJ')
+        )
+        self.p_b, self.ap_b, self.folha_b, self.desempenho_b = aplicada(
+            self.prof_b, self.d2, self.t2, self.aluno2, self._questao(self.prof_b, self.d2, self.top2, tipo='OBJ')
+        )
+
+    def test_lista_mostra_so_as_dele(self):
+        self.client.force_login(self.prof_a)
+        lista = self.client.get(reverse('provas:aplicacao_list'))
+        self.assertEqual(list(lista.context['aplicacoes']), [self.ap_a])
+        self.assertEqual(lista.context['total'], 1)
+        self.assertEqual(list(lista.context['turmas']), [self.t1])
+
+    def test_aplicacao_e_folha_de_outro_professor_dao_404(self):
+        self.client.force_login(self.prof_a)
+        for nome in (
+            'aplicacao_detail',
+            'aplicacao_notas',
+            'aplicacao_ata_pdf',
+            'aplicacao_folhas',
+            'aplicacao_revisao_manual',
+            'aplicacao_upload_folhas',
+            'aplicacao_folhas_zip',
+            'aplicacao_cadernos_zip',
+        ):
+            with self.subTest(rota=nome):
+                self.assertEqual(self.client.get(reverse(f'provas:{nome}', args=[self.ap_b.pk])).status_code, 404)
+        for nome in ('folha_cartao_pdf', 'folha_caderno_pdf', 'folha_lancamento_manual'):
+            with self.subTest(rota=nome):
+                self.assertEqual(self.client.get(reverse(f'provas:{nome}', args=[self.folha_b.pk])).status_code, 404)
+        for nome, pk in (
+            ('aplicacao_atribuir_versoes', self.ap_b.pk),
+            ('aplicacao_corrigir_folhas', self.ap_b.pk),
+            ('desempenho_revisao_manual', self.desempenho_b.pk),
+        ):
+            with self.subTest(rota=nome):
+                resposta = self.client.post(reverse(f'provas:{nome}', args=[pk]), {'resposta': 'A'})
+                self.assertEqual(resposta.status_code, 404)
+        self.desempenho_b.refresh_from_db()
+        self.assertEqual(self.desempenho_b.resposta_marcada, '*')
+
+    def test_professor_opera_a_propria_aplicacao(self):
+        self.client.force_login(self.prof_a)
+        painel = self.client.get(reverse('provas:aplicacao_detail', args=[self.ap_a.pk]))
+        self.assertTrue(painel.context['pode_alterar'])
+        self.assertContains(painel, reverse('provas:aplicacao_upload_folhas', args=[self.ap_a.pk]))
+
+    def test_coordenador_consulta_mas_nao_opera(self):
+        self.client.force_login(self.coord)
+        painel = self.client.get(reverse('provas:aplicacao_detail', args=[self.ap_b.pk]))
+        self.assertEqual(painel.status_code, 200)
+        self.assertFalse(painel.context['pode_alterar'])
+        self.assertNotContains(painel, reverse('provas:aplicacao_folhas_zip', args=[self.ap_b.pk]))
+        self.assertNotContains(painel, reverse('provas:aplicacao_upload_folhas', args=[self.ap_b.pk]))
+        self.assertEqual(self.client.get(reverse('provas:aplicacao_notas', args=[self.ap_b.pk])).status_code, 200)
+        lancamento = reverse('provas:folha_lancamento_manual', args=[self.folha_b.pk])
+        self.assertContains(self.client.get(lancamento), 'Só consulta')
+
+        self.assertEqual(self.client.post(lancamento, {'nota_corte': '5'}).status_code, 403)
+        upload = reverse('provas:aplicacao_upload_folhas', args=[self.ap_b.pk])
+        self.assertEqual(self.client.get(upload).status_code, 403)
+        gerar = self.client.post(reverse('provas:aplicacao_folhas', args=[self.ap_b.pk]), {'acao': 'gerar'})
+        self.assertEqual(gerar.status_code, 403)
+        distribuir = self.client.post(reverse('provas:aplicacao_atribuir_versoes', args=[self.ap_b.pk]))
+        self.assertEqual(distribuir.status_code, 403)
+        revisar = self.client.post(
+            reverse('provas:desempenho_revisao_manual', args=[self.desempenho_b.pk]), {'resposta': 'A'}
+        )
+        self.assertEqual(revisar.status_code, 403)
+        self.desempenho_b.refresh_from_db()
+        self.assertEqual(self.desempenho_b.resposta_marcada, '*')
+
+    def test_professor_so_cadastra_aplicacao_da_propria_prova_nas_turmas_dele(self):
+        from provas.models import ProvaAplicacao
+
+        self.client.force_login(self.prof_a)
+        url = reverse('provas:aplicacao_create')
+        tela = self.client.get(url)
+        self.assertEqual(list(tela.context['form'].fields['prova'].queryset), [self.p_a])
+        self.assertEqual(list(tela.context['form'].fields['turma'].queryset), [self.t1])
+
+        dados = {'prova': self.p_a.pk, 'data_aplicacao': '2026-12-01', 'nota_corte': '6'}
+        self.client.post(url, {**dados, 'turma': self.t2.pk})
+        self.assertFalse(ProvaAplicacao.objects.filter(prova=self.p_a, turma=self.t2).exists())
+        self.client.post(url, {**dados, 'turma': self.t1.pk})
+        self.assertTrue(ProvaAplicacao.objects.filter(prova=self.p_a, data_aplicacao='2026-12-01').exists())
+
+    def test_coordenador_so_cadastra_aplicacao_das_provas_dele(self):
+        from provas.forms import ProvaAplicacaoForm
+
+        form = ProvaAplicacaoForm(usuario=self.coord)
+        self.assertFalse(form.fields['prova'].queryset.filter(pk__in=[self.p_a.pk, self.p_b.pk]).exists())
+        self.assertEqual(set(form.fields['turma'].queryset), {self.t1, self.t2})
+
+
+class DesempenhoPorPerfilTest(CenarioAcesso):
+    """
+    Painel e psicometria: o professor vê os pares turma + disciplina das docências dele — o
+    Simulado ENADE aplicado à turma entra, mas só nas disciplinas que ele leciona.
+    """
+
+    def setUp(self):
+        from datetime import date
+
+        from desempenho.models import Desempenho
+        from provas.models import FolhaResposta, Prova, ProvaAplicacao, ProvaVersao
+
+        def aplicacao(autor, turma, aluno, respostas, titulo):
+            prova = Prova.objects.create(titulo=titulo, autor=autor)
+            versao = ProvaVersao.objects.create(prova=prova, identificador='A', numero_versao=1)
+            ap = ProvaAplicacao.objects.create(prova=prova, turma=turma, data_aplicacao=date(2026, 11, 10))
+            folha = FolhaResposta.objects.create(prova_aplicacao=ap, aluno=aluno, prova_versao=versao)
+            for questao, acertou in respostas:
+                Desempenho.objects.create(folha_resposta=folha, questao=questao, resposta_marcada='A', acertou=acertou)
+            return ap
+
+        q_a = self._questao(self.prof_a, tipo='OBJ')
+        q_b = self._questao(self.prof_b, self.d2, self.top2, tipo='OBJ')
+        enade_d1 = self._questao(self.admin, tipo='OBJ', enunciado='ENADE de D1')
+        enade_d2 = self._questao(self.admin, self.d2, self.top2, tipo='OBJ', enunciado='ENADE de D2')
+
+        self.ap_a = aplicacao(self.prof_a, self.t1, self.aluno1, [(q_a, False)], 'Prova da A')
+        self.ap_b = aplicacao(self.prof_b, self.t2, self.aluno2, [(q_b, True)], 'Prova do B')
+        # Simulado ENADE do administrador na T1: D1 (da professora A) e D2 (que ninguém leciona na T1).
+        self.ap_enade = aplicacao(
+            self.admin, self.t1, self.aluno1, [(enade_d1, True), (enade_d2, False)], 'Simulado ENADE'
+        )
+
+    def _painel(self, usuario, **filtros):
+        self.client.force_login(usuario)
+        return self.client.get(reverse('desempenho:dashboard'), filtros)
+
+    def test_professor_ve_so_os_pares_turma_disciplina_dele_inclusive_o_enade(self):
+        painel = self._painel(self.prof_a)
+        self.assertEqual({linha['topico'] for linha in painel.context['por_topico']}, {'Tópico Um'})
+        self.assertEqual(painel.context['total_registros'], 2)  # prova dela + ENADE de D1
+        self.assertEqual(list(painel.context['turmas']), [self.t1])
+        self.assertEqual(set(painel.context['aplicacoes']), {self.ap_a, self.ap_enade})
+        self.assertContains(painel, 'Mostrando só as turmas e disciplinas que você leciona')
+
+    def test_professor_de_outra_disciplina_nao_ve_o_enade_da_outra_turma(self):
+        painel = self._painel(self.prof_b)
+        self.assertEqual(painel.context['total_registros'], 1)  # só a prova dele na T2
+        self.assertEqual(list(painel.context['aplicacoes']), [self.ap_b])
+
+    def test_filtro_por_aplicacao_de_outro_e_ignorado(self):
+        painel = self._painel(self.prof_a, aplicacao=self.ap_b.pk)
+        self.assertEqual(painel.context['filtro_aplicacao'], str(self.ap_b.pk))
+        self.assertEqual({linha['topico'] for linha in painel.context['por_topico']}, {'Tópico Um'})
+
+    def test_coordenador_ve_tudo(self):
+        painel = self._painel(self.coord)
+        self.assertEqual(painel.context['total_registros'], 4)
+        self.assertNotContains(painel, 'Mostrando só as turmas e disciplinas que você leciona')
+
+    def test_psicometria_so_com_as_respostas_que_o_professor_ve(self):
+        self.client.force_login(self.prof_a)
+        tela = self.client.get(reverse('desempenho:psicometria'), {'min_respostas': 1})
+        self.assertEqual({item['disciplina'] for item in tela.context['itens']}, {'Disciplina Um'})
+        csv = self.client.get(reverse('desempenho:psicometria'), {'min_respostas': 1, 'formato': 'csv'})
+        self.assertNotIn('ENADE de D2', csv.content.decode('utf-8-sig'))
+
+        self.client.force_login(self.admin)
+        tela = self.client.get(reverse('desempenho:psicometria'), {'min_respostas': 1})
+        self.assertEqual(len(tela.context['itens']), 4)

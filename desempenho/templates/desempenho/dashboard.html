@@ -19,6 +19,9 @@
       Taxa de erro por tópico e por nível de dificuldade, a partir das questões corrigidas
       (objetivas via OMR/manual e discursivas por nota de corte). Maior taxa = maior fragilidade.
     </p>
+    {% if not perfil_ve_tudo %}
+    <p class="small text-muted mb-0"><i class="bi bi-funnel" aria-hidden="true"></i> Mostrando só as turmas e disciplinas que você leciona (inclusive o Simulado ENADE aplicado a elas).</p>
+    {% endif %}
   </div>
 </div>
 

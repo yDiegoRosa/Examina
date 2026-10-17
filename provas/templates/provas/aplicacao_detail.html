@@ -76,6 +76,8 @@
     {% elif redistribuicao_bloqueada %}
     <button type="button" class="btn btn-outline" disabled title="Os cartões-resposta já foram gerados"><i class="bi bi-lock-fill"></i> Versões distribuídas</button>
     <p class="small text-muted mt-2 mb-0">Os cartões-resposta já foram gerados: redistribuir trocaria o caderno de quem já recebeu o cartão.</p>
+    {% elif not pode_alterar %}
+    <span class="small text-muted"><i class="bi bi-eye"></i> Só consulta: quem altera é o autor da prova.</span>
     {% else %}
     <form method="post" action="{% url 'provas:aplicacao_atribuir_versoes' aplicacao.pk %}" style="margin: 0;">
       {% csrf_token %}
@@ -91,7 +93,7 @@
     <p class="small text-muted mb-3">
       {{ total_folhas }} cartão(ões) gerado(s) — um por aluno, com nome, matrícula e QR para a leitura óptica.
     </p>
-    {% if alunos_sem_cartao %}
+    {% if alunos_sem_cartao and pode_alterar %}
     <div class="small p-3 mb-3" role="status" style="background: var(--color-warning-bg); border: 1px solid var(--fae-gold); border-radius: var(--radius-sm);">
       <i class="bi bi-person-plus-fill" aria-hidden="true" style="color: var(--fae-gold);"></i>
       {{ alunos_sem_cartao }} aluno(s) entraram na turma depois e ainda estão sem cartão. Use
@@ -101,6 +103,7 @@
     </div>
     {% endif %}
     <div class="flex flex-wrap gap-2">
+      {% if pode_alterar %}
       <form method="post" action="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" style="margin: 0;">
         {% csrf_token %}
         <input type="hidden" name="acao" value="gerar">
@@ -108,9 +111,12 @@
       </form>
       <a href="{% url 'provas:aplicacao_folhas_zip' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-file-earmark-zip"></i> Baixar cartões para impressão (ZIP)</a>
       <a href="{% url 'provas:aplicacao_cadernos_zip' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-journal-text"></i> Baixar cadernos nominais (ZIP)</a>
+      {% else %}
+      <a href="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" class="btn btn-outline"><i class="bi bi-people"></i> Cartões e cadernos por aluno</a>
+      {% endif %}
       <a href="{% url 'provas:aplicacao_ata_pdf' aplicacao.pk %}" class="btn btn-outline" target="_blank" rel="noopener"><i class="bi bi-file-earmark-person"></i> Ata de avaliação (PDF)</a>
     </div>
-    {% if versoes|length > 1 %}
+    {% if versoes|length > 1 and pode_alterar %}
     <p class="small text-muted mt-2 mb-0">
       Cadernos de uma versão só:
       {% for versao in versoes %}<a href="{% url 'provas:aplicacao_cadernos_zip' aplicacao.pk %}?versao={{ versao.identificador }}">Versão {{ versao.identificador }}</a>{% if not forloop.last %} • {% endif %}{% endfor %}
@@ -131,8 +137,10 @@
       Cartões com erro e questões em branco/dupla marcação vão para a revisão manual.
     </p>
     <div class="flex flex-wrap gap-2">
+      {% if pode_alterar %}
       <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar cartões escaneados</a>
-      {% if dig_pendentes %}
+      {% endif %}
+      {% if dig_pendentes and pode_alterar %}
       <form method="post" action="{% url 'provas:aplicacao_corrigir_folhas' aplicacao.pk %}" style="margin: 0;">
         {% csrf_token %}
         <button type="submit" class="btn btn-outline"><i class="bi bi-magic"></i> Corrigir {{ dig_pendentes }} pendente(s)</button>
@@ -149,7 +157,9 @@
       {{ total_desempenhos }} questão(ões) corrigida(s). Lance as discursivas por aluno e confira a nota final da turma.
     </p>
     <div class="flex flex-wrap gap-2">
+      {% if pode_alterar %}
       <a href="{% url 'provas:aplicacao_folhas' aplicacao.pk %}" class="btn btn-outline"><i class="bi bi-pencil-square"></i> Lançar notas por aluno</a>
+      {% endif %}
       <a href="{% url 'provas:aplicacao_notas' aplicacao.pk %}" class="btn btn-primary"><i class="bi bi-table"></i> Notas da turma</a>
       <a href="{% url 'desempenho:dashboard' %}?aplicacao={{ aplicacao.pk }}" class="btn btn-outline"><i class="bi bi-graph-up-arrow"></i> Desempenho</a>
     </div>

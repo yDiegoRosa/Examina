@@ -3178,7 +3178,7 @@ class AtribuicaoVersaoServiceTest(TestCase):
 class FolhaRespostaTest(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord_f', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disciplina = Disciplina.objects.create(nome='Disc Folha')
         self.topico = Topico.objects.create(disciplina=self.disciplina, nome='Top Folha')
         self.questao = Questao.objects.create(
@@ -3423,7 +3423,7 @@ def _imagem_png(nome='folha.png'):
 class UploadFolhasViewTest(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord_up', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.prova = Prova.objects.create(titulo='Prova Upload')
         self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
         self.aplicacao = ProvaAplicacao.objects.create(
@@ -3630,7 +3630,7 @@ class CorrecaoFolhaTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='corretor', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Correcao')
         self.prova = Prova.objects.create(titulo='Prova Correcao', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -3822,7 +3822,7 @@ class RevisaoManualTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='rev', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Rev')
         self.prova = Prova.objects.create(titulo='Prova Rev', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -3919,7 +3919,7 @@ class LancamentoManualTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='prof', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Lanc')
         self.prova = Prova.objects.create(titulo='Prova Lanc', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -4370,7 +4370,7 @@ class NotasAplicacaoViewTest(TestCase):
         from desempenho.models import Desempenho
 
         self.user = get_user_model().objects.create_user(username='doc_notas', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
 
         disc = Disciplina.objects.create(nome='Disc Export')
@@ -5217,7 +5217,7 @@ class AtaAvaliacaoTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='doc_ata', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
 
         autor = get_user_model().objects.create_user(username='autor_ata', first_name='Maria', last_name='Docente')

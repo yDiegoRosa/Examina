@@ -79,7 +79,10 @@ class ProvaAplicacaoForm(forms.ModelForm):
 
         super().__init__(*args, **kwargs)
         self.usuario = usuario
-        provas = Prova.objects.all() if usuario is None else provas_visiveis(usuario)
+        if usuario is None or _eh_administrador(usuario):
+            provas = Prova.objects.all()
+        else:  # coordenador também: só aplica as provas dele
+            provas = provas_visiveis(usuario).filter(autor=usuario)
         self.fields['prova'].queryset = provas.filter(versoes__isnull=False).distinct().order_by('-criado_em', '-pk')
         self.fields['prova'].help_text = 'Somente provas com versões (cadernos) geradas aparecem na lista.'
         turmas = Turma.objects.all() if usuario is None else turmas_permitidas(usuario)
@@ -91,7 +94,7 @@ class ProvaAplicacaoForm(forms.ModelForm):
         cleaned = super().clean()
         prova, turma = cleaned.get('prova'), cleaned.get('turma')
         if self.usuario is not None and prova and turma and not pode_aplicar(self.usuario, prova, turma):
-            self.add_error('turma', 'Você só pode aplicar esta prova numa turma em que leciona a disciplina dela.')
+            self.add_error('turma', 'Você só pode aplicar a sua prova numa turma em que leciona a disciplina dela.')
         return cleaned
 
     class Meta:

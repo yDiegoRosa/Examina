@@ -14,15 +14,17 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from academico.acesso import (
+    aplicacoes_visiveis,
     autor_do_acervo,
     disciplinas_permitidas,
     eh_administrador,
     mascaras_visiveis,
     no_acervo_de,
     provas_visiveis,
+    turmas_permitidas,
     ve_tudo,
 )
-from academico.models import Matricula, Turma
+from academico.models import Matricula
 from banco_questoes.models import Disciplina, Questao, Topico
 from banco_questoes.permissions import administrador_required, docente_ou_coordenador_required
 from banco_questoes.utils import parse_pk
@@ -71,6 +73,22 @@ def _prova_alteravel(request, pk, queryset=None):
 def _mascara_alteravel(request, pk, queryset=None):
     """Máscara do usuário (404 se ele nem a vê; 403 se vê mas não pode alterar)."""
     return _alteravel(request, get_object_or_404(mascaras_visiveis(request.user, queryset), pk=pk))
+
+
+def _pode_alterar_aplicacao(request, aplicacao) -> bool:
+    """Para os templates: esconder as ações de quem só consulta (coordenador diante da de outro)."""
+    return eh_administrador(request.user) or aplicacao.prova.autor_id == request.user.pk
+
+
+def _aplicacao_do_usuario(request, pk, queryset=None, alterar=False):
+    """
+    Aplicação que o usuário vê (404 se não vê). Com ``alterar``, só o autor da prova (ou o
+    administrador) segue: gerar cartões/cadernos, distribuir, corrigir e lançar notas.
+    """
+    aplicacao = get_object_or_404(aplicacoes_visiveis(request.user, queryset), pk=pk)
+    if alterar:
+        _alteravel(request, aplicacao.prova)
+    return aplicacao
 
 
 def _bloquear_simulado_enade(request, mascara):
@@ -1011,7 +1029,9 @@ def aplicacao_folhas_zip(request, pk):
 
     from .services.folha_service import gerar_folhas_da_aplicacao, render_folha_pdf
 
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(
+        request, pk, ProvaAplicacao.objects.select_related('prova', 'turma'), alterar=True
+    )
 
     try:
         folhas = gerar_folhas_da_aplicacao(aplicacao)
@@ -1070,11 +1090,13 @@ def aplicacao_cadernos_zip(request, pk):
     from .services.folha_service import gerar_folhas_da_aplicacao
     from .services.pdf_generator import PDFGenerationError
 
-    aplicacao = get_object_or_404(
+    aplicacao = _aplicacao_do_usuario(
+        request,
+        pk,
         ProvaAplicacao.objects.select_related(
             'prova', 'prova__mascara', 'prova__mascara__disciplina', 'prova__disciplina', 'prova__autor', 'turma'
         ),
-        pk=pk,
+        alterar=True,
     )
 
     try:
@@ -1149,9 +1171,9 @@ def _pdf_da_folha(folha, tipo: str, gerar_pdf) -> HttpResponse:
     return response
 
 
-def _folha_da_aplicacao(pk):
+def _folha_da_aplicacao(request, pk):
     return get_object_or_404(
-        FolhaResposta.objects.select_related(
+        FolhaResposta.objects.filter(prova_aplicacao__in=aplicacoes_visiveis(request.user)).select_related(
             'aluno',
             'prova_versao',
             'prova_aplicacao__turma',
@@ -1169,7 +1191,7 @@ def folha_cartao_pdf(request, pk):
     """Cartão-resposta de um aluno só — por exemplo, de quem entrou na turma depois."""
     from .services.folha_service import render_folha_pdf
 
-    folha = _folha_da_aplicacao(pk)
+    folha = _folha_da_aplicacao(request, pk)
     return _pdf_da_folha(folha, 'cartao', lambda: render_folha_pdf(folha))
 
 
@@ -1179,7 +1201,7 @@ def folha_caderno_pdf(request, pk):
     """Caderno nominal de um aluno só, na versão do cartão dele."""
     from .services.caderno_service import render_cadernos_nominais
 
-    folha = _folha_da_aplicacao(pk)
+    folha = _folha_da_aplicacao(request, pk)
     return _pdf_da_folha(folha, 'caderno', lambda: next(render_cadernos_nominais(folha.prova_aplicacao, [folha]))[1])
 
 
@@ -1195,8 +1217,8 @@ def aplicacao_ata_pdf(request, pk):
 
     from .services.ata_service import render_ata_pdf
 
-    aplicacao = get_object_or_404(
-        ProvaAplicacao.objects.select_related('prova', 'prova__mascara', 'prova__autor', 'turma'), pk=pk
+    aplicacao = _aplicacao_do_usuario(
+        request, pk, ProvaAplicacao.objects.select_related('prova', 'prova__mascara', 'prova__autor', 'turma')
     )
 
     try:
@@ -1228,7 +1250,9 @@ def aplicacao_upload_folhas(request, pk):
     de uma aplicação, criando uma ``FolhaDigitalizada`` PENDENTE por imagem para o
     processamento posterior pelo leitor óptico (OMR). Não faz OMR agora.
     """
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(
+        request, pk, ProvaAplicacao.objects.select_related('prova', 'turma'), alterar=True
+    )
 
     if request.method == 'POST':
         form = UploadFolhasForm(request.POST, request.FILES)
@@ -1284,7 +1308,7 @@ def aplicacao_corrigir_folhas(request, pk):
     """
     from .services.correcao import corrigir_folha_digitalizada
 
-    aplicacao = get_object_or_404(ProvaAplicacao, pk=pk)
+    aplicacao = _aplicacao_do_usuario(request, pk, ProvaAplicacao.objects.select_related('prova'), alterar=True)
 
     pendentes = list(aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.PENDENTE).order_by('criado_em'))
     if not pendentes:
@@ -1335,7 +1359,7 @@ def aplicacao_revisao_manual(request, pk):
     """
     from desempenho.models import Desempenho
 
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(request, pk, ProvaAplicacao.objects.select_related('prova', 'turma'))
 
     digitalizacoes_erro = aplicacao.digitalizacoes.filter(status=FolhaDigitalizada.Status.ERRO).order_by('-criado_em')
     inconclusivas = (
@@ -1358,6 +1382,7 @@ def aplicacao_revisao_manual(request, pk):
             'inconclusivas': inconclusivas,
             'folhas': folhas,
             'letras': ['A', 'B', 'C', 'D', 'E'],
+            'pode_alterar': _pode_alterar_aplicacao(request, aplicacao),
         },
     )
 
@@ -1371,7 +1396,13 @@ def desempenho_revisao_manual(request, pk):
 
     from .services.correcao import corrigir_questao_manual
 
-    desempenho = get_object_or_404(Desempenho.objects.select_related('folha_resposta'), pk=pk)
+    desempenho = get_object_or_404(
+        Desempenho.objects.filter(folha_resposta__prova_aplicacao__in=aplicacoes_visiveis(request.user)).select_related(
+            'folha_resposta__prova_aplicacao__prova'
+        ),
+        pk=pk,
+    )
+    _alteravel(request, desempenho.folha_resposta.prova_aplicacao.prova)
     aplicacao_pk = desempenho.folha_resposta.prova_aplicacao_id
     resposta = request.POST.get('resposta', '')
 
@@ -1392,7 +1423,13 @@ def digitalizacao_vincular_folha(request, pk):
     """Vincula manualmente uma folha a uma digitalização com erro e reprocessa (OMR)."""
     from .services.correcao import revincular_e_reprocessar
 
-    digitalizacao = get_object_or_404(FolhaDigitalizada.objects.select_related('prova_aplicacao'), pk=pk)
+    digitalizacao = get_object_or_404(
+        FolhaDigitalizada.objects.filter(prova_aplicacao__in=aplicacoes_visiveis(request.user)).select_related(
+            'prova_aplicacao__prova'
+        ),
+        pk=pk,
+    )
+    _alteravel(request, digitalizacao.prova_aplicacao.prova)
     aplicacao_pk = digitalizacao.prova_aplicacao_id
 
     folha_pk = parse_pk(request.POST.get('folha_id'))
@@ -1419,10 +1456,12 @@ def aplicacao_folhas(request, pk):
     """Lista as folhas (alunos) de uma aplicação com atalho para o lançamento manual de notas."""
     from desempenho.models import Desempenho
 
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(request, pk, ProvaAplicacao.objects.select_related('prova', 'turma'))
 
     if request.method == 'POST' and request.POST.get('acao') == 'gerar':
         from .services.folha_service import gerar_folhas_da_aplicacao
+
+        _alteravel(request, aplicacao.prova)
 
         try:
             folhas = gerar_folhas_da_aplicacao(aplicacao)
@@ -1450,7 +1489,7 @@ def aplicacao_folhas(request, pk):
     return render(
         request,
         'provas/aplicacao_folhas.html',
-        {'aplicacao': aplicacao, 'linhas': linhas},
+        {'aplicacao': aplicacao, 'linhas': linhas, 'pode_alterar': _pode_alterar_aplicacao(request, aplicacao)},
     )
 
 
@@ -1469,12 +1508,15 @@ def folha_lancamento_manual(request, pk):
     )
 
     folha = get_object_or_404(
-        FolhaResposta.objects.select_related('aluno', 'prova_versao', 'prova_aplicacao__prova'),
+        FolhaResposta.objects.filter(prova_aplicacao__in=aplicacoes_visiveis(request.user)).select_related(
+            'aluno', 'prova_versao', 'prova_aplicacao__prova'
+        ),
         pk=pk,
     )
     aplicacao = folha.prova_aplicacao
 
     if request.method == 'POST':
+        _alteravel(request, aplicacao.prova)
         corte = aplicacao.nota_corte
         corte_raw = (request.POST.get('nota_corte') or '').strip().replace(',', '.')
         if corte_raw:
@@ -1533,6 +1575,7 @@ def folha_lancamento_manual(request, pk):
             'aplicacao': aplicacao,
             'linhas': itens_versao_para_lancamento(folha),
             'letras': ['A', 'B', 'C', 'D', 'E'],
+            'pode_alterar': _pode_alterar_aplicacao(request, aplicacao),
         },
     )
 
@@ -2141,10 +2184,14 @@ def prova_pacote_zip(request, pk):
 @login_required
 @docente_ou_coordenador_required
 def aplicacao_list(request):
-    """Lista as aplicações (prova × turma × data) com o progresso das folhas, busca e filtro por turma."""
-    aplicacoes = ProvaAplicacao.objects.select_related('prova', 'turma').annotate(
-        total_folhas=Count('folhas', distinct=True),
-        folhas_lidas=Count('folhas', filter=Q(folhas__status=FolhaResposta.Status.LIDA), distinct=True),
+    """Lista as aplicações (prova × turma × data) com progresso, busca e filtro (professor: só as dele)."""
+    aplicacoes = (
+        aplicacoes_visiveis(request.user)
+        .select_related('prova', 'turma')
+        .annotate(
+            total_folhas=Count('folhas', distinct=True),
+            folhas_lidas=Count('folhas', filter=Q(folhas__status=FolhaResposta.Status.LIDA), distinct=True),
+        )
     )
     busca = request.GET.get('q', '').strip()
     turma_id = request.GET.get('turma', '')
@@ -2171,8 +2218,8 @@ def aplicacao_list(request):
             'querystring': params.urlencode(),
             'busca': busca,
             'turma_selecionada': turma_id,
-            'turmas': Turma.objects.order_by('-periodo', 'nome'),
-            'total': ProvaAplicacao.objects.count(),
+            'turmas': turmas_permitidas(request.user).order_by('-periodo', 'nome'),
+            'total': aplicacoes_visiveis(request.user).count(),
         },
     )
 
@@ -2182,7 +2229,7 @@ def aplicacao_list(request):
 def aplicacao_create(request):
     """Cadastra uma aplicação de prova a uma turma (aceita ``?prova=<pk>`` para pré-selecionar a prova)."""
     if request.method == 'POST':
-        form = ProvaAplicacaoForm(request.POST)
+        form = ProvaAplicacaoForm(request.POST, usuario=request.user)
         if form.is_valid():
             aplicacao = form.save()
             messages.success(
@@ -2193,7 +2240,7 @@ def aplicacao_create(request):
     else:
         prova_id = request.GET.get('prova', '')
         initial = {'prova': prova_id} if prova_id.isascii() and prova_id.isdigit() else None
-        form = ProvaAplicacaoForm(initial=initial)
+        form = ProvaAplicacaoForm(initial=initial, usuario=request.user)
 
     return render(request, 'provas/aplicacao_form.html', {'form': form})
 
@@ -2209,7 +2256,7 @@ def aplicacao_detail(request, pk):
 
     from .services.version_assigner import resumo_distribuicao
 
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(request, pk, ProvaAplicacao.objects.select_related('prova', 'turma'))
 
     folhas_por_status = dict(aplicacao.folhas.values_list('status').annotate(total=Count('id')))
     digitalizacoes_por_status = dict(aplicacao.digitalizacoes.values_list('status').annotate(total=Count('id')))
@@ -2246,6 +2293,7 @@ def aplicacao_detail(request, pk):
             'pendencias_revisao': dig_erro + inconclusivas,
             'total_desempenhos': desempenhos.count(),
             'redistribuicao_bloqueada': total_folhas > 0,
+            'pode_alterar': _pode_alterar_aplicacao(request, aplicacao),
         },
     )
 
@@ -2257,7 +2305,9 @@ def aplicacao_atribuir_versoes(request, pk):
     """Distribui as versões em blocos aos alunos matriculados — bloqueado após gerar as folhas."""
     from .services.version_assigner import atribuir_versoes
 
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(
+        request, pk, ProvaAplicacao.objects.select_related('prova', 'turma'), alterar=True
+    )
     try:
         atribuicoes = atribuir_versoes(aplicacao)
     except ValueError as exc:
@@ -2390,7 +2440,9 @@ def aplicacao_notas(request, pk):
     """
     from desempenho.services import notas_da_aplicacao
 
-    aplicacao = get_object_or_404(ProvaAplicacao.objects.select_related('prova', 'prova__mascara', 'turma'), pk=pk)
+    aplicacao = _aplicacao_do_usuario(
+        request, pk, ProvaAplicacao.objects.select_related('prova', 'prova__mascara', 'turma')
+    )
     boletim = notas_da_aplicacao(aplicacao)
 
     formato = (request.GET.get('formato') or '').lower()

@@ -180,7 +180,7 @@ class DashboardFragilidadesViewTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Dash')
         self.topico = Topico.objects.create(disciplina=self.disc, nome='Redes')
         self.questao = Questao.objects.create(
@@ -234,7 +234,7 @@ class PsicometriaTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord2', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Psi')
         self.prova = Prova.objects.create(titulo='Prova Psi', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)

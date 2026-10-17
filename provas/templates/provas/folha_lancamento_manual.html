@@ -25,6 +25,8 @@
 
 <form method="post">
   {% csrf_token %}
+  {# Quem só consulta (coordenador diante da aplicação de outro) vê os campos travados. #}
+  <fieldset {% if not pode_alterar %}disabled{% endif %} style="border: 0; padding: 0; margin: 0; min-width: 0;">
 
   <div class="card-surface p-3 mb-4 flex items-center gap-3" style="max-width: 720px;">
     <label class="form-label mb-0" for="id_nota_corte"><strong>Nota de corte para “acertou”</strong> (discursivas)</label>
@@ -101,8 +103,13 @@
       </table>
     </div>
     <div class="p-3" style="border-top: 1px solid var(--border-color);">
+      {% if pode_alterar %}
       <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Salvar lançamentos</button>
+      {% else %}
+      <span class="small text-muted"><i class="bi bi-eye"></i> Só consulta: quem altera é o autor da prova.</span>
+      {% endif %}
     </div>
   </div>
+  </fieldset>
 </form>
 {% endblock %}
