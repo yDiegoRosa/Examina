@@ -1,6 +1,10 @@
-"""Formulários dos cadastros acadêmicos (Aluno e Turma)."""
+"""Formulários dos cadastros acadêmicos (Aluno, Turma e Docência)."""
 
 from django import forms
+from django.contrib.auth import get_user_model
+
+from banco_questoes.models import Disciplina
+from banco_questoes.permissions import GRUPO_COORDENADOR
 
 from .models import Aluno, Turma
 
@@ -73,3 +77,29 @@ class TurmaForm(forms.ModelForm):
 
     def clean_nome(self):
         return self.cleaned_data['nome'].strip()
+
+
+class _ProfessorChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        nome = obj.get_full_name()
+        return f'{nome} ({obj.get_username()})' if nome else obj.get_username()
+
+
+class DocenciaForm(forms.Form):
+    """Docência na turma: professor (grupos Docente/Coordenador) e disciplina que ele leciona."""
+
+    professor = _ProfessorChoiceField(
+        label='Professor',
+        queryset=get_user_model()
+        .objects.filter(is_active=True, groups__name__in=['Docente', GRUPO_COORDENADOR])
+        .distinct()
+        .order_by('first_name', 'username'),
+        empty_label='Selecione o professor...',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    disciplina = forms.ModelChoiceField(
+        label='Disciplina',
+        queryset=Disciplina.objects.filter(ativo=True).order_by('nome'),
+        empty_label='Selecione a disciplina...',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )

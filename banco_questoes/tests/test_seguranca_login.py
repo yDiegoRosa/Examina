@@ -115,5 +115,8 @@ class TestAlterarSenha:
 
     def test_menu_tem_o_link_para_alterar_senha(self, client, professor):
         client.force_login(professor)
-        resposta = client.get(reverse('banco_questoes:questao_list'))
-        assert f'href="{reverse("password_change")}"' in resposta.content.decode()
+        html = client.get(reverse('banco_questoes:questao_list')).content.decode()
+        # Botão redondo da conta na barra (nome no title) e item do menu no celular.
+        assert f'href="{reverse("password_change")}" class="user-capsule"' in html
+        assert 'title="prof_login — Minha conta (alterar senha)"' in html
+        assert 'class="nav-item-conta"' in html

@@ -49,6 +49,7 @@ def criar_prova_manual(
     numero_caderno: int = 1,
     mascara: Mascara | None = None,
     pontuacoes: dict[int, Decimal | str] | None = None,
+    autor_questoes=None,
 ) -> Prova:
     """
     Cria e persiste uma avaliação por montagem 100% manual (seleção livre no acervo),
@@ -71,6 +72,8 @@ def criar_prova_manual(
         mascara: Instância opcional de Mascara de Avaliação guia.
         pontuacoes: Pontuação por ID de questão, definida pelo docente na montagem. Questão
             sem valor informado vale ``PONTUACAO_PADRAO`` (1,00).
+        autor_questoes: se informado, usa só as questões desse autor (professor monta provas
+            só com as próprias questões — ``academico.acesso.autor_do_acervo``); ``None`` = acervo todo.
 
     Returns:
         Instância de Prova criada e persistida.
@@ -108,12 +111,12 @@ def criar_prova_manual(
             f'mas você selecionou {len(ids_unicos)}.',
         )
 
-    # 3. Busca e validação de existência e status ativo
-    questoes = list(
-        Questao.objects.filter(pk__in=ids_unicos, ativo=True)
-        .select_related('disciplina', 'topico')
-        .prefetch_related('alternativas')
-    )
+    # 3. Busca e validação de existência e status ativo (e de autoria, quando restrito:
+    # questão de outro autor conta como "não encontrada")
+    questoes_qs = Questao.objects.filter(pk__in=ids_unicos, ativo=True)
+    if autor_questoes is not None:
+        questoes_qs = questoes_qs.filter(autor=autor_questoes)
+    questoes = list(questoes_qs.select_related('disciplina', 'topico').prefetch_related('alternativas'))
 
     if len(questoes) != len(ids_unicos):
         ids_encontrados = {q.pk for q in questoes}

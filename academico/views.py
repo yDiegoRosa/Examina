@@ -1,4 +1,10 @@
-"""Views do cadastro acadêmico: CRUDs de Aluno e Turma."""
+"""
+Views do cadastro acadêmico: CRUDs de Aluno e Turma, matrículas e docências.
+
+Só o administrador cadastra e altera (alunos, turmas, matrículas, docências); o professor
+consulta as turmas das suas docências e os alunos delas; o coordenador consulta tudo
+(regras em ``academico.acesso``).
+"""
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -8,11 +14,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from banco_questoes.permissions import docente_ou_coordenador_required
+from banco_questoes.permissions import administrador_required, docente_ou_coordenador_required
 from banco_questoes.utils import parse_pk
 
-from .forms import AlunoForm, TurmaForm
-from .models import Aluno, Matricula, Turma
+from .acesso import turmas_permitidas, ve_tudo
+from .forms import AlunoForm, DocenciaForm, TurmaForm
+from .models import Aluno, Docencia, Matricula, Turma
 
 
 def _paginar(request, queryset, por_pagina=10):
@@ -40,8 +47,15 @@ def _filtrar_por_status(queryset, status):
 @login_required
 @docente_ou_coordenador_required
 def aluno_list(request):
-    """Lista alunos com busca (nome/matrícula), filtro por status e paginação."""
-    alunos_qs = Aluno.objects.all()
+    """
+    Lista alunos com busca (nome/matrícula), filtro por status e paginação. O professor vê
+    só os alunos matriculados nas turmas das suas docências.
+    """
+    if ve_tudo(request.user):
+        base_qs = Aluno.objects.all()
+    else:
+        base_qs = Aluno.objects.filter(matriculas__turma__in=turmas_permitidas(request.user)).distinct()
+    alunos_qs = base_qs
 
     busca = request.GET.get('q', '').strip()
     status = request.GET.get('status', '')
@@ -49,7 +63,7 @@ def aluno_list(request):
         alunos_qs = alunos_qs.filter(Q(nome__icontains=busca) | Q(matricula__icontains=busca))
     alunos_qs = _filtrar_por_status(alunos_qs, status)
 
-    metricas = Aluno.objects.aggregate(
+    metricas = Aluno.objects.filter(pk__in=base_qs.values('pk')).aggregate(
         total=Count('pk'),
         ativos=Count('pk', filter=Q(ativo=True)),
         inativos=Count('pk', filter=Q(ativo=False)),
@@ -72,7 +86,7 @@ def aluno_list(request):
 
 
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def aluno_create(request):
     """Cria um novo aluno."""
     if request.method == 'POST':
@@ -92,7 +106,7 @@ def aluno_create(request):
 
 
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def aluno_update(request, pk):
     """Edita um aluno existente."""
     aluno = get_object_or_404(Aluno, pk=pk)
@@ -114,7 +128,7 @@ def aluno_update(request, pk):
 
 @require_POST
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def aluno_toggle_ativo(request, pk):
     """Alterna o status ativo/inativo do aluno."""
     aluno = get_object_or_404(Aluno, pk=pk)
@@ -131,8 +145,9 @@ def aluno_toggle_ativo(request, pk):
 @login_required
 @docente_ou_coordenador_required
 def turma_list(request):
-    """Lista turmas com busca (nome/período), filtro por status e paginação."""
-    turmas_qs = Turma.objects.all()
+    """Lista turmas com busca, filtro por status e paginação (professor: só as das suas docências)."""
+    base_qs = turmas_permitidas(request.user)
+    turmas_qs = base_qs
 
     busca = request.GET.get('q', '').strip()
     status = request.GET.get('status', '')
@@ -140,7 +155,7 @@ def turma_list(request):
         turmas_qs = turmas_qs.filter(Q(nome__icontains=busca) | Q(periodo__icontains=busca))
     turmas_qs = _filtrar_por_status(turmas_qs, status)
 
-    metricas = Turma.objects.aggregate(
+    metricas = Turma.objects.filter(pk__in=base_qs.values('pk')).aggregate(
         total=Count('pk'),
         ativas=Count('pk', filter=Q(ativo=True)),
         inativas=Count('pk', filter=Q(ativo=False)),
@@ -163,7 +178,7 @@ def turma_list(request):
 
 
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def turma_create(request):
     """Cria uma nova turma."""
     if request.method == 'POST':
@@ -183,7 +198,7 @@ def turma_create(request):
 
 
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def turma_update(request, pk):
     """Edita uma turma existente."""
     turma = get_object_or_404(Turma, pk=pk)
@@ -205,7 +220,7 @@ def turma_update(request, pk):
 
 @require_POST
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def turma_toggle_ativo(request, pk):
     """Alterna o status ativo/inativo da turma."""
     turma = get_object_or_404(Turma, pk=pk)
@@ -225,8 +240,9 @@ def turma_matriculas(request, pk):
     """
     Gerencia o elenco de uma turma: mostra as matrículas (com situação) e os alunos
     ativos disponíveis para matricular. Desmatricular é *soft* (preserva o histórico).
+    O professor só consulta (turmas das suas docências); matricular é do administrador.
     """
-    turma = get_object_or_404(Turma, pk=pk)
+    turma = get_object_or_404(turmas_permitidas(request.user), pk=pk)
     matriculas = turma.matriculas.select_related('aluno').order_by('aluno__nome')
     matriculados_ids = turma.matriculas.filter(situacao=Matricula.Situacao.MATRICULADO).values_list(
         'aluno_id', flat=True
@@ -246,7 +262,7 @@ def turma_matriculas(request, pk):
 
 @require_POST
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def turma_matricular(request, pk):
     """Matricula (ou reativa) os alunos selecionados na turma."""
     turma = get_object_or_404(Turma, pk=pk)
@@ -275,7 +291,7 @@ def turma_matricular(request, pk):
 
 @require_POST
 @login_required
-@docente_ou_coordenador_required
+@administrador_required
 def turma_desmatricular(request, pk):
     """Desmatricula (soft) um aluno: situação CANCELADO + data de encerramento; a linha permanece."""
     turma = get_object_or_404(Turma, pk=pk)
@@ -285,3 +301,48 @@ def turma_desmatricular(request, pk):
     matricula.save(update_fields=['situacao', 'data_encerramento', 'atualizado_em'])
     messages.success(request, f'{matricula.aluno.nome} foi desmatriculado(a) da turma "{turma}".')
     return redirect('academico:turma_matriculas', pk=turma.pk)
+
+
+# ---------------------------------------------------------------------------
+# Docências da turma (professor × disciplina) — só o administrador
+# ---------------------------------------------------------------------------
+@login_required
+@administrador_required
+def turma_docencias(request, pk):
+    """Professores e disciplinas da turma: base do acesso por perfil (``academico.acesso``)."""
+    turma = get_object_or_404(Turma, pk=pk)
+    if request.method == 'POST':
+        form = DocenciaForm(request.POST)
+        if form.is_valid():
+            docencia, criada = Docencia.objects.update_or_create(
+                professor=form.cleaned_data['professor'],
+                disciplina=form.cleaned_data['disciplina'],
+                turma=turma,
+                defaults={'ativo': True},
+            )
+            verbo = 'cadastrada' if criada else 'reativada'
+            messages.success(request, f'Docência {verbo}: {docencia}.')
+            return redirect('academico:turma_docencias', pk=turma.pk)
+    else:
+        form = DocenciaForm()
+
+    docencias = turma.docencias.select_related('professor', 'disciplina').order_by('-ativo', 'disciplina__nome')
+    return render(
+        request,
+        'academico/turma_docencias.html',
+        {'turma': turma, 'docencias': docencias, 'form': form},
+    )
+
+
+@require_POST
+@login_required
+@administrador_required
+def turma_docencia_toggle(request, pk):
+    """Encerra (ou reativa) uma docência da turma; a linha fica no histórico."""
+    turma = get_object_or_404(Turma, pk=pk)
+    docencia = get_object_or_404(Docencia, pk=parse_pk(request.POST.get('docencia')), turma=turma)
+    docencia.ativo = not docencia.ativo
+    docencia.save(update_fields=['ativo', 'atualizado_em'])
+    estado = 'reativada' if docencia.ativo else 'encerrada'
+    messages.success(request, f'Docência {estado}: {docencia}.')
+    return redirect('academico:turma_docencias', pk=turma.pk)

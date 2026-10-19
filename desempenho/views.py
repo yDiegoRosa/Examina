@@ -4,14 +4,16 @@ import csv
 from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import render
 
-from academico.models import Turma
+from academico.acesso import filtro_turma_disciplina, turmas_permitidas
 from banco_questoes.permissions import docente_ou_coordenador_required
 from banco_questoes.utils import parse_pk
 from provas.models import ProvaAplicacao
 
+from .models import Desempenho
 from .services import (
     indice_facilidade_por_questao,
     questoes_fora_do_esperado,
@@ -21,6 +23,24 @@ from .services import (
 
 # Nº de tópicos exibidos no gráfico (os de maior erro); a tabela mostra todos.
 TOPICO_CHART_LIMITE = 15
+
+
+def _escopo(user):
+    """
+    Recorte do desempenho pelo acesso do usuário: os pares turma + disciplina das docências do
+    professor — inclusive o Simulado ENADE aplicado à turma, só nas disciplinas dele. ``None``
+    para quem vê tudo (administrador e coordenador).
+    """
+    return filtro_turma_disciplina(user, 'folha_resposta__prova_aplicacao__turma', 'questao__disciplina')
+
+
+def _aplicacoes_do_painel(user, escopo):
+    """Aplicações do filtro: as das provas do professor e as que têm resultado dentro do recorte."""
+    aplicacoes = ProvaAplicacao.objects.select_related('prova', 'turma').order_by('-data_aplicacao')
+    if escopo is None:
+        return aplicacoes
+    com_resultado = Desempenho.objects.filter(escopo).values('folha_resposta__prova_aplicacao')
+    return aplicacoes.filter(Q(prova__autor=user) | Q(pk__in=com_resultado))
 
 
 def _parse_data(valor):
@@ -35,10 +55,12 @@ def _parse_data(valor):
 def dashboard_fragilidades(request):
     """
     Dashboard de fragilidades/forças: taxa de erro por tópico e por dificuldade,
-    com filtros por turma, prova/aplicação e período (intervalo de datas).
+    com filtros por turma, prova/aplicação e período (intervalo de datas). O professor vê só
+    as turmas e disciplinas das suas docências.
     """
-    turmas = Turma.objects.all().order_by('periodo', 'nome')
-    aplicacoes = ProvaAplicacao.objects.select_related('prova', 'turma').order_by('-data_aplicacao')
+    escopo = _escopo(request.user)
+    turmas = turmas_permitidas(request.user).order_by('periodo', 'nome')
+    aplicacoes = _aplicacoes_do_painel(request.user, escopo)
 
     # IDs inválidos (ex.: ?turma=abc) são ignorados em vez de gerar erro 500.
     turma_pk = parse_pk(request.GET.get('turma'))
@@ -51,7 +73,13 @@ def dashboard_fragilidades(request):
     turma = turmas.filter(pk=turma_pk).first() if turma_pk else None
     aplicacao = aplicacoes.filter(pk=aplicacao_pk).first() if aplicacao_pk else None
 
-    filtros = {'turma': turma, 'aplicacao': aplicacao, 'data_inicio': data_inicio, 'data_fim': data_fim}
+    filtros = {
+        'turma': turma,
+        'aplicacao': aplicacao,
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'escopo': escopo,
+    }
     por_topico = taxa_erro_por_topico(**filtros)
     por_dificuldade = taxa_erro_por_dificuldade(**filtros)
 
@@ -159,14 +187,18 @@ def psicometria(request):
     """
     Relatório de psicometria básica (RF14): índice de facilidade por questão
     (média global de `acertou` em todas as aplicações), destaque das questões com
-    índice fora do esperado e exportação em CSV/PDF.
+    índice fora do esperado e exportação em CSV/PDF. O professor vê só as respostas das
+    turmas e disciplinas das suas docências.
     """
+    escopo = _escopo(request.user)
     min_respostas = _param_int(request, 'min_respostas', 5)
     limite_baixo = _param_float(request, 'limite_baixo', 0.20)
     limite_alto = _param_float(request, 'limite_alto', 0.90)
 
-    itens = indice_facilidade_por_questao(min_respostas=min_respostas)
-    fora = questoes_fora_do_esperado(limite_baixo=limite_baixo, limite_alto=limite_alto, min_respostas=min_respostas)
+    itens = indice_facilidade_por_questao(min_respostas=min_respostas, escopo=escopo)
+    fora = questoes_fora_do_esperado(
+        limite_baixo=limite_baixo, limite_alto=limite_alto, min_respostas=min_respostas, escopo=escopo
+    )
 
     context = {
         'itens': itens,

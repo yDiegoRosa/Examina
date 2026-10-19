@@ -20,6 +20,7 @@ class SubstituicaoQuestaoError(ValidationError):
 def obter_candidatas_substituicao(
     item,
     limite: int = 15,
+    autor_questoes=None,
 ) -> QuerySet[Questao]:
     """
     Retorna questões candidatas ativas para substituir um item específico de uma prova.
@@ -36,6 +37,8 @@ def obter_candidatas_substituicao(
     Args:
         item: Instância de ProvaQuestao.
         limite: Quantidade máxima de sugestões a retornar.
+        autor_questoes: se informado, usa só as questões desse autor (professor monta provas
+            só com as próprias questões — ``academico.acesso.autor_do_acervo``); ``None`` = acervo todo.
 
     Returns:
         QuerySet[Questao] anotado com `vezes_usada_recentemente` e ordenado por prioridade.
@@ -55,6 +58,7 @@ def obter_candidatas_substituicao(
         dificuldade=questao_atual.dificuldade,
         tipo=questao_atual.tipo,
         excluir_ids=ids_existentes_na_prova,
+        autor_questoes=autor_questoes,
     ).prefetch_related('alternativas', 'topico', 'disciplina')
 
     return candidatas[:limite]

@@ -7,9 +7,11 @@
   <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-arrow-left"></i> Painel da aplicação
   </a>
+  {% if pode_alterar %}
   <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-cloud-arrow-up"></i> Enviar cartões
   </a>
+  {% endif %}
   <a href="{% url 'provas:aplicacao_notas' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-table"></i> Notas da turma
   </a>
@@ -39,6 +41,7 @@
 <div class="card-surface">
   <div class="p-3 flex items-center justify-between" style="border-bottom: 1px solid var(--border-color);">
     <h3 class="font-bold text-main mb-0"><i class="bi bi-file-earmark-person"></i> Alunos ({{ linhas|length }})</h3>
+    {% if pode_alterar %}
     <form method="post" style="margin: 0;">
       {% csrf_token %}
       <input type="hidden" name="acao" value="gerar">
@@ -46,6 +49,9 @@
         <i class="bi bi-arrow-repeat"></i> Gerar/atualizar cartões
       </button>
     </form>
+    {% else %}
+    <span class="small text-muted"><i class="bi bi-eye"></i> Só consulta: quem altera é o autor da prova.</span>
+    {% endif %}
   </div>
   <div class="table-responsive">
     <table class="saas-table">
@@ -74,7 +80,7 @@
           <td>
             <div class="flex flex-wrap gap-2">
               <a href="{% url 'provas:folha_lancamento_manual' l.folha.pk %}" class="btn btn-primary small">
-                <i class="bi bi-pencil-square"></i> Lançar notas
+                {% if pode_alterar %}<i class="bi bi-pencil-square"></i> Lançar notas{% else %}<i class="bi bi-eye"></i> Ver notas{% endif %}
               </a>
               {# Material individual — por exemplo, de quem entrou na turma depois. #}
               <a href="{% url 'provas:folha_cartao_pdf' l.folha.pk %}" class="btn btn-outline small" target="_blank" rel="noopener" title="Cartão-resposta deste aluno (PDF)">

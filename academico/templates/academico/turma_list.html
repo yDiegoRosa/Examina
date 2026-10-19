@@ -19,9 +19,11 @@
     </p>
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
+    {% if perfil_admin %}
     <a href="{% url 'academico:turma_create' %}" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-plus-circle-fill"></i> Nova Turma
     </a>
+    {% endif %}
   </div>
 </div>
 
@@ -97,9 +99,15 @@
           </td>
           <td class="text-right">
             <div class="flex items-center justify-end gap-1">
-              <a href="{% url 'academico:turma_matriculas' pk=turma.pk %}" class="btn-table-action" title="Gerenciar matrículas">
+              {% if perfil_admin %}
+              <a href="{% url 'academico:turma_docencias' pk=turma.pk %}" class="btn-table-action" title="Docentes da turma" aria-label="Docentes da turma {{ turma }}">
+                <i class="bi bi-person-video3" aria-hidden="true"></i>
+              </a>
+              {% endif %}
+              <a href="{% url 'academico:turma_matriculas' pk=turma.pk %}" class="btn-table-action" title="{% if perfil_admin %}Gerenciar matrículas{% else %}Ver alunos da turma{% endif %}">
                 <i class="bi bi-person-check"></i>
               </a>
+              {% if perfil_admin %}
               <a href="{% url 'academico:turma_update' pk=turma.pk %}" class="btn-table-action" title="Editar turma">
                 <i class="bi bi-pencil-square"></i>
               </a>
@@ -111,6 +119,7 @@
                   <i class="bi {% if turma.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}" aria-hidden="true"></i>
                 </button>
               </form>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -120,7 +129,7 @@
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-folder-x"></i></div>
             <h4 class="font-bold text-main">Nenhuma turma encontrada</h4>
             <p class="text-muted mb-3">Cadastre a primeira turma do período.</p>
-            <a href="{% url 'academico:turma_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Nova Turma</a>
+            {% if perfil_admin %}<a href="{% url 'academico:turma_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Nova Turma</a>{% endif %}
           </td>
         </tr>
         {% endfor %}

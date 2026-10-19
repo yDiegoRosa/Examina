@@ -121,10 +121,12 @@
       </div>
 
       <!-- Linha 2 de Filtros -->
+      {% if perfil_ve_tudo %}
       <div class="col-span-4">
         <label class="form-label">{{ filter.form.autor.label|default:"Autor / Docente" }}</label>
         {{ filter.form.autor }}
       </div>
+      {% endif %}
 
       <div class="col-span-5">
         <label class="form-label">{{ filter.form.origem.label|default:"Origem / Exame" }}</label>
@@ -236,11 +238,12 @@
           </td>
           <td class="text-right">
             <div class="flex gap-2 justify-end">
-              {% if pode_editar %}
               <a href="{% url 'banco_questoes:questao_history' pk=q.pk %}"
                  class="btn-table-action" title="Ver Histórico de Alterações">
                 <i class="bi bi-clock-history"></i>
               </a>
+              {# Editar/inativar: o autor da questão (ou o administrador) — ver academico.acesso. #}
+              {% if pode_editar and q.pk in ids_alteraveis %}
               <a href="{% url 'banco_questoes:questao_update' pk=q.pk %}"
                  class="btn btn-outline btn-sm" title="Editar Questão">
                 <i class="bi bi-pencil-square"></i> Editar

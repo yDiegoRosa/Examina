@@ -1,5 +1,6 @@
 """Modelos do domínio acadêmico: alunos, turmas e o vínculo (matrícula) entre eles."""
 
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
@@ -141,3 +142,46 @@ class Matricula(models.Model):
     def ativa(self) -> bool:
         """Indica se o vínculo está atualmente ativo (aluno matriculado)."""
         return self.situacao == self.Situacao.MATRICULADO
+
+
+class Docencia(models.Model):
+    """
+    O professor leciona uma disciplina numa turma (cadastro feito só pelo administrador).
+
+    É o que define a "turma do professor" no acesso por perfil (``academico.acesso``): o
+    professor aplica provas nas turmas das suas docências e, no desempenho, vê só os pares
+    turma + disciplina delas — inclusive no Simulado ENADE, que é gerado pelo administrador.
+    """
+
+    professor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='docencias',
+        verbose_name='professor',
+    )
+    disciplina = models.ForeignKey(
+        'banco_questoes.Disciplina',
+        on_delete=models.PROTECT,
+        related_name='docencias',
+        verbose_name='disciplina',
+    )
+    turma = models.ForeignKey(
+        Turma,
+        on_delete=models.PROTECT,
+        related_name='docencias',
+        verbose_name='turma',
+    )
+    ativo = models.BooleanField('ativa', default=True)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['turma', 'disciplina__nome', 'professor__username']
+        unique_together = [('professor', 'disciplina', 'turma')]
+        verbose_name = 'docência'
+        verbose_name_plural = 'docências'
+
+    def __str__(self):
+        nome = self.professor.get_full_name() or self.professor.get_username()
+        return f'{nome} — {self.disciplina} — {self.turma}'

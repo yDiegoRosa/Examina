@@ -21,18 +21,47 @@ MEDIA_TMP = tempfile.mkdtemp()
 
 @override_settings(MEDIA_ROOT=MEDIA_TMP)
 class MediaProtegidaTest(TestCase):
-    """/media/ não é público: só Docente/Coordenador baixam folhas escaneadas e imagens."""
+    """
+    /media/ não é público: o professor baixa só a digitalização das aplicações dele e as imagens
+    das questões dele (ou das provas dele); administrador e coordenador baixam tudo.
+    """
 
     def setUp(self):
-        pasta = Path(MEDIA_TMP) / 'folhas_digitalizadas'
-        pasta.mkdir(parents=True, exist_ok=True)
-        (pasta / 'folha.png').write_bytes(b'conteudo-da-folha')
+        for pasta, arquivo, conteudo in (
+            ('folhas_digitalizadas', 'folha.png', b'conteudo-da-folha'),
+            ('questoes/imagens', 'figura.png', b'figura-da-questao'),
+        ):
+            (Path(MEDIA_TMP) / pasta).mkdir(parents=True, exist_ok=True)
+            (Path(MEDIA_TMP) / pasta / arquivo).write_bytes(conteudo)
         self.url = '/media/folhas_digitalizadas/folha.png'
+        self.url_figura = '/media/questoes/imagens/figura.png'
 
         user_model = get_user_model()
         self.docente = user_model.objects.create_user(username='doc_media', password='segredo123')  # noqa: S106
         self.docente.groups.add(Group.objects.get(name='Docente'))
+        self.outro_docente = user_model.objects.create_user(username='outro_doc_media', password='x')  # noqa: S106
+        self.outro_docente.groups.add(Group.objects.get(name='Docente'))
+        self.coordenador = user_model.objects.create_user(username='coord_media', password='x')  # noqa: S106
+        self.coordenador.groups.add(Group.objects.get(name='Coordenador'))
         self.sem_grupo = user_model.objects.create_user(username='sem_grupo_media', password='segredo123')  # noqa: S106
+
+        # A digitalização é de uma aplicação da prova do docente.
+        prova = Prova.objects.create(titulo='Prova da mídia', autor=self.docente)
+        aplicacao = ProvaAplicacao.objects.create(
+            prova=prova,
+            turma=Turma.objects.create(periodo='2026.2', nome='T Mídia'),
+            data_aplicacao=date(2026, 11, 10),
+        )
+        FolhaDigitalizada.objects.create(prova_aplicacao=aplicacao, imagem='folhas_digitalizadas/folha.png')
+        self.prova = prova
+        self.questao_figura = Questao.objects.create(
+            disciplina=Disciplina.objects.create(nome='Disc Mídia'),
+            tipo='DIS',
+            dificuldade='F',
+            enunciado='Questão com figura',
+            imagem='questoes/imagens/figura.png',
+            autor=self.outro_docente,
+        )
 
     def test_anonimo_redirecionado_ao_login(self):
         resp = self.client.get(self.url)
@@ -43,12 +72,38 @@ class MediaProtegidaTest(TestCase):
         self.client.force_login(self.sem_grupo)
         self.assertEqual(self.client.get(self.url).status_code, 403)
 
-    def test_docente_recebe_o_arquivo(self):
+    def test_docente_recebe_a_digitalizacao_da_aplicacao_dele(self):
         self.client.force_login(self.docente)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(b''.join(resp.streaming_content), b'conteudo-da-folha')
         self.assertEqual(resp['Content-Type'], 'image/png')
+
+    def test_outro_docente_nao_recebe_a_digitalizacao(self):
+        self.client.force_login(self.outro_docente)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_coordenador_recebe_tudo(self):
+        self.client.force_login(self.coordenador)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self.client.get(self.url_figura).status_code, 200)
+
+    def test_imagem_de_questao_so_do_autor_ou_de_prova_dele(self):
+        self.client.force_login(self.outro_docente)  # autor da questão
+        self.assertEqual(self.client.get(self.url_figura).status_code, 200)
+
+        self.client.force_login(self.docente)
+        self.assertEqual(self.client.get(self.url_figura).status_code, 404)
+        # Questão de outro autor numa prova dele (prova montada antes do acesso por perfil).
+        ProvaQuestao.objects.create(prova=self.prova, questao=self.questao_figura, numero=1, ordem=1)
+        self.assertEqual(self.client.get(self.url_figura).status_code, 200)
+
+    def test_arquivo_sem_dono_conhecido_so_para_quem_ve_tudo(self):
+        (Path(MEDIA_TMP) / 'avulso.txt').write_bytes(b'avulso')
+        self.client.force_login(self.docente)
+        self.assertEqual(self.client.get('/media/avulso.txt').status_code, 404)
+        self.client.force_login(self.coordenador)
+        self.assertEqual(self.client.get('/media/avulso.txt').status_code, 200)
 
     def test_arquivo_inexistente_404(self):
         self.client.force_login(self.docente)
@@ -76,7 +131,7 @@ class EntradasInvalidasTest(TestCase):
 
     def setUp(self):
         user = get_user_model().objects.create_user(username='doc_entradas', password='segredo123')  # noqa: S106
-        user.groups.add(Group.objects.get(name='Docente'))
+        user.groups.add(Group.objects.get_or_create(name='Administrador')[0])  # robustez de entrada, não acesso
         self.client.force_login(user)
 
         self.disc = Disciplina.objects.create(nome='Disc Entradas')

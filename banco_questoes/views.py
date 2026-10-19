@@ -3,6 +3,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
@@ -24,15 +25,33 @@ from .utils import parse_pk
 logger = logging.getLogger(__name__)
 
 
+def _questao_alteravel(request, pk):
+    """
+    Questão que o usuário pode editar/inativar (``academico.acesso``): a dele, ou qualquer uma
+    para o administrador. Questão que ele nem vê responde 404; a que vê mas não pode alterar
+    (coordenador diante da questão de outro professor) responde 403.
+    """
+    from academico.acesso import questoes_alteraveis, questoes_visiveis
+
+    questao = get_object_or_404(questoes_visiveis(request.user), pk=pk)
+    if not questoes_alteraveis(request.user).filter(pk=questao.pk).exists():
+        raise PermissionDenied('Só o autor da questão (ou o administrador) pode alterá-la.')
+    return questao
+
+
 # ---------------------------------------------------------------------------
 # Lista de questões (com django-filter e paginação)
 # ---------------------------------------------------------------------------
 @login_required
 def questao_list(request):
-    """Lista de questões com filtros avançados via django-filter, métricas e paginação."""
-    base_qs = (
-        Questao.objects.select_related('disciplina', 'topico', 'autor').prefetch_related('tags').order_by('-criado_em')
-    )
+    """
+    Lista de questões com filtros avançados via django-filter, métricas e paginação. O
+    professor vê só as dele; administrador e coordenador veem o acervo inteiro.
+    """
+    from academico.acesso import questoes_alteraveis, questoes_visiveis
+
+    visiveis = questoes_visiveis(request.user)
+    base_qs = visiveis.select_related('disciplina', 'topico', 'autor').prefetch_related('tags').order_by('-criado_em')
 
     # Aplicação do FilterSet
     questao_filter = QuestaoFilter(request.GET, queryset=base_qs)
@@ -49,8 +68,8 @@ def questao_list(request):
     get_params.pop('page', None)
     querystring = get_params.urlencode()
 
-    # Métricas globais do acervo
-    all_questoes = Questao.objects.all()
+    # Métricas do acervo que o usuário vê
+    all_questoes = visiveis
     metricas = {
         'total': all_questoes.count(),
         'objetivas': all_questoes.filter(tipo=Questao.Tipo.OBJETIVA).count(),
@@ -85,6 +104,12 @@ def questao_list(request):
             'has_active_filters': has_active_filters,
             'pode_criar': is_docente_ou_coordenador(request.user),
             'pode_editar': can_change_questao(request.user),
+            # Questões da página que o usuário pode editar/inativar (as dele; todas p/ o administrador).
+            'ids_alteraveis': set(
+                questoes_alteraveis(request.user, Questao.objects.filter(pk__in=[q.pk for q in page_obj])).values_list(
+                    'pk', flat=True
+                )
+            ),
         },
     )
 
@@ -157,7 +182,7 @@ def questao_create(request):
 @pode_editar_questao_required
 def questao_update(request, pk):
     """Edição de questão existente com histórico automático via simple-history."""
-    questao = get_object_or_404(Questao, pk=pk)
+    questao = _questao_alteravel(request, pk)
 
     if request.method == 'POST':
         form = QuestaoForm(request.POST, request.FILES, instance=questao)
@@ -230,7 +255,7 @@ def questao_toggle_ativo(request, pk):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
 
-    questao = get_object_or_404(Questao, pk=pk)
+    questao = _questao_alteravel(request, pk)
     questao.ativo = not questao.ativo
     questao._history_user = request.user
     questao.save(update_fields=['ativo', 'atualizado_em'])
@@ -290,8 +315,11 @@ def download_modelo_csv(request):
         ]
     )
 
+    from academico.acesso import questoes_visiveis
+
     base_qs = (
-        Questao.objects.select_related('disciplina', 'topico')
+        questoes_visiveis(request.user)
+        .select_related('disciplina', 'topico')
         .prefetch_related('tags', 'alternativas')
         .order_by('-criado_em')
     )
@@ -452,8 +480,11 @@ def download_modelo_xlsx(request):
         cell.alignment = header_align
         cell.border = thin_border
 
+    from academico.acesso import questoes_visiveis
+
     base_qs = (
-        Questao.objects.select_related('disciplina', 'topico')
+        questoes_visiveis(request.user)
+        .select_related('disciplina', 'topico')
         .prefetch_related('tags', 'alternativas')
         .order_by('-criado_em')
     )
@@ -723,7 +754,9 @@ def questao_history(request, pk):
     imediatamente anterior e exibe quais campos mudaram (valor antigo → novo),
     quem realizou a alteração e quando.
     """
-    questao = get_object_or_404(Questao, pk=pk)
+    from academico.acesso import questoes_visiveis
+
+    questao = get_object_or_404(questoes_visiveis(request.user), pk=pk)
     registros = questao.history.all().order_by('-history_date')
 
     versoes = []

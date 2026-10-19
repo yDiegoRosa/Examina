@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
   <!-- Design System Vanilla CSS (Zero Bootstrap) -->
-  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20261006.2">
+  <link rel="stylesheet" href="{% static 'banco_questoes/css/custom.css' %}?v=20261007.1">
 
   {% block extra_css %}{% endblock %}
 </head>
@@ -100,12 +100,9 @@
             <i class="bi bi-sun-fill icon-sun" aria-hidden="true"></i>
           </button>
           {% if user.is_authenticated %}
-          <div class="user-capsule">
-            <i class="bi bi-person-fill-check text-warning" style="color: var(--fae-gold);"></i>
-            <span>{{ user.username }}</span>
-          </div>
-          <a href="{% url 'password_change' %}" class="btn btn-outline nav-conta" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" title="Alterar senha" aria-label="Alterar senha">
-            <i class="bi bi-key" aria-hidden="true"></i>
+          {# Conta: botão redondo (o nome na barra não cabia ao lado dos 6 links); o nome aparece no title. #}
+          <a href="{% url 'password_change' %}" class="user-capsule" title="{{ user.username }} — Minha conta (alterar senha)" aria-label="{{ user.username }}: minha conta, alterar senha">
+            <i class="bi bi-person-fill-gear" aria-hidden="true"></i>
           </a>
           <form method="post" action="{% url 'logout' %}" style="display: inline; margin: 0;">
             {% csrf_token %}

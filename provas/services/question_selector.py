@@ -15,6 +15,7 @@ def consultar_questoes_candidatas_priorizadas(
     tipo: str | None = None,
     limite_provas_recentes: int = 5,
     excluir_ids: set[int] | list[int] | None = None,
+    autor_questoes=None,
 ) -> QuerySet[Questao]:
     """
     Retorna QuerySet de questões ativas anotadas e ordenadas pela restrição do RF07:
@@ -33,6 +34,8 @@ def consultar_questoes_candidatas_priorizadas(
         tipo: Tipo de questão ('OBJ', 'DIS', opcional).
         limite_provas_recentes: Quantidade de avaliações anteriores a considerar (padrão: 5).
         excluir_ids: Lista/set de IDs de questões a excluir (ex.: já selecionadas no mesmo exame).
+        autor_questoes: se informado, usa só as questões desse autor (professor monta provas
+            só com as próprias questões — ``academico.acesso.autor_do_acervo``); ``None`` = acervo todo.
 
     Returns:
         QuerySet[Questao] anotado com `vezes_usada_recentemente` e ordenado por prioridade.
@@ -55,8 +58,10 @@ def consultar_questoes_candidatas_priorizadas(
         priorizar_enade = False
         modalidade = None
 
-    # 2. Base de questões ativas da disciplina
+    # 2. Base de questões ativas da disciplina (só as do autor, quando restrito)
     qs = Questao.objects.filter(ativo=True)
+    if autor_questoes is not None:
+        qs = qs.filter(autor=autor_questoes)
     if disc:
         qs = qs.filter(disciplina=disc)
 
@@ -112,6 +117,7 @@ def consultar_questoes_candidatas_priorizadas(
 def selecionar_questoes_por_matriz(
     mascara,
     limite_provas_recentes: int = 5,
+    autor_questoes=None,
 ) -> list[Questao]:
     """
     Executa a seleção automatizada de questões para compor uma avaliação conforme o RF07,
@@ -143,6 +149,7 @@ def selecionar_questoes_por_matriz(
                 tipo=balde.tipo,
                 limite_provas_recentes=limite_provas_recentes,
                 excluir_ids=ids_selecionados,
+                autor_questoes=autor_questoes,
             )[:qtd_necessaria]
         )
 
@@ -167,6 +174,7 @@ def gerar_prova_automatizada(
     titulo: str | None = None,
     numero_caderno: int = 1,
     limite_provas_recentes: int = 5,
+    autor_questoes=None,
 ):
     """
     Gera uma avaliação acadêmica persistida (Prova e ProvaQuestao) a partir de uma Máscara.
@@ -183,6 +191,8 @@ def gerar_prova_automatizada(
         titulo: Título customizado da avaliação (opcional).
         numero_caderno: Número do caderno de prova (padrão: 1).
         limite_provas_recentes: Janela deslizante de histórico de repetições (padrão: 5).
+        autor_questoes: se informado, usa só as questões desse autor (professor monta provas
+            só com as próprias questões — ``academico.acesso.autor_do_acervo``); ``None`` = acervo todo.
 
     Returns:
         Instância de Prova persistida com todas as suas questões vinculadas.
@@ -206,7 +216,7 @@ def gerar_prova_automatizada(
     )
 
     # 1. Validação prévia de disponibilidade por célula
-    relatorio = validar_disponibilidade_estoque(mascara)
+    relatorio = validar_disponibilidade_estoque(mascara, autor_questoes=autor_questoes)
     if not relatorio.esta_valido:
         raise EstoqueInsuficienteError(relatorio)
 
@@ -221,6 +231,7 @@ def gerar_prova_automatizada(
         questoes = selecionar_questoes_por_matriz(
             mascara=mascara,
             limite_provas_recentes=limite_provas_recentes,
+            autor_questoes=autor_questoes,
         )
 
         if len(questoes) < mascara.quantidade_questoes:

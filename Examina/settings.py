@@ -100,6 +100,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Perfil (administrador / visão total) para menu e botões — ver academico.acesso.
+                'banco_questoes.context_processors.perfil',
             ],
         },
     },
