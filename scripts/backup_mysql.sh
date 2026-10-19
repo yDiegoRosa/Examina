@@ -86,6 +86,7 @@ if docker exec "$MYSQL_CONTAINER" \
       --user="$MYSQL_USER" \
       --password="$MYSQL_PASSWORD" \
       --single-transaction \
+      --no-tablespaces \
       --routines \
       --triggers \
       --events \

@@ -1,20 +1,22 @@
-Django>=5.2,<5.3
-django-environ>=0.11.0
-django-filter>=24.0
-django-simple-history>=3.7.0
-django-taggit>=6.1.0
-mysqlclient>=2.2.0
-Pillow>=10.0.0
+# Versões travadas: validadas na imagem de produção (build + suíte de testes no container) em
+# 2026-10-19. Para atualizar um pacote, troque a versão aqui e repita essa validação.
+Django==5.2.18
+django-environ==0.14.0
+django-filter==26.2
+django-simple-history==3.13.0
+django-taggit==6.1.0
+mysqlclient==2.3.0
+Pillow==13.0.0
 qrcode==8.2
 opencv-python-headless==5.0.0.93
-asgiref
-sqlparse
-tzdata
+asgiref==3.12.1
+sqlparse==0.6.0
+tzdata==2026.5
 ruff==0.16.4
-coverage>=7.0
-pytest>=8.0
-pytest-django>=4.8
-openpyxl>=3.1.0
-weasyprint>=60.0
+coverage==7.16.2
+pytest==9.1.1
+pytest-django==4.14.0
+openpyxl==3.1.5
+weasyprint==70.0
 gunicorn==26.2.0
 whitenoise==6.12.0

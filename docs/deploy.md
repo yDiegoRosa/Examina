@@ -57,6 +57,18 @@ Opcionais:
 | `LOG_LEVEL` | `WARNING` | Nível de log com `DEBUG=False`. |
 | `CSV_UPLOAD_MAX_SIZE_MB` | `5` | Tamanho máximo da planilha de importação de questões. |
 
+E-mail do administrador — recebe o aviso de falha no backup e os erros internos (500) do sistema:
+
+| Variável | Exemplo | Para quê |
+|---|---|---|
+| `ADMINS` | `admin@instituicao.edu.br` | E-mail(s) do administrador, separados por vírgula. |
+| `EMAIL_HOST` / `EMAIL_PORT` | `smtp.provedor.com` / `587` | Servidor SMTP. Sem `EMAIL_HOST`, nada é enviado (os e-mails só aparecem no log). |
+| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | | Login do SMTP (em Gmail, uma senha de app). |
+| `EMAIL_USE_SSL` | `False` | `True` para a porta 465; na 587 o padrão é STARTTLS. |
+| `EMAIL_REMETENTE` | `examina@instituicao.edu.br` | Remetente dos e-mails (precisa ser aceito pelo SMTP). |
+
+Para testar: `docker compose -f docker-compose.prod.yml exec web python manage.py sendtestemail --admins`.
+
 O `.env` tem senhas: mantenha-o fora do Git (já está no `.gitignore`) e com acesso restrito (`chmod 600 .env`).
 
 ## 3. Subir o sistema
@@ -127,6 +139,8 @@ Com Caddy, `reverse_proxy 127.0.0.1:8000` já envia `X-Forwarded-Proto`; ajuste 
 - [ ] O PDF de uma prova é gerado com acentos corretos (fontes do WeasyPrint na imagem).
 - [ ] O ZIP de cartões de uma aplicação de teste baixa sem erro de timeout.
 - [ ] O envio de uma foto de cartão funciona e a imagem aparece só para usuários logados.
+- [ ] `sendtestemail --admins` chega ao e-mail do administrador.
+- [ ] `bash scripts/backup_completo.sh` termina sem erro e os arquivos aparecem no bucket do R2.
 
 ## 7. Atualizar para uma nova versão
 
@@ -152,4 +166,4 @@ A imagem é reconstruída, os estáticos são coletados de novo e as migrations 
 
 O banco tem scripts de backup, restauração e teste no [runbook](backup-restore.md) (o container precisa se chamar `examina_mysql`, como no compose).
 
-Atenção: os scripts cobrem só o MySQL. Os uploads (cartões escaneados e imagens das questões) ficam no volume `media_data` e ainda não têm backup automático. Esse planejamento ficou para depois, junto com a ida do banco para a nuvem.
+A rotina `scripts/backup_completo.sh` faz o backup do MySQL e dos uploads (cartões escaneados e imagens das questões, no volume `media_data`), copia os dois para um bucket do Cloudflare R2 e avisa o administrador por e-mail se algo falhar. Configure o bucket, o arquivo `/etc/examina-backup.env` e o cron seguindo o [runbook](backup-restore.md#2-agendar-a-rotina-automática-linuxservidor).
