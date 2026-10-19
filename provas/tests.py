@@ -3958,6 +3958,15 @@ class LancamentoManualTest(TestCase):
     def test_nota_corte_padrao_seis(self):
         self.assertEqual(self.aplicacao.nota_corte, Decimal('6.00'))
 
+    def test_campos_numericos_mostram_os_valores_atuais(self):
+        # <input type="number"> só aceita ponto: o valor localizado ("6,00") apareceria vazio.
+        lancar_nota_discursiva(self.folha, self.dis, Decimal('7.5'), Decimal('6'), usuario=self.user)
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('provas:folha_lancamento_manual', args=[self.folha.pk]))
+        self.assertContains(resp, 'name="nota_corte" class="form-input"')
+        self.assertContains(resp, 'value="6.00"')
+        self.assertContains(resp, 'value="7.50"')
+
     def test_tela_de_lancamento_usa_os_rotulos_do_caderno(self):
         # Versão antiga (discursiva gravada com número 2): a tela mostra "D01", como no caderno.
         self.client.force_login(self.user)

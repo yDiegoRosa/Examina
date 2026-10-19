@@ -1274,46 +1274,6 @@ a:hover {
   transform: translateY(0);
 }
 
-/* Caixa de Acesso Rápido de Teste */
-.login-test-box {
-  margin-top: 1.5rem;
-  padding: 0.85rem 1rem;
-  background: #FFFBEB;
-  border: 1px dashed #F59E0B;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
-}
-
-.login-test-box:hover {
-  background: #FEF3C7;
-  border-color: #D97706;
-  transform: translateY(-1px);
-}
-
-.login-test-icon {
-  color: #D97706;
-  font-size: 1.25rem;
-}
-
-.login-test-info {
-  flex: 1;
-  font-size: 0.825rem;
-  color: #78350F;
-}
-
-.login-test-btn {
-  font-size: 0.775rem;
-  font-weight: 700;
-  color: #B45309;
-  text-decoration: underline;
-  white-space: nowrap;
-}
-
 /* Faixa de Recursos Institucionais (Abaixo do Card) */
 .login-highlights-bar {
   width: 100%;

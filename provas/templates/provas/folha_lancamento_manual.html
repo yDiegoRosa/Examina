@@ -1,4 +1,5 @@
 {% extends "banco_questoes/base.html" %}
+{% load l10n %}
 
 {% block title %}Lançar notas — {{ folha.aluno.nome }} — Examina{% endblock %}
 
@@ -31,7 +32,7 @@
   <div class="card-surface p-3 mb-4 flex items-center gap-3" style="max-width: 720px;">
     <label class="form-label mb-0" for="id_nota_corte"><strong>Nota de corte para “acertou”</strong> (discursivas)</label>
     <input type="number" id="id_nota_corte" name="nota_corte" class="form-input" style="max-width: 120px;"
-           min="0" max="10" step="0.5" value="{{ aplicacao.nota_corte }}">
+           min="0" max="10" step="0.5" value="{{ aplicacao.nota_corte|unlocalize }}">
     <span class="small text-muted">acertou = nota ≥ corte</span>
   </div>
 
@@ -92,7 +93,7 @@
               {% else %}
               <input type="number" name="nota_{{ l.questao.id }}" class="form-input" min="0" max="10" step="0.5"
                      placeholder="0–10"
-                     value="{% if l.desempenho.nota is not None %}{{ l.desempenho.nota }}{% endif %}">
+                     value="{% if l.desempenho.nota is not None %}{{ l.desempenho.nota|unlocalize }}{% endif %}">
               {% endif %}
             </td>
           </tr>

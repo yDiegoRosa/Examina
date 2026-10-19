@@ -288,6 +288,12 @@ class PsicometriaTest(TestCase):
         self.assertEqual(fora[q_facil.id]['motivo'], 'muito_facil')
         self.assertNotIn(q_medio.id, fora)
 
+    def test_limites_voltam_no_formulario_com_ponto_decimal(self):
+        self.client.login(username='coord2', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('desempenho:psicometria'), {'limite_baixo': '0.25', 'limite_alto': '0.85'})
+        self.assertContains(resp, 'value="0.25"')
+        self.assertContains(resp, 'value="0.85"')
+
     def test_view_render(self):
         q = self._questao()
         for _ in range(5):

@@ -1445,6 +1445,10 @@ class AuthenticationViewsTest(TestCase):
         self.assertContains(response, 'Entrar no Examina')
         self.assertContains(response, 'id_username')
         self.assertContains(response, 'id_password')
+        # Sem credenciais de demonstração na tela nem preenchimento automático.
+        self.assertNotContains(response, 'faetec')
+        self.assertNotContains(response, 'btn-autofill')
+        self.assertNotContains(response, 'Preencher')
 
     def test_unauthenticated_access_redirects_to_login(self):
         """Garante que funções internas e rota raiz exigem autenticação prévia."""
