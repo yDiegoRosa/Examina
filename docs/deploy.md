@@ -152,4 +152,4 @@ A imagem é reconstruída, os estáticos são coletados de novo e as migrations 
 
 O banco tem scripts de backup, restauração e teste no [runbook](backup-restore.md) (o container precisa se chamar `examina_mysql`, como no compose).
 
-Atenção: os scripts cobrem só o MySQL. Os uploads (cartões escaneados e imagens das questões) ficam no volume `media_data` e ainda não têm backup automático. Esse planejamento ficou para depois, junto com a ida do banco para a nuvem.
+Os scripts cobrem o MySQL (`backup_mysql.sh`) e os uploads — cartões escaneados e imagens das questões, no volume `media_data` (`backup_media.sh`). Agende os dois no cron do servidor e copie a pasta `backups/` para fora do servidor; o destino dessa cópia ainda está por definir.

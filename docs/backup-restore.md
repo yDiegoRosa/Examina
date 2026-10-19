@@ -1,6 +1,8 @@
 # Backup e Restauração — Runbook
 
-Guia operacional para gerenciar os backups do banco de dados MySQL do projeto **Examina**.
+Guia operacional para gerenciar os backups do projeto **Examina**: o banco de dados MySQL e a
+mídia (cartões escaneados e imagens das questões, no volume de mídia do container web).
+Os dois precisam ser copiados juntos — um banco sem as imagens (ou o contrário) não recupera o sistema.
 
 ---
 
@@ -11,8 +13,9 @@ Guia operacional para gerenciar os backups do banco de dados MySQL do projeto **
 | Engine | MySQL 8.0 |
 | Container | `examina_mysql` |
 | Banco principal | `examina_db` |
-| Formato do backup | `.sql.gz` (mysqldump + gzip) |
+| Formato do backup | Banco: `.sql.gz` (mysqldump + gzip) • Mídia: `media_*.tar.gz` |
 | Diretório de backups | `backups/` (raiz do projeto) |
+| Container da mídia | `examina_django` (pasta `/app/media`) |
 | Retenção local | 7 dias |
 | Frequência automática | Diária às 02h00 (cron do servidor) |
 | Teste de restauração (CI) | Semanal — domingo 00h Brasília |
@@ -31,14 +34,16 @@ Guia operacional para gerenciar os backups do banco de dados MySQL do projeto **
 
 | Script | Finalidade |
 |---|---|
-| [`scripts/backup_mysql.sh`](../scripts/backup_mysql.sh) | Gera backup comprimido |
-| [`scripts/restore_mysql.sh`](../scripts/restore_mysql.sh) | Restaura backup em produção |
-| [`scripts/test_restore.sh`](../scripts/test_restore.sh) | Valida um backup em banco isolado |
+| [`scripts/backup_mysql.sh`](../scripts/backup_mysql.sh) | Gera backup comprimido do banco |
+| [`scripts/restore_mysql.sh`](../scripts/restore_mysql.sh) | Restaura backup do banco em produção |
+| [`scripts/test_restore.sh`](../scripts/test_restore.sh) | Valida um backup do banco em banco isolado |
+| [`scripts/backup_media.sh`](../scripts/backup_media.sh) | Gera backup da mídia (`media_*.tar.gz`) |
+| [`scripts/restore_media.sh`](../scripts/restore_media.sh) | Restaura a mídia (sobrescreve arquivos de mesmo nome; não apaga os demais) |
 
 Dar permissão de execução (primeira vez):
 
 ```bash
-chmod +x scripts/backup_mysql.sh scripts/restore_mysql.sh scripts/test_restore.sh
+chmod +x scripts/*.sh
 ```
 
 ---
@@ -59,6 +64,14 @@ MYSQL_PASSWORD=sua_senha ./scripts/backup_mysql.sh \
 
 O arquivo será salvo em `backups/YYYY-MM-DD_HH-MM-SS.sql.gz`.
 
+Backup da mídia (aceita as mesmas opções):
+
+```bash
+./scripts/backup_media.sh
+```
+
+Gera `backups/media_YYYY-MM-DD_HH-MM-SS.tar.gz`. Mídia vazia (instalação nova) é válida.
+
 ---
 
 ### 2. Agendar backup automático (Linux/servidor)
@@ -69,10 +82,10 @@ Edite o crontab do servidor de produção:
 crontab -e
 ```
 
-Adicione a linha abaixo para execução **diária às 02h00**:
+Adicione a linha abaixo para execução **diária às 02h00** (banco e mídia, em sequência):
 
 ```cron
-0 2 * * * cd /caminho/para/Examina && MYSQL_PASSWORD=sua_senha bash scripts/backup_mysql.sh >> logs/cron.log 2>&1
+0 2 * * * cd /caminho/para/Examina && MYSQL_PASSWORD=sua_senha bash scripts/backup_mysql.sh >> logs/cron.log 2>&1 && bash scripts/backup_media.sh >> logs/cron.log 2>&1
 ```
 
 > **Dica de segurança:** use um arquivo de credenciais protegido (`chmod 600`) em vez de expor a senha diretamente no crontab.
@@ -87,8 +100,12 @@ MYSQL_USER=examina_user
 ```
 
 ```cron
-0 2 * * * cd /caminho/para/Examina && set -a; source /etc/examina-backup.env; set +a; bash scripts/backup_mysql.sh >> logs/cron.log 2>&1
+0 2 * * * cd /caminho/para/Examina && set -a; source /etc/examina-backup.env; set +a; bash scripts/backup_mysql.sh >> logs/cron.log 2>&1 && bash scripts/backup_media.sh >> logs/cron.log 2>&1
 ```
+
+> **Cópia fora do servidor:** os arquivos em `backups/` ficam no mesmo disco do sistema — se o
+> servidor for perdido, os backups vão junto. Depois do cron, copie a pasta para outro lugar
+> (outra máquina, NAS ou armazenamento em nuvem). O destino ainda está por definir.
 
 ---
 
@@ -131,7 +148,13 @@ MYSQL_PASSWORD=sua_senha ./scripts/restore_mysql.sh backups/2026-08-27_02-00-00.
 # Passo 5: Verificar e subir o serviço novamente
 docker compose up -d web
 docker compose exec web python manage.py check
+
+# Passo 6: Restaurar a mídia do mesmo momento (com o web no ar)
+./scripts/restore_media.sh backups/media_2026-08-27_02-00-00.tar.gz
 ```
+
+Esse procedimento (banco e mídia apagados e restaurados) foi ensaiado em 2026-10-19 numa cópia
+local do ambiente de produção: dados e arquivos voltaram idênticos.
 
 ---
 
@@ -192,6 +215,17 @@ ERROR: Container 'examina_mysql' não está em execução.
 
 ---
 
+### Aviso de privilégio `PROCESS` no mysqldump
+
+```
+mysqldump: Error: 'Access denied; you need (at least one of) the PROCESS privilege(s) ...' when trying to dump tablespaces
+```
+
+O `backup_mysql.sh` já usa `--no-tablespaces` (o usuário da aplicação não tem esse privilégio e
+o Examina não usa tablespaces). Se o aviso aparecer, o script está desatualizado.
+
+---
+
 ### Credenciais inválidas
 
 ```
@@ -232,7 +266,8 @@ ERROR: ❌ Tabela 'banco_questoes_questao': esperado >= 1 linha(s), encontrado: 
 
 ## Checklist de DR (Disaster Recovery)
 
-- [ ] Backup mais recente existe e tem menos de 25h
+- [ ] Backup mais recente (banco **e** mídia) existe e tem menos de 25h
+- [ ] Cópia dos backups fora do servidor está em dia
 - [ ] `test_restore.sh` passou sem erros
 - [ ] Documentação atualizada com credenciais de acesso ao servidor
 - [ ] Cron agendado e ativo no servidor de produção (`crontab -l`)
