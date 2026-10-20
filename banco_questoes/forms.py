@@ -56,31 +56,34 @@ class AlterarSenhaForm(PasswordChangeForm):
 # XLSX / XLS:
 #   .xlsx → ZIP  → b'PK\x03\x04'
 #   .xls  → OLE2 → b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
-_ALLOWED_EXTENSIONS = ('.csv', '.xlsx', '.xls')
+#   .zip  → ZIP  → b'PK\x03\x04' (planilha + imagens — ver importacao_zip.py)
+_ALLOWED_EXTENSIONS = ('.csv', '.xlsx', '.xls', '.zip')
 
 _MAGIC_BYTES: dict[str, bytes] = {
     '.xlsx': b'PK\x03\x04',  # OOXML / ZIP container
     '.xls': b'\xd0\xcf\x11\xe0',  # OLE2 Compound Document
+    '.zip': b'PK\x03\x04',
 }
 
 
 def _validate_upload_file(arquivo):
     """
     Valida extensão, tamanho e assinatura binária (magic bytes) de um arquivo
-    de upload destinado à importação CSV/XLSX.
+    de upload destinado à importação CSV/XLSX/ZIP. O .zip (planilha + imagens) tem um
+    limite de tamanho próprio, ``IMPORT_ZIP_MAX_SIZE_MB``.
 
     Levanta ``forms.ValidationError`` em caso de falha, sem consumir o stream
     (o ponteiro é reposicionado em 0 após a leitura dos magic bytes).
     """
-    max_mb = getattr(settings, 'CSV_UPLOAD_MAX_SIZE_MB', 5)
-    max_bytes = max_mb * 1024 * 1024
-
     # -- 1. Extensão --------------------------------------------------------
     nome = arquivo.name.lower()
     if not any(nome.endswith(ext) for ext in _ALLOWED_EXTENSIONS):
         raise forms.ValidationError(f'Formato inválido. São aceitos apenas: {", ".join(_ALLOWED_EXTENSIONS)}.')
 
     ext = next(ext for ext in _ALLOWED_EXTENSIONS if nome.endswith(ext))
+    limite = 'IMPORT_ZIP_MAX_SIZE_MB' if ext == '.zip' else 'CSV_UPLOAD_MAX_SIZE_MB'
+    max_mb = getattr(settings, limite, 50 if ext == '.zip' else 5)
+    max_bytes = max_mb * 1024 * 1024
 
     # -- 2. Tamanho ---------------------------------------------------------
     # InMemoryUploadedFile expõe .size; TemporaryFileUploadedFile também.
@@ -119,26 +122,28 @@ def _validate_upload_file(arquivo):
 # ---------------------------------------------------------------------------
 class CSVUploadForm(forms.Form):
     """
-    Formulário para upload de planilhas CSV ou Excel destinadas à importação
-    em lote de questões.
+    Formulário para upload de planilhas CSV ou Excel (ou um .zip com a planilha e as
+    imagens) destinadas à importação em lote de questões.
 
     Validações aplicadas no ``clean_arquivo()``:
-    - Extensão: apenas .csv, .xlsx, .xls
-    - Tamanho: ≤ ``settings.CSV_UPLOAD_MAX_SIZE_MB`` MB (padrão 5 MB)
+    - Extensão: apenas .csv, .xlsx, .xls, .zip
+    - Tamanho: ≤ ``settings.CSV_UPLOAD_MAX_SIZE_MB`` MB (padrão 5 MB); .zip ≤
+      ``settings.IMPORT_ZIP_MAX_SIZE_MB`` MB (padrão 50 MB)
     - Magic bytes: verifica a assinatura binária real do arquivo para
       detectar arquivos renomeados (e.g. .exe disfarçado de .csv)
     """
 
     arquivo = forms.FileField(
-        label='Arquivo CSV ou Excel (.xlsx)',
+        label='Arquivo CSV, Excel (.xlsx) ou .zip com imagens',
         widget=forms.ClearableFileInput(
             attrs={
                 'class': 'form-input form-file-input',
-                'accept': '.csv,.xlsx,.xls',
+                'accept': '.csv,.xlsx,.xls,.zip',
             }
         ),
         help_text=f'Formatos aceitos: .csv, .xlsx, .xls · Tamanho máximo: '
-        f'{getattr(settings, "CSV_UPLOAD_MAX_SIZE_MB", 5)} MB',
+        f'{getattr(settings, "CSV_UPLOAD_MAX_SIZE_MB", 5)} MB; .zip (planilha + imagens) até '
+        f'{getattr(settings, "IMPORT_ZIP_MAX_SIZE_MB", 50)} MB',
     )
 
     def clean_arquivo(self):

@@ -631,12 +631,25 @@ def download_modelo_xlsx(request):
 
 
 # ---------------------------------------------------------------------------
-# Importação em Lote via Excel (.xlsx) e CSV & Commit (RF02)
+# Exemplo de importação com imagens (.zip = planilha + pasta de imagens)
+# ---------------------------------------------------------------------------
+@login_required
+def download_exemplo_zip(request):
+    """ZIP de exemplo: planilha com a coluna ``imagem`` e a pasta ``imagens/`` (ver importacao_zip)."""
+    from .importacao_zip import gerar_exemplo_zip
+
+    response = HttpResponse(gerar_exemplo_zip(), content_type='application/zip')
+    response['Content-Disposition'] = 'attachment; filename="exemplo_importacao_com_imagens.zip"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Importação em Lote via Excel (.xlsx), CSV ou .zip com imagens & Commit (RF02)
 # ---------------------------------------------------------------------------
 @login_required
 @docente_ou_coordenador_required
 def questao_import(request):
-    """View para upload de planilhas Excel (.xlsx) ou arquivos CSV, commit e relatório de inconsistências."""
+    """Upload de planilha Excel (.xlsx), CSV ou .zip (planilha + imagens), commit e relatório de inconsistências."""
     relatorio = None
 
     if request.method == 'POST':
@@ -682,9 +695,11 @@ def questao_import(request):
             )
 
         if relatorio.total_sucesso > 0:
+            com_imagem = f', {relatorio.total_com_imagem} com imagem' if relatorio.total_com_imagem else ''
             messages.success(
                 request,
-                f'Importação concluída: {relatorio.total_sucesso} questão(ões) importada(s) e comitadas no acervo.',
+                f'Importação concluída: {relatorio.total_sucesso} questão(ões) importada(s) e comitadas no acervo'
+                f'{com_imagem}.',
             )
         if relatorio.total_rejeitadas > 0:
             messages.warning(

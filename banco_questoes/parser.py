@@ -91,6 +91,10 @@ HEADER_ALIAS_MAP = {
     'topico': 'topico',
     'dificuldade': 'dificuldade',
     'tags': 'tags',
+    # Imagem da questão (só tem efeito na importação por .zip — ver importacao_zip.py)
+    'imagem': 'imagem',
+    'figura': 'imagem',
+    'arquivo_imagem': 'imagem',
 }
 
 
@@ -251,6 +255,7 @@ class CSVQuestaoParser:
                     'alternativas': alternativas,
                     'correta': correta_letra,
                     'criterios_correcao': comentarios,
+                    'imagem': clean_row.get('imagem', ''),
                     'raw': clean_row,
                 }
             )
@@ -401,6 +406,7 @@ class ExcelQuestaoParser:
                     'alternativas': alternativas,
                     'correta': correta_letra,
                     'criterios_correcao': comentarios,
+                    'imagem': clean_row.get('imagem', ''),
                     'raw': clean_row,
                 }
             )

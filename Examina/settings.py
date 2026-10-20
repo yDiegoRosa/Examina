@@ -250,6 +250,9 @@ EMAIL_SUBJECT_PREFIX = '[Examina] '
 # ---------------------------------------------------------------------------
 # Maximum size (in MB) accepted for CSV/XLSX imports
 CSV_UPLOAD_MAX_SIZE_MB = env.int('CSV_UPLOAD_MAX_SIZE_MB', default=5)
+# Importação com imagens (.zip = planilha + pasta de imagens; banco_questoes.importacao_zip)
+IMPORT_ZIP_MAX_SIZE_MB = env.int('IMPORT_ZIP_MAX_SIZE_MB', default=50)
+IMPORT_IMAGEM_MAX_SIZE_MB = env.float('IMPORT_IMAGEM_MAX_SIZE_MB', default=5)
 
 # ---------------------------------------------------------------------------
 # Production-only security hardening

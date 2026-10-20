@@ -56,6 +56,7 @@ Opcionais:
 | `LOGIN_MAX_TENTATIVAS` / `LOGIN_BLOQUEIO_MINUTOS` | `5` / `15` | Limite de tentativas de login por usuário. |
 | `LOG_LEVEL` | `WARNING` | Nível de log com `DEBUG=False`. |
 | `CSV_UPLOAD_MAX_SIZE_MB` | `5` | Tamanho máximo da planilha de importação de questões. |
+| `IMPORT_ZIP_MAX_SIZE_MB` / `IMPORT_IMAGEM_MAX_SIZE_MB` | `50` / `5` | Importação com imagens: tamanho do `.zip` e de cada imagem (o proxy precisa aceitar o tamanho do ZIP). |
 
 E-mail do administrador — recebe o aviso de falha no backup e os erros internos (500) do sistema:
 
