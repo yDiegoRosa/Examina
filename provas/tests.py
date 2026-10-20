@@ -5354,3 +5354,44 @@ class AtaAvaliacaoTest(TestCase):
         html = render_to_string('provas/pdf_capa_prova.html', {'prova': self.prova})
         self.assertIn('Tecnológica do Rio de Janeiro Fernando Mota', html)
         self.assertNotIn('Tecnológica do Estado do Rio de Janeiro', html)
+
+
+class MascaraFormScriptTest(TestCase):
+    """
+    O JavaScript da tela de máscara procura os campos pelo id: se o id não existe, a lógica cai
+    em silêncio. Foi assim que a validação da modalidade mista lia 0 objetivas e 0 discursivas.
+    """
+
+    def setUp(self):
+        user = get_user_model().objects.create_user(username='admin_script', password='x')  # noqa: S106
+        user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
+        self.client.force_login(user)
+        self.mascara = MascaraProva.objects.create(
+            titulo='Mista do teste',
+            quantidade_questoes=10,
+            modalidade=MascaraProva.Modalidade.MISTA,
+            quantidade_objetivas=8,
+            quantidade_discursivas=2,
+            percentual_facil=30,
+            percentual_medio=50,
+            percentual_dificil=20,
+            autor=user,
+        )
+
+    def test_todo_id_usado_pelo_script_existe_na_tela(self):
+        import re
+
+        for url in (reverse('provas:mascara_create'), reverse('provas:mascara_update', args=[self.mascara.pk])):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                usados = set(re.findall(r"getElementById\('([^']+)'\)", html))
+                existentes = set(re.findall(r'id="([^"]+)"', html))
+                self.assertTrue(usados)
+                self.assertEqual(usados - existentes, set())
+
+    def test_validacao_do_envio_fica_no_formulario_da_mascara(self):
+        # O primeiro <form> da página é o "Sair" do menu: a validação não pode se prender a ele.
+        html = self.client.get(reverse('provas:mascara_create')).content.decode()
+        self.assertIn('id="mascara-form"', html)
+        self.assertIn("getElementById('mascara-form')", html)
+        self.assertNotIn("document.querySelector('form')", html)
