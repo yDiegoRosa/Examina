@@ -51,6 +51,12 @@ done
 [[ -d "$BACKUP_DIR" ]] || die "Pasta de backups não encontrada: ${BACKUP_DIR}"
 
 BACKUP_DIR="$(realpath "$BACKUP_DIR")"
+# Git Bash (Windows): o Docker precisa do caminho no formato C:/...; com /c/... ou /tmp/... a
+# pasta é montada vazia, sem erro — e o envio "daria certo" sem mandar nada.
+MONTAGEM="$BACKUP_DIR"
+if command -v cygpath >/dev/null 2>&1; then
+  MONTAGEM="$(cygpath -m "$BACKUP_DIR")"
+fi
 DESTINO="r2:${R2_BUCKET}/${R2_PREFIXO}"
 
 log "INFO" "=========================================="
@@ -68,7 +74,7 @@ export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
 
 if docker run --rm \
-    -v "${BACKUP_DIR}:/backups:ro" \
+    -v "${MONTAGEM}:/backups:ro" \
     -e RCLONE_CONFIG_R2_TYPE -e RCLONE_CONFIG_R2_PROVIDER -e RCLONE_CONFIG_R2_REGION \
     -e RCLONE_CONFIG_R2_ENDPOINT -e RCLONE_CONFIG_R2_ACCESS_KEY_ID \
     -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY -e RCLONE_CONFIG_R2_NO_CHECK_BUCKET \
