@@ -13,9 +13,10 @@
           <i class="bi bi-file-earmark-arrow-up-fill"></i> Módulo 1 • Importação em Lote (RF02)
         </span>
       </div>
-      <h1 class="mb-1">Importação de Questões (Excel & CSV)</h1>
+      <h1 class="mb-1">Importação de Questões (Excel, CSV ou ZIP com imagens)</h1>
       <p class="text-secondary" style="max-width: 620px;">
         Envie planilhas Excel (<code>.xlsx</code>) ou arquivos CSV formatados com questões para inserção e validação automatizada no acervo.
+        Para questões com figura, envie um <code>.zip</code> com a planilha e a pasta de imagens.
       </p>
     </div>
 
@@ -25,6 +26,9 @@
       </a>
       <a href="{% url 'banco_questoes:download_modelo_csv' %}" class="btn btn-outline">
         <i class="bi bi-file-earmark-arrow-down-fill" style="color: var(--fae-blue-primary);"></i> Baixar Modelo CSV
+      </a>
+      <a href="{% url 'banco_questoes:download_exemplo_zip' %}" class="btn btn-outline">
+        <i class="bi bi-file-earmark-zip-fill" style="color: var(--fae-gold);"></i> Baixar exemplo com imagens (ZIP)
       </a>
       <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">
         <i class="bi bi-arrow-left"></i> Voltar ao Acervo
@@ -38,9 +42,9 @@
     <div class="card-header header-primary">
       <div class="flex items-center gap-2">
         <i class="bi bi-cloud-arrow-up-fill text-primary" style="font-size: 1.2rem; color: var(--fae-blue-electric);"></i>
-        <span class="font-bold">Selecione a Planilha Excel (.xlsx) ou Arquivo CSV</span>
+        <span class="font-bold">Selecione a Planilha Excel (.xlsx), o Arquivo CSV ou o ZIP com imagens</span>
       </div>
-      <span class="badge-pill badge-pill-medio font-bold">Padrão 10 Colunas</span>
+      <span class="badge-pill badge-pill-medio font-bold">Padrão 15 colunas (+ imagem no .zip)</span>
     </div>
     <div class="card-body">
       <form method="post" enctype="multipart/form-data" id="form-import-csv">
@@ -51,12 +55,14 @@
             <i class="bi bi-file-earmark-excel-fill" style="color: #107C41;"></i>
             <i class="bi bi-filetype-csv" style="color: var(--fae-blue-electric);"></i>
           </div>
-          <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Arraste sua planilha Excel (.xlsx) ou arquivo CSV</div>
+          <div class="font-extrabold mb-1" style="font-size: 1.15rem;">Arraste sua planilha Excel (.xlsx), arquivo CSV ou ZIP com imagens</div>
           <p class="text-muted small mb-4" style="max-width: 520px; margin-left: auto; margin-right: auto;">
-            Formatos aceitos: <strong>Microsoft Excel (.xlsx)</strong> e <strong>CSV</strong> (UTF-8 com/sem BOM, Latin-1, separadores <code>,</code> ou <code>;</code>).
+            Formatos aceitos: <strong>Microsoft Excel (.xlsx)</strong>, <strong>CSV</strong> (UTF-8 com/sem BOM, Latin-1, separadores <code>,</code> ou <code>;</code>)
+            e <strong>.zip</strong> (planilha + pasta de imagens).
           </p>
 
-          <input type="file" name="csv_file" id="id_csv_file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" class="form-input" style="max-width: 400px; margin: 0 auto; display: block;" required>
+          {# O nome do campo precisa ser "arquivo" (CSVUploadForm). #}
+          <input type="file" name="arquivo" id="id_arquivo" accept=".xlsx,.xls,.csv,.zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/zip" class="form-input" style="max-width: 400px; margin: 0 auto; display: block;" required>
         </div>
 
         <div class="flex items-center justify-between mt-4">
@@ -77,7 +83,7 @@
     <div class="card-header">
       <div class="flex items-center gap-2">
         <i class="bi bi-info-circle-fill" style="color: var(--fae-gold);"></i>
-        <span class="font-bold">Estrutura das 10 Colunas (Excel e CSV)</span>
+        <span class="font-bold">Estrutura das 15 Colunas (Excel e CSV)</span>
       </div>
     </div>
     <div class="card-body">
@@ -86,7 +92,8 @@
           <i class="bi bi-table" style="color: var(--fae-blue-primary);"></i> Colunas do Formato Padrão
         </div>
         <p class="text-muted small mb-0">
-          <code>origem</code>, <code>questao</code>, <code>enunciado</code>, <code>opcao_a</code>, <code>opcao_b</code>, <code>opcao_c</code>, <code>opcao_d</code>, <code>opcao_e</code>, <code>gabarito</code>, <code>comentarios</code>
+          <code>origem</code>, <code>questao</code>, <code>tipo</code>, <code>disciplina</code>, <code>topico</code>, <code>dificuldade</code>, <code>enunciado</code>, <code>opcao_a</code>, <code>opcao_b</code>, <code>opcao_c</code>, <code>opcao_d</code>, <code>opcao_e</code>, <code>gabarito</code>, <code>tags</code>, <code>comentarios</code>
+          — e <code>imagem</code>, só no envio por <code>.zip</code>.
         </p>
       </div>
       <div class="grid grid-cols-2 gap-4">
@@ -107,6 +114,17 @@
             Preencha <code>enunciado</code> e deixe as alternativas em branco — o tipo discursivo é inferido automaticamente. <code>comentarios</code> é opcional.
           </p>
         </div>
+      </div>
+      <div style="background: #F8FAFC; padding: 1rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-top: 1rem;">
+        <div class="font-bold text-main mb-1 flex items-center gap-2">
+          <i class="bi bi-file-earmark-zip-fill" style="color: var(--fae-gold);"></i> Questões com imagem (.zip)
+        </div>
+        <p class="text-muted small mb-0">
+          Compacte num <code>.zip</code> a planilha e uma pasta com as imagens. Na coluna <code>imagem</code>, escreva o caminho do
+          arquivo dentro do ZIP (ex.: <code>imagens/q10.png</code>) — é o nome que liga a imagem à questão, não a ordem dos arquivos.
+          Deixe a coluna vazia nas questões sem imagem. Imagens PNG ou JPG, uma por questão, de preferência só a figura recortada.
+          Se uma imagem faltar ou for inválida, só aquela questão é recusada.
+        </p>
       </div>
     </div>
   </div>
@@ -132,7 +150,7 @@
       </div>
       <div>
         <div class="metric-num text-success">{{ relatorio.total_sucesso }}</div>
-        <div class="metric-text">Importadas com Sucesso</div>
+        <div class="metric-text">Importadas com Sucesso{% if relatorio.total_com_imagem %} · {{ relatorio.total_com_imagem }} com imagem{% endif %}</div>
       </div>
     </div>
 
@@ -216,6 +234,9 @@
                   <i class="bi bi-arrow-right"></i>
                 </a>
               </div>
+              {% if item.imagem %}
+              <div class="small text-muted mt-1"><i class="bi bi-image"></i> Com imagem: {{ item.imagem }}</div>
+              {% endif %}
               {% else %}
               <div style="background: var(--color-danger-bg); border-left: 3px solid var(--color-danger); padding: 0.5rem 0.75rem; border-radius: var(--radius-xs);">
                 {% for err in item.erros %}
@@ -239,7 +260,7 @@
       <i class="bi bi-grid-fill"></i> Ir para o Acervo de Questões
     </a>
     <a href="{% url 'banco_questoes:questao_import' %}" class="btn btn-outline">
-      <i class="bi bi-upload"></i> Importar Outro Arquivo CSV
+      <i class="bi bi-upload"></i> Importar Outro Arquivo
     </a>
   </div>
   {% endif %}

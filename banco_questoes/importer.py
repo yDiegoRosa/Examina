@@ -2,8 +2,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from django.core.files.base import ContentFile
 from django.db import transaction
 
+from .importacao_zip import ImagemDoPacote, PacoteImportacao, eh_zip
 from .models import Alternativa, Disciplina, Questao, Topico
 from .parser import FileQuestaoParser
 from .validator import CSVQuestaoValidator
@@ -22,6 +24,7 @@ class ImportLineResult:
     disciplina: str
     questao_id: int | None = None
     erros: list[str] = field(default_factory=list)
+    imagem: str = ''  # nome da imagem gravada com a questão (importação por .zip)
 
 
 @dataclass
@@ -31,6 +34,7 @@ class ImportExecutionResult:
     total_processadas: int = 0
     total_sucesso: int = 0
     total_rejeitadas: int = 0
+    total_com_imagem: int = 0
     linhas: list[ImportLineResult] = field(default_factory=list)
 
     @property
@@ -42,7 +46,8 @@ class ImportExecutionResult:
 class QuestaoImportService:
     """
     Serviço orquestrador do pipeline de importação em lote de questões (RF02).
-    Suporta arquivos Microsoft Excel (.xlsx) e arquivos CSV.
+    Suporta arquivos Microsoft Excel (.xlsx), CSV e .zip (planilha + imagens: a coluna
+    ``imagem`` de cada linha aponta o arquivo da imagem dentro do ZIP).
 
     Etapas do Pipeline:
     1. Parser: Leitura nativa e extração de colunas linha a linha (Excel ou CSV).
@@ -58,12 +63,19 @@ class QuestaoImportService:
         autor: Any = None,
     ) -> ImportExecutionResult:
         """
-        Executa o pipeline completo de importação a partir de um arquivo Excel (.xlsx) ou CSV.
+        Executa o pipeline completo de importação a partir de um arquivo Excel (.xlsx), CSV ou
+        .zip (planilha + imagens).
 
         Retorna uma instância de ImportExecutionResult com o resumo e detalhamento.
         """
-        # 1. Leitura e extração estruturada (Excel ou CSV)
-        parsed_rows = FileQuestaoParser.parse(file_or_content, filename=filename)
+        # 1. Leitura e extração estruturada (Excel ou CSV; no .zip, a planilha de dentro dele)
+        pacote = None
+        nome = filename or getattr(file_or_content, 'name', '') or ''
+        if eh_zip(nome):
+            pacote = PacoteImportacao.abrir(file_or_content)
+            parsed_rows = FileQuestaoParser.parse(pacote.planilha, filename=pacote.nome_planilha)
+        else:
+            parsed_rows = FileQuestaoParser.parse(file_or_content, filename=filename)
 
         if not parsed_rows:
             return ImportExecutionResult()
@@ -80,6 +92,10 @@ class QuestaoImportService:
 
             if val_res and val_res.is_valid:
                 data = val_res.cleaned_data
+                imagem, erro_imagem = cls._imagem_da_linha(row, pacote)
+                if erro_imagem:
+                    cls._rejeitar(exec_result, row, [erro_imagem])
+                    continue
                 try:
                     with transaction.atomic():
                         # Cria ou recupera a disciplina
@@ -103,6 +119,7 @@ class QuestaoImportService:
                             numero_questao=data.get('numero_questao', ''),
                             enunciado=data['enunciado'],
                             criterios_correcao=data.get('criterios_correcao', ''),
+                            imagem=ContentFile(imagem.conteudo, name=imagem.nome_arquivo) if imagem else None,
                             ativo=True,
                             autor=autor,
                         )
@@ -122,6 +139,7 @@ class QuestaoImportService:
                                 )
 
                     exec_result.total_sucesso += 1
+                    exec_result.total_com_imagem += bool(imagem)
                     exec_result.linhas.append(
                         ImportLineResult(
                             linha=line_num,
@@ -131,41 +149,52 @@ class QuestaoImportService:
                             disciplina=data['disciplina'],
                             questao_id=questao.pk,
                             erros=[],
+                            imagem=questao.imagem.name.rsplit('/', 1)[-1] if questao.imagem else '',
                         )
                     )
                     logger.info('Questão Q%s importada com sucesso da linha %s.', questao.pk, line_num)
 
                 except Exception as exc:
                     logger.exception('Erro ao persistir questão da linha %s: %s', line_num, exc)
-                    exec_result.total_rejeitadas += 1
-                    exec_result.linhas.append(
-                        ImportLineResult(
-                            linha=line_num,
-                            status='REJEITADA',
-                            enunciado=row.get('enunciado', ''),
-                            tipo=row.get('tipo', ''),
-                            disciplina=row.get('disciplina', ''),
-                            questao_id=None,
-                            erros=[f'Erro interno de persistência: {exc}'],
-                        )
-                    )
+                    cls._rejeitar(exec_result, row, [f'Erro interno de persistência: {exc}'])
             else:
                 inval_res = next((r for r in validation_report.linhas_invalidas if r.linha == line_num), None)
                 erros = inval_res.errors if inval_res else ['Linha com inconsistências não identificadas.']
-                exec_result.total_rejeitadas += 1
-                exec_result.linhas.append(
-                    ImportLineResult(
-                        linha=line_num,
-                        status='REJEITADA',
-                        enunciado=row.get('enunciado', ''),
-                        tipo=row.get('tipo', ''),
-                        disciplina=row.get('disciplina', ''),
-                        questao_id=None,
-                        erros=erros,
-                    )
-                )
+                cls._rejeitar(exec_result, row, erros)
 
         return exec_result
+
+    @staticmethod
+    def _imagem_da_linha(row: dict, pacote: PacoteImportacao | None) -> tuple[ImagemDoPacote | None, str]:
+        """(imagem, '') quando a coluna ``imagem`` está ok ou vazia; (None, motivo) se não."""
+        caminho = (row.get('imagem') or '').strip()
+        if not caminho:
+            return None, ''
+        linha = row['linha']
+        if pacote is None:
+            return None, (
+                f'Linha {linha}: a coluna "imagem" só funciona na importação por .zip (planilha + imagens). '
+                'Envie um .zip ou deixe a coluna vazia.'
+            )
+        try:
+            return pacote.imagem(caminho), ''
+        except ValueError as exc:
+            return None, f'Linha {linha}: {exc}'
+
+    @staticmethod
+    def _rejeitar(exec_result: ImportExecutionResult, row: dict, erros: list[str]) -> None:
+        exec_result.total_rejeitadas += 1
+        exec_result.linhas.append(
+            ImportLineResult(
+                linha=row['linha'],
+                status='REJEITADA',
+                enunciado=row.get('enunciado', ''),
+                tipo=row.get('tipo', ''),
+                disciplina=row.get('disciplina', ''),
+                questao_id=None,
+                erros=erros,
+            )
+        )
 
     @classmethod
     def import_csv(cls, file_or_content: Any, autor: Any = None) -> ImportExecutionResult:
