@@ -18,7 +18,7 @@ Os dois precisam ser copiados juntos — um banco sem as imagens (ou o contrári
 | Container da mídia | `examina_django` (pasta `/app/media`) |
 | Retenção local | 7 dias |
 | Frequência automática | Diária às 02h00 (cron do servidor, `scripts/backup_completo.sh`) |
-| Cópia fora do servidor | Bucket do Cloudflare R2 (retenção pela regra de ciclo de vida) |
+| Cópia fora do servidor | Bucket do Cloudflare R2: 35 dias, protegidos contra exclusão nos primeiros 30 |
 | Aviso de falha | E-mail para os administradores (`ADMINS` no `.env` do sistema) |
 | Teste de restauração (CI) | Semanal — domingo 00h Brasília |
 
@@ -88,13 +88,21 @@ dos dois para o Cloudflare R2. Se alguma etapa falhar, manda um e-mail aos admin
 
 1. **R2 → Create bucket**: nome `examina-backups` (o plano gratuito do R2 cobre 10 GB, bem mais
    que o necessário no começo).
-2. No bucket, **Settings → Object lifecycle rules → Add rule**: apagar objetos com prefixo
-   `examina/` depois de **30 dias** (é a retenção da cópia externa; a local continua 7 dias).
-3. **R2 → Manage API tokens → Create API token**: permissão **Object Read & Write**, aplicada
+2. No bucket, **Settings → Bucket lock rules**: regra com prefixo `examina/` e retenção de
+   **30 dias**. Ninguém apaga nem substitui um backup nesse período, nem com o token — se o
+   servidor for invadido, a cópia externa continua a salvo. (O script não é afetado: cada
+   arquivo tem nome com data e hora e nada é sobrescrito nem apagado.)
+3. No bucket, **Settings → Object lifecycle rules → Add rule**, prefixo `examina/`:
+   - **excluir objetos depois de 35 dias** (é a retenção da cópia externa; a local continua
+     7 dias). Precisa ser maior que o bloqueio, para a exclusão nunca coincidir com ele;
+   - **cancelar carregamentos incompletos de várias partes depois de 7 dias** (limpa envios
+     interrompidos no meio);
+   - deixar **desmarcada** a transição para *Acesso infrequente* (não entra na cota gratuita,
+     cobra por GB lido na restauração e tem permanência mínima de 30 dias).
+4. **R2 → Manage API tokens → Create API token**: permissão **Object Read & Write**, aplicada
    **só ao bucket** `examina-backups`. Anote o *Access Key ID*, o *Secret Access Key* (aparece uma
-   vez só) e o *Account ID* (fica na página inicial do R2).
-4. Opcional, mais proteção: **Settings → Bucket lock rules** impede apagar os objetos por N dias,
-   mesmo com o token (útil se o servidor for invadido).
+   vez só) e o *Account ID* (fica na página inicial do R2). Nunca cole essas chaves em chat,
+   e-mail ou repositório; elas vão só no arquivo do item b.
 
 **b) Arquivo de credenciais no servidor** — `/etc/examina-backup.env`, `chmod 600`, dono root
 ou o usuário do serviço (fica fora do projeto e do Git):
@@ -122,7 +130,9 @@ docker compose -f docker-compose.prod.yml exec web python manage.py sendtestemai
 0 2 * * * cd /caminho/para/Examina && bash scripts/backup_completo.sh >> logs/cron.log 2>&1
 ```
 
-Rode uma vez à mão (`bash scripts/backup_completo.sh`) e confira os arquivos no bucket. O envio
+Rode uma vez à mão (`bash scripts/backup_completo.sh`) e confira os arquivos no bucket.
+(Testado em 2026-10-19: envio ao bucket, segunda execução sem reenvio e exclusão recusada pelo
+bloqueio com `ObjectLockedByBucketPolicy`.) O envio
 para o R2 usa a imagem Docker oficial do rclone (baixada na primeira execução); não há nada a
 instalar no servidor além do Docker.
 
@@ -237,7 +247,7 @@ Vá em **Actions → 🗄️ Backup — Restore Test → Run workflow**.
 | Tipo | Retenção | Local |
 |---|---|---|
 | Backups locais | 7 dias | `backups/` |
-| Cópia externa | 30 dias (regra de ciclo de vida do bucket) | Cloudflare R2, `examina-backups/examina/` |
+| Cópia externa | 35 dias (ciclo de vida); protegida contra exclusão nos primeiros 30 (bloqueio) | Cloudflare R2, `examina-backups/examina/` |
 | Artefatos do CI | 7 dias | GitHub Actions |
 
 ---
