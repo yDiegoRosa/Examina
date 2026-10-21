@@ -43,7 +43,7 @@ from .presets import construir_distribuicao_topicos_enade, preset_enade_initial
 from .services import fiducial
 from .services.answer_sheet_layout import build_layout, max_questoes_por_pagina
 from .services.caderno_layout import eh_mascara_enade, eh_prova_enade, numerar_por_tipo, ordenar_como_caderno
-from .services.caderno_service import contexto_caderno
+from .services.caderno_service import contexto_caderno, valor_total_do_snapshot
 from .services.folha_service import FOLHA_ALTERNATIVAS, FOLHA_COLUMNS, FOLHA_ID_DIGITS, aviso_discursivas
 from .services.manual_generator import ProvaManualError, criar_prova_manual
 from .services.pdf_generator import PDFGeneratorService
@@ -604,7 +604,8 @@ def prova_manual_create(request):
         'provas/prova_manual_form.html',
         {
             'form': form,
-            'escala_nota': mascara_guia.valor_total if mascara_guia else Decimal('10'),
+            # Sem máscara guia, a nota é a soma dos pontos obtidos (sem conversão para 0–10).
+            'escala_nota': mascara_guia.valor_total if mascara_guia else None,
             'mascara_guia': mascara_guia,
             'disciplina_selecionada': disciplina_selecionada,
             'topicos_disciplina': topicos_disciplina,
@@ -1652,7 +1653,7 @@ def prova_capa_pdf(request, pk):
         tempo_minutos = mascara.tempo_estimado_minutos
         modalidade = mascara.get_modalidade_display()
     elif snap:
-        valor_total = snap.get('valor_total')
+        valor_total = valor_total_do_snapshot(snap)
         tempo_minutos = snap.get('tempo_estimado_minutos')
         modalidade_code = snap.get('modalidade', '')
         _modalidade_map = {
@@ -1827,7 +1828,7 @@ def prova_gabarito_pdf(request, pk):
         valor_total = mascara.valor_total
         modalidade = mascara.get_modalidade_display()
     elif snap:
-        valor_total = snap.get('valor_total')
+        valor_total = valor_total_do_snapshot(snap)
         modalidade_code = snap.get('modalidade', '')
         _modalidade_map = {
             'OBJ': 'Somente Objetivas',
@@ -2051,7 +2052,7 @@ def prova_pacote_zip(request, pk):
         valor_total = mascara.valor_total
         modalidade = mascara.get_modalidade_display()
     elif snap:
-        valor_total = snap.get('valor_total')
+        valor_total = valor_total_do_snapshot(snap)
         modalidade_code = snap.get('modalidade', '')
         _modalidade_map = {
             'OBJ': 'Somente Objetivas',

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .models import Questao
+from .utils import alternativas_repetidas
 
 
 def normalize_enunciado(text: str) -> str:
@@ -180,6 +181,13 @@ class CSVQuestaoValidator:
                 errors.append(
                     f'Linha {linha_num}: A alternativa do gabarito "{correta}" não corresponde a nenhuma alternativa preenchida ({", ".join(letras_disponiveis) or "nenhuma"}).'
                 )
+
+        # Alternativas com o mesmo texto deixam a questão sem resposta distinguível
+        repetidas = alternativas_repetidas((a['letra'], a['texto']) for a in alternativas)
+        if repetidas:
+            errors.append(
+                f'Linha {linha_num}: Alternativas repetidas ({repetidas}): cada alternativa precisa de um texto diferente.'
+            )
 
         # Atualiza a flag correta nas alternativas estruturadas
         alts_com_flag = [
