@@ -5354,3 +5354,97 @@ class AtaAvaliacaoTest(TestCase):
         html = render_to_string('provas/pdf_capa_prova.html', {'prova': self.prova})
         self.assertIn('Tecnológica do Rio de Janeiro Fernando Mota', html)
         self.assertNotIn('Tecnológica do Estado do Rio de Janeiro', html)
+
+
+class ProvaManualNotaPelaSomaDosPontosTest(TestCase):
+    """
+    Prova montada à mão sem máscara guia vale a soma dos pontos das questões: a nota do aluno é
+    a soma dos pontos obtidos (sem conversão para 0–10), e a capa mostra esse total.
+    """
+
+    def setUp(self):
+        self.disc = Disciplina.objects.create(nome='Disc Soma de Pontos')
+        self.questoes = [
+            Questao.objects.create(
+                disciplina=self.disc, tipo='DIS', dificuldade='M', enunciado=f'Discursiva {i}', criterios_correcao='x'
+            )
+            for i in range(3)
+        ]
+
+    def _prova(self, mascara=None):
+        from .services.manual_generator import criar_prova_manual
+
+        pontos = dict(zip((q.pk for q in self.questoes), ('2', '2', '3'), strict=True))  # 7 pontos
+        return criar_prova_manual(
+            'Prova de 7 pontos',
+            disciplina=self.disc,
+            questoes_ids=[q.pk for q in self.questoes],
+            pontuacoes=pontos,
+            mascara=mascara,
+        )
+
+    def test_sem_mascara_a_nota_e_a_soma_dos_pontos_obtidos(self):
+        from desempenho.models import Desempenho
+        from desempenho.services import escala_da_prova, notas_da_aplicacao
+
+        from .services.caderno_service import valor_total_do_snapshot
+        from .services.version_generator import gerar_versoes_prova
+
+        prova = self._prova()
+        self.assertEqual(prova.snapshot_mascara['valor_total'], '7.00')
+        self.assertEqual(escala_da_prova(prova), Decimal('7.00'))
+        self.assertEqual(valor_total_do_snapshot(prova.snapshot_mascara), Decimal('7.00'))  # capa: "7,00 ponto(s)"
+
+        versao = gerar_versoes_prova(prova, 1)[0]
+        aplicacao = ProvaAplicacao.objects.create(
+            prova=prova, turma=Turma.objects.create(periodo='2026.2', nome='T Soma'), data_aplicacao=date(2026, 11, 10)
+        )
+        for nome, notas in (('Ana', ('10', '10', '10')), ('Bruno', ('0', '0', '10'))):
+            folha = FolhaResposta.objects.create(
+                prova_aplicacao=aplicacao, aluno=Aluno.objects.create(nome=nome, matricula=nome), prova_versao=versao
+            )
+            for questao, nota in zip(self.questoes, notas, strict=True):
+                Desempenho.objects.create(folha_resposta=folha, questao=questao, nota=Decimal(nota))
+
+        notas = {linha['aluno']: linha['nota'] for linha in notas_da_aplicacao(aplicacao)['linhas']}
+        self.assertEqual(notas, {'Ana': Decimal('7.00'), 'Bruno': Decimal('3.00')})
+
+    def test_com_mascara_guia_continua_proporcional_ao_valor_da_mascara(self):
+        from desempenho.services import escala_da_prova
+
+        guia = MascaraProva.objects.create(
+            titulo='Guia de 10 pontos',
+            disciplina=self.disc,
+            quantidade_questoes=3,
+            modalidade=MascaraProva.Modalidade.DISCURSIVA,
+            percentual_facil=0,
+            percentual_medio=100,
+            percentual_dificil=0,
+            valor_total=Decimal('10.00'),
+        )
+        self.assertEqual(escala_da_prova(self._prova(guia)), Decimal('10.00'))
+
+    def test_migracao_preenche_as_provas_manuais_antigas(self):
+        migracao = import_module('provas.migrations.0014_valor_total_prova_manual')
+        manual = self._prova()
+        manual.snapshot_mascara.pop('valor_total')  # como as provas criadas antes da mudança
+        manual.save(update_fields=['snapshot_mascara'])
+        automatica = Prova.objects.create(titulo='Por máscara', disciplina=self.disc, snapshot_mascara={})
+
+        migracao.preencher_valor_total(apps, None)
+        manual.refresh_from_db()
+        automatica.refresh_from_db()
+        self.assertEqual(manual.snapshot_mascara['valor_total'], '7.00')
+        self.assertEqual(automatica.snapshot_mascara, {})
+
+        migracao.remover_valor_total(apps, None)
+        manual.refresh_from_db()
+        self.assertNotIn('valor_total', manual.snapshot_mascara)
+
+    def test_tela_de_montagem_explica_a_regra(self):
+        usuario = get_user_model().objects.create_user(username='admin_soma', password='x')  # noqa: S106
+        usuario.groups.add(Group.objects.get_or_create(name='Administrador')[0])
+        self.client.force_login(usuario)
+        tela = self.client.get(reverse('provas:prova_manual_create'), {'disciplina': self.disc.pk})
+        self.assertContains(tela, 'a nota de cada aluno é a soma dos pontos que ele obtiver')
+        self.assertNotContains(tela, 'na escala de 0 a 10')

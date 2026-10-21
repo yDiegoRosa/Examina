@@ -6,6 +6,7 @@ matrícula na capa e a versão do cartão-resposta do aluno.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 from banco_questoes.models import Questao
@@ -26,6 +27,14 @@ _MODALIDADE_DISPLAY = {
     'DIS': 'Somente Discursivas',
     'MISTA': 'Mista (Objetivas e Discursivas)',
 }
+
+
+def valor_total_do_snapshot(snap: dict) -> Decimal | None:
+    """``valor_total`` do snapshot como número (o JSON guarda texto: "7.00" sai "7,00" na capa)."""
+    try:
+        return Decimal(str(snap.get('valor_total')))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 def itens_do_caderno(prova: Prova, versao: ProvaVersao | None) -> list[dict]:
@@ -100,7 +109,7 @@ def contexto_caderno(
         tempo_minutos = mascara.tempo_estimado_minutos
         modalidade = mascara.get_modalidade_display()
     elif snap:
-        valor_total = snap.get('valor_total')
+        valor_total = valor_total_do_snapshot(snap)
         tempo_minutos = snap.get('tempo_estimado_minutos')
         modalidade_code = snap.get('modalidade', '')
         modalidade = _MODALIDADE_DISPLAY.get(modalidade_code, modalidade_code)

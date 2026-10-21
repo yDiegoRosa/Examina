@@ -6,6 +6,7 @@ from django.forms import inlineformset_factory
 
 from .models import Alternativa, Disciplina, Questao, Topico
 from .seguranca_login import minutos_de_bloqueio
+from .utils import alternativas_repetidas
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +333,13 @@ class QuestaoForm(forms.ModelForm):
             self.add_error(
                 None,
                 'Questões objetivas precisam de no mínimo 2 alternativas.',
+            )
+            return False
+
+        repetidas = alternativas_repetidas((f.cleaned_data.get('letra'), f.cleaned_data.get('texto')) for f in filled)
+        if repetidas:
+            self.add_error(
+                None, f'Alternativas repetidas ({repetidas}): cada alternativa precisa de um texto diferente.'
             )
             return False
 

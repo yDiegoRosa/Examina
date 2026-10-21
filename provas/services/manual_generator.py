@@ -225,6 +225,8 @@ def criar_prova_manual(
             'quantidade_questoes': total_questoes,
             'modalidade': 'MANUAL',
             'modalidade_display': 'Montagem Manual (Seleção Livre)',
+            # Sem máscara, a prova vale a soma dos pontos das questões (a nota é a soma dos obtidos).
+            'valor_total': str(sum(pontuacao_por_questao.values())),
             'tipo_geracao': 'MANUAL',
             'embaralhar_questoes': False,
             'embaralhar_alternativas': False,
