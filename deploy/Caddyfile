@@ -1,0 +1,26 @@
+# HTTPS do Examina num servidor próprio (VPS). O Caddy obtém e renova sozinho o certificado
+# (Let's Encrypt) para o domínio em DOMINIO (.env), redireciona HTTP → HTTPS e encaminha para
+# o gunicorn. Usado pelo serviço "caddy" do docker-compose.prod.yml (COMPOSE_PROFILES=caddy).
+# Requisitos: o registro DNS do domínio aponta para o IP do servidor e as portas 80/443 abertas.
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# Envio de cartões escaneados: até 100 imagens de até 10 MB numa requisição; .zip de questões até 50 MB.
+	request_body {
+		max_size 200MB
+	}
+
+	# O Caddy já envia X-Forwarded-Proto/For — no .env: BEHIND_PROXY=True.
+	reverse_proxy web:8000 {
+		transport http {
+			# ZIPs de cadernos e a correção em lote rodam dentro da requisição (GUNICORN_TIMEOUT=120 s).
+			response_header_timeout 130s
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
