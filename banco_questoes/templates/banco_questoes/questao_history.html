@@ -176,9 +176,16 @@
     transition: opacity 0.15s;
   }
   .diff-toggle-btn:hover { opacity: 0.75; }
-  .diff-body { overflow: hidden; transition: max-height 0.3s ease; }
+  /* overflow-y esconde para a animação de abrir/fechar; overflow-x rola se a tabela não couber. */
+  .diff-body { overflow-x: auto; overflow-y: hidden; transition: max-height 0.3s ease; }
   .diff-body.collapsed { max-height: 0; }
   .diff-body.expanded  { max-height: 2000px; }
+
+  /* Celular: o nome do campo deixa de ocupar 160 px fixos e pode quebrar a linha. */
+  @media (max-width: 640px) {
+    .diff-field-name { width: auto; white-space: normal; }
+    .diff-table th, .diff-table td { padding: 0.5rem; }
+  }
 </style>
 {% endblock %}
 
@@ -212,7 +219,7 @@
 </div>
 
 <!-- Resumo rápido -->
-<div class="flex items-center gap-3 mb-4" style="font-size:0.875rem; color:var(--text-muted);">
+<div class="flex flex-wrap items-center gap-3 mb-4" style="font-size:0.875rem; color:var(--text-muted);">
   <i class="bi bi-layers-fill" style="color:var(--fae-blue-electric);"></i>
   <span>
     <strong style="color:var(--text-main);">{{ versoes|length }}</strong>
@@ -238,7 +245,7 @@
 
     <!-- Cabeçalho do card -->
     <div class="flex items-center justify-between flex-wrap gap-3">
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
         <!-- Badge de ação -->
         <span class="history-badge {{ v.action_css }}">
           {% if v.action_css == 'history-action-create' %}
@@ -286,7 +293,7 @@
       <table class="diff-table">
         <thead>
           <tr>
-            <th style="width:160px;">Campo</th>
+            <th>Campo</th>
             <th>Valor Anterior</th>
             <th class="diff-arrow" style="width:2.5rem;"></th>
             <th>Valor Novo</th>
