@@ -212,3 +212,51 @@ class PaginasDeErroTest(TestCase):
         resp = server_error(RequestFactory().get('/'))
         self.assertEqual(resp.status_code, 500)
         self.assertIn('Erro interno do servidor (500)', resp.content.decode())
+
+
+class SemCacheDepoisDeSairTest(TestCase):
+    """
+    Depois de "Sair", o botão voltar não pode mostrar a tela anterior (o celular guardava a
+    página inteira na memória): páginas de usuário logado vão com "no-store" e a sessão acaba.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='doc_cache', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+
+    def test_pagina_de_usuario_logado_nao_fica_no_cache(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('banco_questoes:questao_list'))
+        self.assertEqual(resp.status_code, 200)
+        cache = resp['Cache-Control']
+        for diretiva in ('no-store', 'no-cache', 'private'):
+            self.assertIn(diretiva, cache)
+
+    def test_download_de_usuario_logado_tambem_nao_fica_no_cache(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('banco_questoes:download_modelo_csv'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('no-store', resp['Cache-Control'])
+
+    def test_visitante_nao_recebe_o_cabecalho_do_middleware(self):
+        resp = self.client.get(reverse('banco_questoes:questao_list'))  # redireciona para o login
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(resp.has_header('Cache-Control'))
+
+    def test_depois_de_sair_a_pagina_manda_para_o_login(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse('banco_questoes:questao_list')).status_code, 200)
+
+        self.client.post(reverse('logout'))
+
+        resp = self.client.get(reverse('banco_questoes:questao_list'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(resp['Location'].startswith(reverse('login')))
+
+    def test_pagina_restaurada_pelo_voltar_e_recarregada(self):
+        js = (Path(__file__).resolve().parent.parent / 'banco_questoes/static/banco_questoes/js/main.js').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn("addEventListener('pageshow'", js)
+        self.assertIn('e.persisted', js)
+        self.assertIn('window.location.reload()', js)
