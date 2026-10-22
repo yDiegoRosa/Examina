@@ -37,7 +37,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-span-4">
+    <div class="col-span-3">
       <label class="form-label" for="f_aplic">Prova / aplicação</label>
       <select id="f_aplic" name="aplicacao" class="form-select">
         <option value="">Todas</option>
@@ -54,7 +54,8 @@
       <label class="form-label" for="f_fim">Até</label>
       <input type="date" id="f_fim" name="data_fim" class="form-input" value="{{ filtro_data_fim }}">
     </div>
-    <div class="col-span-1 flex gap-2">
+    {# 2 colunas: em 1 coluna os dois botões não cabiam e o "Limpar" saía cortado. #}
+    <div class="col-span-2 flex gap-2">
       <button type="submit" class="btn btn-primary" title="Aplicar filtros"><i class="bi bi-funnel-fill"></i></button>
       <a href="{% url 'desempenho:dashboard' %}" class="btn btn-outline" title="Limpar filtros"><i class="bi bi-x-lg"></i></a>
     </div>

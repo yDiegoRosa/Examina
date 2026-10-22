@@ -11,9 +11,9 @@
   {# ID oculto para edição #}
   {{ form.id }}
 
-  <div class="flex items-start gap-4" style="width: 100%;">
+  <div class="flex items-start gap-4 alternativa-row" style="width: 100%;">
     <!-- Seletor de Letra -->
-    <div style="width: 110px; flex-shrink: 0;">
+    <div class="alt-letra">
       <label class="form-label">
         <i class="bi bi-tag-fill me-1"></i> Letra
       </label>
@@ -24,7 +24,7 @@
     </div>
 
     <!-- Texto da Alternativa -->
-    <div class="flex-grow">
+    <div class="flex-grow alt-texto">
       <label class="form-label">
         <i class="bi bi-fonts me-1"></i> Texto da Alternativa
       </label>
@@ -35,7 +35,7 @@
     </div>
 
     <!-- Checkbox de Gabarito/Correta -->
-    <div style="min-width: 110px; flex-shrink: 0; padding-top: 0.25rem;">
+    <div class="alt-correta">
       <label class="form-label text-center">Gabarito?</label>
       <div class="flex items-center justify-center gap-2 mt-2">
         {{ form.correta }}
@@ -44,7 +44,7 @@
     </div>
 
     <!-- Botão de Remoção -->
-    <div style="padding-top: 1.65rem; flex-shrink: 0;">
+    <div class="alt-remover">
       <button type="button" class="btn-danger-circle btn-remove-alternativa" title="Remover Alternativa">
         <i class="bi bi-trash3"></i>
       </button>
