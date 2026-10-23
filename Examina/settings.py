@@ -86,6 +86,8 @@ MIDDLEWARE = [
     # Páginas de usuário logado não ficam no cache do navegador (voltar depois de "Sair").
     'Examina.middleware.SemCacheParaUsuarioLogadoMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # Login sem "Manter conectado": sai após SESSAO_INATIVIDADE_MINUTOS sem uso (depois de messages).
+    'Examina.middleware.EncerraSessaoInativaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
 ]
@@ -214,6 +216,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'banco_questoes:questao_list'
 LOGOUT_REDIRECT_URL = 'login'
+
+# Sessão: com "Manter conectado neste computador" marcado no login, dura SESSION_COOKIE_AGE
+# (2 semanas, padrão do Django); desmarcado, termina ao fechar o navegador e depois de
+# SESSAO_INATIVIDADE_MINUTOS sem uso (Examina.middleware.EncerraSessaoInativaMiddleware).
+SESSAO_INATIVIDADE_MINUTOS = env.int('SESSAO_INATIVIDADE_MINUTOS', default=120)
 
 # Limite de tentativas de login (banco_questoes.seguranca_login): depois de
 # LOGIN_MAX_TENTATIVAS senhas erradas do mesmo usuário em LOGIN_BLOQUEIO_MINUTOS, o login

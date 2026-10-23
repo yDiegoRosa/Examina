@@ -20,6 +20,10 @@ class LoginForm(AuthenticationForm):
 
     login_bloqueado = False
 
+    # Desmarcado: a sessão termina ao fechar o navegador ou após um tempo sem uso
+    # (Examina.views.LoginView); marcado: dura 2 semanas.
+    lembrar = forms.BooleanField(required=False, label='Manter conectado neste computador')
+
     def _recusar_se_bloqueado(self, username):
         minutos = minutos_de_bloqueio(username)
         if minutos:
