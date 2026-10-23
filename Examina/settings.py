@@ -250,7 +250,9 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)  # porta 465
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=not EMAIL_USE_SSL)  # porta 587 (STARTTLS)
 EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=10)
-DEFAULT_FROM_EMAIL = env('EMAIL_REMETENTE', default=EMAIL_HOST_USER or 'examina@localhost')
+# "EMAIL_REMETENTE=" vazio (como o criar_env_producao.sh gera) vale como não definido: sem o
+# "or", o remetente ficaria em branco e o servidor SMTP recusaria a mensagem.
+DEFAULT_FROM_EMAIL = env('EMAIL_REMETENTE', default='') or EMAIL_HOST_USER or 'examina@localhost'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL  # remetente dos e-mails aos ADMINS
 EMAIL_SUBJECT_PREFIX = '[Examina] '
 
