@@ -65,14 +65,19 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f'   Imagem ilegível: {exc}'))
                 continue
 
-            folha = omr.identificar_folha(imagem)
+            payload, origem_qr = omr.ler_qr_da_folha(imagem)
+            token = omr.extrair_qr_token(payload)
+            folha = omr.localizar_folha(token) if token else None
+            onde = ' no recorte da imagem endireitada' if origem_qr == 'recorte' else ''
             if folha is not None:
                 resumo['qr'] += 1
-                self.stdout.write(f'   QR: ok — {folha.aluno.nome} (versão {folha.prova_versao.identificador})')
+                self.stdout.write(f'   QR: ok{onde} — {folha.aluno.nome} (versão {folha.prova_versao.identificador})')
             else:
-                payload = omr.decodificar_qr(imagem)
-                motivo = 'não lido' if not payload else f'lido ({payload!r}), mas não corresponde a uma folha'
+                motivo = 'não lido' if not payload else f'lido{onde} ({payload!r}), mas não corresponde a uma folha'
                 self.stdout.write(self.style.WARNING(f'   QR: {motivo}'))
+
+            cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY) if imagem.ndim == 3 else imagem
+            _, largura_marcadores = omr.detectar_marcadores_com_largura(cinza)
 
             try:
                 canonica = omr.corrigir_perspectiva(imagem)
@@ -80,7 +85,8 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f'   Marcadores: {exc} (sem deskew, bolhas não lidas)'))
                 continue
             resumo['marcadores'] += 1
-            self.stdout.write('   Marcadores: 4 detectados — folha endireitada')
+            escala = f' (imagem reduzida a {largura_marcadores} px)' if largura_marcadores else ''
+            self.stdout.write(f'   Marcadores: 4 detectados{escala} — folha endireitada')
             if pasta_canonica:
                 destino = pasta_canonica / f'{Path(caminho).stem}_canonica.png'
                 cv2.imwrite(str(destino), canonica)
@@ -105,7 +111,9 @@ class Command(BaseCommand):
                     vazias.append(ordenadas[1] if len(ordenadas) > 1 else 0.0)
                 bolhas = '  '.join(f'{letra} {fracao:.2f}' for letra, fracao in sorted(leitura.preenchimentos.items()))
                 resultado = f'ok ({leitura.marcada})' if leitura.status == 'ok' else leitura.status
-                self.stdout.write(f'   Q{numero:02d}  {bolhas}  → {resultado}')
+                dx, dy = leitura.deslocamento_mm
+                ajuste = f'  [ajuste {dx:+.1f}, {dy:+.1f} mm]' if (dx or dy) else ''
+                self.stdout.write(f'   Q{numero:02d}  {bolhas}  → {resultado}{ajuste}')
 
         self._resumo(resumo, marcadas, vazias)
 

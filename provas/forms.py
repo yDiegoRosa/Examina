@@ -17,6 +17,25 @@ class _MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
 
+# Marcas "ftyp" do contêiner HEIF (HEIC/HEIF de celulares). Nem o Pillow nem o OpenCV do
+# projeto leem esse formato; em vez de uma biblioteca nova, o envio é recusado com orientação.
+_MARCAS_HEIF = (b'heic', b'heix', b'hevc', b'hevx', b'heim', b'heis', b'mif1', b'msf1')
+
+
+def _eh_heif(arquivo) -> bool:
+    """Foto HEIC/HEIF: pela extensão ou pela assinatura ``ftyp`` no início do arquivo."""
+    nome = (getattr(arquivo, 'name', '') or '').lower()
+    if nome.endswith(('.heic', '.heif')):
+        return True
+    try:
+        posicao = arquivo.tell()
+        cabecalho = arquivo.read(12)
+        arquivo.seek(posicao)
+    except (AttributeError, OSError, ValueError):
+        return False
+    return len(cabecalho) >= 12 and cabecalho[4:8] == b'ftyp' and cabecalho[8:12] in _MARCAS_HEIF
+
+
 class MultipleImageField(forms.ImageField):
     """
     Campo de upload de **múltiplas** imagens.
@@ -47,6 +66,13 @@ class MultipleImageField(forms.ImageField):
             return []
 
         arquivos = data if isinstance(data, (list, tuple)) else [data]
+        for arquivo in arquivos:
+            if _eh_heif(arquivo):
+                raise forms.ValidationError(
+                    f'A foto "{arquivo.name}" está no formato HEIC/HEIF, que o sistema não lê. Envie em JPG ou PNG: '
+                    'tire a foto pela câmera do próprio sistema (ela já gera JPG) ou desative o formato HEIF/'
+                    '"alta eficiência" nas configurações da câmera do celular.'
+                )
         single_clean = super().clean
         limpos = [single_clean(arquivo, initial) for arquivo in arquivos]
 

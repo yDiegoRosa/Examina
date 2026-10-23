@@ -71,7 +71,14 @@ ID_ROWS = 10  # dígitos 0–9
 ANS_HEADER_Y = 128.0  # linha dos rótulos A–E (topo das colunas)
 ANS_FIRST_ROW_CY = 134.0  # centro da 1ª linha de questões
 ANS_PITCH_Y = 8.0  # passo vertical entre questões
-ANS_BUBBLE_R = 1.9
+# Raio da bolha: 2,4 mm (era 1,9; aumentado em 2026-10-06 para facilitar o preenchimento).
+# Os centros não mudaram e o leitor mede só o disco interno (omr.INNER_R_FRAC × raio =
+# 1,49 mm), que ainda cabe dentro da bolha antiga: cartões impressos com 1,9 continuam
+# legíveis, por isso o SCHEMA_VERSION não mudou. Não passe de ~2,8 mm sem rever isso.
+ANS_BUBBLE_R = 2.4
+# Raio dos cartões impressos antes de 2026-10-06: o ajuste fino do leitor (omr) também
+# procura anéis deste tamanho, para os cartões antigos continuarem bem lidos em fotos.
+ANS_BUBBLE_R_ANTERIOR = 1.9
 ANS_ALT_PITCH_X = 6.0  # passo horizontal entre alternativas
 ANS_COL_WIDTH = 60.0  # passo horizontal entre colunas de questões
 ANS_FIRST_COL_X0 = 18.0  # borda esquerda (x0) da 1ª coluna
