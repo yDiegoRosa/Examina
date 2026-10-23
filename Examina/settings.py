@@ -83,6 +83,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Páginas de usuário logado não ficam no cache do navegador (voltar depois de "Sair").
+    'Examina.middleware.SemCacheParaUsuarioLogadoMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
@@ -100,6 +102,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Perfil (administrador / visão total) para menu e botões — ver academico.acesso.
+                'banco_questoes.context_processors.perfil',
             ],
         },
     },
@@ -224,10 +228,33 @@ LOGIN_BLOQUEIO_MINUTOS = env.int('LOGIN_BLOQUEIO_MINUTOS', default=15)
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 # ---------------------------------------------------------------------------
+# E-mail: avisos ao administrador (falha no backup e erros 500 pelo logger mail_admins)
+# ---------------------------------------------------------------------------
+# ADMINS: e-mails separados por vírgula. Sem EMAIL_HOST, os e-mails só aparecem no log
+# (backend de console) — nada é enviado.
+ADMINS = [('Administrador', email) for email in env.list('ADMINS', default=[])]
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_BACKEND = (
+    'django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST else 'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)  # porta 465
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=not EMAIL_USE_SSL)  # porta 587 (STARTTLS)
+EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=10)
+DEFAULT_FROM_EMAIL = env('EMAIL_REMETENTE', default=EMAIL_HOST_USER or 'examina@localhost')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL  # remetente dos e-mails aos ADMINS
+EMAIL_SUBJECT_PREFIX = '[Examina] '
+
+# ---------------------------------------------------------------------------
 # Upload limits
 # ---------------------------------------------------------------------------
 # Maximum size (in MB) accepted for CSV/XLSX imports
 CSV_UPLOAD_MAX_SIZE_MB = env.int('CSV_UPLOAD_MAX_SIZE_MB', default=5)
+# Importação com imagens (.zip = planilha + pasta de imagens; banco_questoes.importacao_zip)
+IMPORT_ZIP_MAX_SIZE_MB = env.int('IMPORT_ZIP_MAX_SIZE_MB', default=50)
+IMPORT_IMAGEM_MAX_SIZE_MB = env.float('IMPORT_IMAGEM_MAX_SIZE_MB', default=5)
 
 # ---------------------------------------------------------------------------
 # Production-only security hardening

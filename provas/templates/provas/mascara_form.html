@@ -405,7 +405,7 @@
   </div>
 
   <!-- Barra de Ações -->
-  <div class="flex gap-3 mb-6">
+  <div class="flex flex-wrap gap-3 mb-6">
     <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
       <i class="bi bi-floppy2-fill"></i> Salvar Máscara de Avaliação
     </button>
@@ -925,8 +925,8 @@
     });
   }
 
-  // Validação Pre-Submit no Cliente
-  const formElement = document.querySelector('form');
+  // Validação Pre-Submit no Cliente (o formulário da máscara — o primeiro <form> da página é o "Sair" do menu)
+  const formElement = document.getElementById('mascara-form');
   if (formElement) {
     formElement.addEventListener('submit', function(e) {
       const f = parseInt(inputFacil ? inputFacil.value : 0, 10) || 0;
@@ -1000,8 +1000,8 @@
       const mod = modalidadeSelect ? modalidadeSelect.value : '';
       if (mod === 'MISTA') {
         const total = parseInt(totalInput ? totalInput.value : 0, 10) || 0;
-        const objInput = document.getElementById('id_quantidade_objetivas');
-        const disInput = document.getElementById('id_quantidade_discursivas');
+        const objInput = document.getElementById('id_qtd_objetivas');
+        const disInput = document.getElementById('id_qtd_discursivas');
         const qObj = parseInt(objInput ? objInput.value : 0, 10) || 0;
         const qDis = parseInt(disInput ? disInput.value : 0, 10) || 0;
         if (qObj + qDis !== total) {

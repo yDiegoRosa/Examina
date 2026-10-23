@@ -1445,6 +1445,10 @@ class AuthenticationViewsTest(TestCase):
         self.assertContains(response, 'Entrar no Examina')
         self.assertContains(response, 'id_username')
         self.assertContains(response, 'id_password')
+        # Sem credenciais de demonstração na tela nem preenchimento automático.
+        self.assertNotContains(response, 'faetec')
+        self.assertNotContains(response, 'btn-autofill')
+        self.assertNotContains(response, 'Preencher')
 
     def test_unauthenticated_access_redirects_to_login(self):
         """Garante que funções internas e rota raiz exigem autenticação prévia."""
@@ -1734,6 +1738,10 @@ class QuestaoListPaginationTest(TestCase):
 
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='docente_pag', password='secret_password')  # noqa: S106
+        # Panorama do acervo inteiro: administrador (o professor veria só as próprias questões).
+        from django.contrib.auth.models import Group
+
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.login(username='docente_pag', password='secret_password')  # noqa: S106
         self.url = reverse('banco_questoes:questao_list')
 

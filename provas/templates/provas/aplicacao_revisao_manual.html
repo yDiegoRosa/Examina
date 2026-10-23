@@ -7,9 +7,11 @@
   <a href="{% url 'provas:aplicacao_detail' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-arrow-left"></i> Painel da aplicação
   </a>
+  {% if pode_alterar %}
   <a href="{% url 'provas:aplicacao_upload_folhas' aplicacao.pk %}" class="btn btn-outline">
     <i class="bi bi-cloud-arrow-up"></i> Enviar cartões
   </a>
+  {% endif %}
 </div>
 
 <div class="hero-card mb-4">
@@ -51,6 +53,9 @@
           <td><a href="{{ d.imagem.url }}" target="_blank" rel="noopener" class="font-bold text-main">{{ d.imagem.name }}</a></td>
           <td class="small text-danger">{{ d.mensagem|default:"—" }}</td>
           <td>
+            {% if not pode_alterar %}
+            <span class="small text-muted"><i class="bi bi-eye"></i> Só consulta: quem altera é o autor da prova.</span>
+            {% else %}
             <form method="post" action="{% url 'provas:digitalizacao_vincular_folha' d.pk %}" class="flex items-center gap-2">
               {% csrf_token %}
               <select name="folha_id" class="form-select" required style="max-width: 200px;">
@@ -61,6 +66,7 @@
               </select>
               <button type="submit" class="btn btn-primary small"><i class="bi bi-link-45deg"></i> Vincular</button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% empty %}
@@ -104,6 +110,9 @@
             {% endif %}
           </td>
           <td>
+            {% if not pode_alterar %}
+            <span class="small text-muted"><i class="bi bi-eye"></i> Só consulta: quem altera é o autor da prova.</span>
+            {% else %}
             <form method="post" action="{% url 'provas:desempenho_revisao_manual' dsp.pk %}" class="flex items-center gap-2">
               {% csrf_token %}
               <select name="resposta" class="form-select" style="max-width: 160px;">
@@ -114,6 +123,7 @@
               </select>
               <button type="submit" class="btn btn-primary small"><i class="bi bi-check2"></i> Salvar</button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% empty %}

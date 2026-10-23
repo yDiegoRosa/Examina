@@ -84,6 +84,22 @@ class TestValidateWithAlternativas:
         assert result is True
         assert form.non_field_errors() == []
 
+    def test_objetiva_com_alternativas_repetidas_gera_erro(self, disciplina):
+        """Duas alternativas com o mesmo texto (sem diferenciar maiúsculas/espaços) → erro."""
+        form = QuestaoForm(data=_build_questao_data(tipo='OBJ', disciplina_id=disciplina.pk))
+        assert form.is_valid()
+
+        alts = [
+            {'letra': 'A', 'texto': 'Alternativa gráfica', 'correta': True},
+            {'letra': 'B', 'texto': 'Outra opção', 'correta': False},
+            {'letra': 'C', 'texto': '  alternativa   GRÁFICA', 'correta': False},
+        ]
+        formset = AlternativaFormSet(data=_build_formset_data(alts))
+        assert formset.is_valid()
+
+        assert form.validate_with_alternativas(formset) is False
+        assert 'Alternativas repetidas (A e C)' in str(form.non_field_errors())
+
     def test_objetiva_sem_nenhuma_correta_gera_erro(self, disciplina):
         """Objetiva sem alternativa correta → adiciona erro não-campo."""
         form_data = _build_questao_data(tipo='OBJ', disciplina_id=disciplina.pk)

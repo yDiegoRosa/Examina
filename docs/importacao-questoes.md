@@ -37,6 +37,7 @@ O parser é tolerante a variações de nome (não diferencia maiúsculas/acentos
 - `opcao_a` ≡ `opção a`, `opcao a`, `alt_a`, `alternativa a` (idem b–e)
 - `gabarito` ≡ `correta`, `resposta`
 - `comentarios` ≡ `comentários`, `justificativa`, `criterios_correcao`
+- `imagem` ≡ `figura`, `arquivo_imagem` (só no envio por `.zip` — ver abaixo)
 
 ## Regras de ouro (importar sem erro)
 
@@ -61,3 +62,38 @@ ENADE ADS 2021,26,OBJ,Redes de Computadores,DNS,M,Qual a função principal do D
 ```csv
 ENADE ADS 2021,4,DIS,Engenharia de Software,Processos de Software,M,Explique as diferenças entre os modelos cascata e ágil.,,,,,,,engenharia-de-software; processos-ageis,Espera-se o contraste entre previsibilidade (cascata) e iteração/adaptação (ágil).
 ```
+
+## Questões com imagem (envio por `.zip`)
+
+Para questões com figura, envie um **`.zip`** com a planilha e uma pasta de imagens, e acrescente
+à planilha a coluna **`imagem`** (16ª coluna). O modelo pronto está em
+**Questões → Importar → Baixar exemplo com imagens (ZIP)**.
+
+```
+questoes_enade.zip
+├── questoes.xlsx          (ou questoes.csv — uma única planilha no ZIP)
+└── imagens/
+    ├── 2021_tads_q10.png
+    └── 2017_tads_q27.png
+```
+
+| Coluna `imagem` | Resultado |
+|---|---|
+| `imagens/2021_tads_q10.png` | a questão recebe essa figura |
+| *(vazia)* | a questão entra sem imagem |
+| `2021_tads_q10.png` | também vale: só o nome do arquivo, se ele for único no ZIP |
+
+- **É o nome que liga a imagem à questão**, não a ordem dos arquivos na pasta. Maiúsculas e
+  minúsculas não fazem diferença; `\` e `/` são aceitos.
+- **Imagens:** PNG ou JPG de verdade (o conteúdo é conferido, não só a extensão), até
+  `IMPORT_IMAGEM_MAX_SIZE_MB` (padrão **5 MB**) cada, **uma por questão**. Prefira só a figura
+  recortada — a página inteira da prova ocupa o caderno todo. Alternativas em forma de imagem
+  não são suportadas.
+- **ZIP:** até `IMPORT_ZIP_MAX_SIZE_MB` (padrão **50 MB**). Pastas `__MACOSX`, arquivos ocultos e
+  caminhos com `..` são ignorados.
+- **Erros por linha:** se a imagem citada não estiver no ZIP, não for PNG/JPG válido ou passar do
+  limite, só aquela questão é recusada (o relatório diz o motivo); as demais entram normalmente.
+- A coluna `imagem` preenchida num `.xlsx`/`.csv` enviado **sem** ZIP recusa a linha (não há de
+  onde tirar a imagem).
+- No caderno (PDF), a figura sai abaixo do enunciado. Depois de importada, a imagem pode ser
+  trocada no formulário da questão.

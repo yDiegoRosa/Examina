@@ -211,7 +211,7 @@ class ProvaListTest(TestCase):
         from provas.models import Prova
 
         cls.user = get_user_model().objects.create_user(username='docente_painel')
-        cls.user.groups.add(Group.objects.get(name='Docente'))
+        cls.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         cls.disciplina = Disciplina.objects.create(nome='Disciplina arquivada', ativo=False)
         cls.outra = Disciplina.objects.create(nome='Outra disciplina')
         cls.manual = Prova.objects.create(
@@ -424,7 +424,7 @@ class MascaraViewsTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_views', password='secret_password')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.login(username='prof_views', password='secret_password')  # noqa: S106
 
         self.disc = Disciplina.objects.create(nome='Banco de Dados (UBD)')
@@ -2011,7 +2011,7 @@ class MontagemManualProvaTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='prof_manual', password='secret_password')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.login(username='prof_manual', password='secret_password')  # noqa: S106
 
         self.disc = Disciplina.objects.create(nome='Sistemas Distribuídos')
@@ -2607,7 +2607,7 @@ class PresetEnadeTest(TestCase):
         self.disciplina = Disciplina.objects.create(nome='Análise e Desenvolvimento de Sistemas')
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='coord_enade', password='secret_password')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
 
     def test_preset_initial_tem_estrutura_do_componente_especifico(self):
         """O preset propõe 30 questões (27 objetivas + 3 discursivas) em modalidade mista."""
@@ -2739,7 +2739,7 @@ class SimuladoEnadeAreasTest(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='coord_areas', password='secret_password')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
 
         # Acervo cobrindo 3 áreas do CE (Banco de Dados, Segurança e Desenvolvimento).
         acervo = {
@@ -3192,7 +3192,7 @@ class AtribuicaoVersaoServiceTest(TestCase):
 class FolhaRespostaTest(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord_f', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disciplina = Disciplina.objects.create(nome='Disc Folha')
         self.topico = Topico.objects.create(disciplina=self.disciplina, nome='Top Folha')
         self.questao = Questao.objects.create(
@@ -3437,7 +3437,7 @@ def _imagem_png(nome='folha.png'):
 class UploadFolhasViewTest(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='coord_up', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.prova = Prova.objects.create(titulo='Prova Upload')
         self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
         self.aplicacao = ProvaAplicacao.objects.create(
@@ -3741,7 +3741,7 @@ class CorrecaoFolhaTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='corretor', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Correcao')
         self.prova = Prova.objects.create(titulo='Prova Correcao', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -3933,7 +3933,7 @@ class RevisaoManualTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='rev', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Rev')
         self.prova = Prova.objects.create(titulo='Prova Rev', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -4030,7 +4030,7 @@ class LancamentoManualTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='prof', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.disc = Disciplina.objects.create(nome='Disc Lanc')
         self.prova = Prova.objects.create(titulo='Prova Lanc', disciplina=self.disc)
         self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
@@ -4068,6 +4068,15 @@ class LancamentoManualTest(TestCase):
 
     def test_nota_corte_padrao_seis(self):
         self.assertEqual(self.aplicacao.nota_corte, Decimal('6.00'))
+
+    def test_campos_numericos_mostram_os_valores_atuais(self):
+        # <input type="number"> só aceita ponto: o valor localizado ("6,00") apareceria vazio.
+        lancar_nota_discursiva(self.folha, self.dis, Decimal('7.5'), Decimal('6'), usuario=self.user)
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('provas:folha_lancamento_manual', args=[self.folha.pk]))
+        self.assertContains(resp, 'name="nota_corte" class="form-input"')
+        self.assertContains(resp, 'value="6.00"')
+        self.assertContains(resp, 'value="7.50"')
 
     def test_tela_de_lancamento_usa_os_rotulos_do_caderno(self):
         # Versão antiga (discursiva gravada com número 2): a tela mostra "D01", como no caderno.
@@ -4343,7 +4352,7 @@ class AplicacaoTelasTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='doc_aplic', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
 
         self.prova = Prova.objects.create(titulo='Prova Aplicável')
@@ -4481,7 +4490,7 @@ class NotasAplicacaoViewTest(TestCase):
         from desempenho.models import Desempenho
 
         self.user = get_user_model().objects.create_user(username='doc_notas', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
 
         disc = Disciplina.objects.create(nome='Disc Export')
@@ -4616,7 +4625,7 @@ class QuantidadeCadernosTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='prof_cadernos', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
         self.disc = Disciplina.objects.create(nome='Disc Cadernos')
         self.topicos = [Topico.objects.create(disciplina=self.disc, nome=f'Tópico {i}') for i in (1, 2)]
@@ -5124,7 +5133,7 @@ class PdfsAvulsosEnadeTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='doc_avulsos', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
         self.disc = Disciplina.objects.create(nome='Disc Avulsos')
 
@@ -5241,7 +5250,7 @@ class LinhasDiscursivaViewTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='doc_linhas', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
         self.disc = Disciplina.objects.create(nome='Disc Linhas')
 
@@ -5328,7 +5337,7 @@ class AtaAvaliacaoTest(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='doc_ata', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])
         self.client.force_login(self.user)
 
         autor = get_user_model().objects.create_user(username='autor_ata', first_name='Maria', last_name='Docente')
@@ -5456,3 +5465,97 @@ class AtaAvaliacaoTest(TestCase):
         html = render_to_string('provas/pdf_capa_prova.html', {'prova': self.prova})
         self.assertIn('Tecnológica do Rio de Janeiro Fernando Mota', html)
         self.assertNotIn('Tecnológica do Estado do Rio de Janeiro', html)
+
+
+class ProvaManualNotaPelaSomaDosPontosTest(TestCase):
+    """
+    Prova montada à mão sem máscara guia vale a soma dos pontos das questões: a nota do aluno é
+    a soma dos pontos obtidos (sem conversão para 0–10), e a capa mostra esse total.
+    """
+
+    def setUp(self):
+        self.disc = Disciplina.objects.create(nome='Disc Soma de Pontos')
+        self.questoes = [
+            Questao.objects.create(
+                disciplina=self.disc, tipo='DIS', dificuldade='M', enunciado=f'Discursiva {i}', criterios_correcao='x'
+            )
+            for i in range(3)
+        ]
+
+    def _prova(self, mascara=None):
+        from .services.manual_generator import criar_prova_manual
+
+        pontos = dict(zip((q.pk for q in self.questoes), ('2', '2', '3'), strict=True))  # 7 pontos
+        return criar_prova_manual(
+            'Prova de 7 pontos',
+            disciplina=self.disc,
+            questoes_ids=[q.pk for q in self.questoes],
+            pontuacoes=pontos,
+            mascara=mascara,
+        )
+
+    def test_sem_mascara_a_nota_e_a_soma_dos_pontos_obtidos(self):
+        from desempenho.models import Desempenho
+        from desempenho.services import escala_da_prova, notas_da_aplicacao
+
+        from .services.caderno_service import valor_total_do_snapshot
+        from .services.version_generator import gerar_versoes_prova
+
+        prova = self._prova()
+        self.assertEqual(prova.snapshot_mascara['valor_total'], '7.00')
+        self.assertEqual(escala_da_prova(prova), Decimal('7.00'))
+        self.assertEqual(valor_total_do_snapshot(prova.snapshot_mascara), Decimal('7.00'))  # capa: "7,00 ponto(s)"
+
+        versao = gerar_versoes_prova(prova, 1)[0]
+        aplicacao = ProvaAplicacao.objects.create(
+            prova=prova, turma=Turma.objects.create(periodo='2026.2', nome='T Soma'), data_aplicacao=date(2026, 11, 10)
+        )
+        for nome, notas in (('Ana', ('10', '10', '10')), ('Bruno', ('0', '0', '10'))):
+            folha = FolhaResposta.objects.create(
+                prova_aplicacao=aplicacao, aluno=Aluno.objects.create(nome=nome, matricula=nome), prova_versao=versao
+            )
+            for questao, nota in zip(self.questoes, notas, strict=True):
+                Desempenho.objects.create(folha_resposta=folha, questao=questao, nota=Decimal(nota))
+
+        notas = {linha['aluno']: linha['nota'] for linha in notas_da_aplicacao(aplicacao)['linhas']}
+        self.assertEqual(notas, {'Ana': Decimal('7.00'), 'Bruno': Decimal('3.00')})
+
+    def test_com_mascara_guia_continua_proporcional_ao_valor_da_mascara(self):
+        from desempenho.services import escala_da_prova
+
+        guia = MascaraProva.objects.create(
+            titulo='Guia de 10 pontos',
+            disciplina=self.disc,
+            quantidade_questoes=3,
+            modalidade=MascaraProva.Modalidade.DISCURSIVA,
+            percentual_facil=0,
+            percentual_medio=100,
+            percentual_dificil=0,
+            valor_total=Decimal('10.00'),
+        )
+        self.assertEqual(escala_da_prova(self._prova(guia)), Decimal('10.00'))
+
+    def test_migracao_preenche_as_provas_manuais_antigas(self):
+        migracao = import_module('provas.migrations.0014_valor_total_prova_manual')
+        manual = self._prova()
+        manual.snapshot_mascara.pop('valor_total')  # como as provas criadas antes da mudança
+        manual.save(update_fields=['snapshot_mascara'])
+        automatica = Prova.objects.create(titulo='Por máscara', disciplina=self.disc, snapshot_mascara={})
+
+        migracao.preencher_valor_total(apps, None)
+        manual.refresh_from_db()
+        automatica.refresh_from_db()
+        self.assertEqual(manual.snapshot_mascara['valor_total'], '7.00')
+        self.assertEqual(automatica.snapshot_mascara, {})
+
+        migracao.remover_valor_total(apps, None)
+        manual.refresh_from_db()
+        self.assertNotIn('valor_total', manual.snapshot_mascara)
+
+    def test_tela_de_montagem_explica_a_regra(self):
+        usuario = get_user_model().objects.create_user(username='admin_soma', password='x')  # noqa: S106
+        usuario.groups.add(Group.objects.get_or_create(name='Administrador')[0])
+        self.client.force_login(usuario)
+        tela = self.client.get(reverse('provas:prova_manual_create'), {'disciplina': self.disc.pk})
+        self.assertContains(tela, 'a nota de cada aluno é a soma dos pontos que ele obtiver')
+        self.assertNotContains(tela, 'na escala de 0 a 10')

@@ -1,0 +1,99 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Docentes — {{ turma }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'academico:turma_list' %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Voltar às turmas</a>
+  <a href="{% url 'academico:turma_matriculas' pk=turma.pk %}" class="btn btn-outline"><i class="bi bi-person-check"></i> Alunos da turma</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-person-video3"></i> Acadêmico • Docentes</span>
+    </div>
+    <h1 class="mb-1">Docentes — {{ turma }}</h1>
+    <p class="text-secondary" style="max-width: 680px;">
+      Quem leciona cada disciplina nesta turma. O professor só aplica provas nas turmas e disciplinas
+      cadastradas aqui e, no desempenho, vê só esses pares turma + disciplina (inclusive o Simulado ENADE).
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-12 gap-3">
+  <div class="col-span-7">
+    <div class="card-surface">
+      <div class="p-3" style="border-bottom: 1px solid var(--border-color);">
+        <h3 class="font-bold text-main mb-0"><i class="bi bi-person-video3"></i> Docências</h3>
+      </div>
+      <div class="table-responsive">
+        <table class="saas-table">
+          <thead>
+            <tr>
+              <th>Professor</th>
+              <th>Disciplina</th>
+              <th style="width: 110px;">Situação</th>
+              <th style="width: 90px;" class="text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in docencias %}
+            <tr>
+              <td><span class="font-bold text-main">{{ d.professor.get_full_name|default:d.professor.get_username }}</span>
+                <span class="small text-muted">({{ d.professor.get_username }})</span></td>
+              <td>{{ d.disciplina.nome }}</td>
+              <td>
+                {% if d.ativo %}
+                <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Ativa</span>
+                {% else %}
+                <span class="badge-pill badge-pill-inactive">Encerrada</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                <form method="post" action="{% url 'academico:turma_docencia_toggle' pk=turma.pk %}" style="display: inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="docencia" value="{{ d.pk }}">
+                  <button type="submit" class="btn-table-action"
+                          title="{% if d.ativo %}Encerrar docência{% else %}Reativar docência{% endif %}"
+                          aria-label="{% if d.ativo %}Encerrar{% else %}Reativar{% endif %} docência de {{ d.professor.get_username }} em {{ d.disciplina.nome }}">
+                    <i class="bi {% if d.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}" aria-hidden="true"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-center p-5">
+                <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-person-video3"></i></div>
+                <p class="text-muted mb-0">Nenhum professor cadastrado nesta turma. Use o painel ao lado.</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-span-5">
+    <div class="card-surface" style="padding: 1.25rem;">
+      <h3 class="font-bold text-main mb-1"><i class="bi bi-plus-circle-fill"></i> Adicionar docência</h3>
+      <p class="small text-muted mb-3">Aparecem os usuários ativos dos grupos Docente e Coordenador.</p>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="mb-3">
+          <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}
+          <div class="small mt-1" style="color: var(--color-danger);">{{ error }}</div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Adicionar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

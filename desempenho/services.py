@@ -5,6 +5,10 @@ Calculam a **taxa de erro** (``1 - média(acertou)`` = erros/total) por tópico 
 nível de dificuldade, filtráveis por turma (ou por uma aplicação específica), para os
 relatórios de fragilidades/forças da turma. Consideram apenas registros já corrigidos
 (``acertou`` definido) — objetivas (OMR/manual) e discursivas (nota ≥ corte).
+
+O parâmetro ``escopo`` (um ``Q`` sobre ``Desempenho``) recorta pelo acesso do usuário: o
+professor vê só os pares turma + disciplina das suas docências — ver
+``academico.acesso.filtro_turma_disciplina``. ``None`` = sem recorte.
 """
 
 from __future__ import annotations
@@ -21,12 +25,14 @@ from .models import Desempenho
 ORDEM_DIFICULDADE = {'F': 0, 'M': 1, 'D': 2}
 
 
-def _base_queryset(turma=None, aplicacao=None, data_inicio=None, data_fim=None):
+def _base_queryset(turma=None, aplicacao=None, data_inicio=None, data_fim=None, escopo=None):
     """
-    Desempenhos corrigidos, filtrados por aplicação (se dada; tem precedência) ou por
-    turma e período (intervalo de ``data_aplicacao``).
+    Desempenhos corrigidos (dentro do ``escopo``), filtrados por aplicação (se dada; tem
+    precedência) ou por turma e período (intervalo de ``data_aplicacao``).
     """
     qs = Desempenho.objects.filter(acertou__isnull=False)
+    if escopo is not None:
+        qs = qs.filter(escopo)
     if aplicacao is not None:
         return qs.filter(folha_resposta__prova_aplicacao=aplicacao)
     if turma is not None:
@@ -42,7 +48,7 @@ def _taxa_erro(erros: int, total: int) -> float:
     return round(erros / total, 4) if total else 0.0
 
 
-def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=None) -> list[dict]:
+def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=None, escopo=None) -> list[dict]:
     """
     Taxa de erro agregada por tópico curricular (Desempenho → Questao → Topico).
 
@@ -51,7 +57,7 @@ def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=
     (fragilidades primeiro). Questões sem tópico são agrupadas como "Sem tópico".
     """
     linhas = (
-        _base_queryset(turma, aplicacao, data_inicio, data_fim)
+        _base_queryset(turma, aplicacao, data_inicio, data_fim, escopo)
         .values('questao__topico', 'questao__topico__nome', 'questao__topico__disciplina__nome')
         .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
         .order_by()
@@ -78,7 +84,7 @@ def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=
     return resultado
 
 
-def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data_fim=None) -> list[dict]:
+def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data_fim=None, escopo=None) -> list[dict]:
     """
     Taxa de erro agregada por nível de dificuldade (``Questao.dificuldade``).
 
@@ -86,7 +92,7 @@ def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data
     ``acertos``, ``erros``, ``taxa_erro``), na ordem Fácil → Médio → Difícil.
     """
     linhas = (
-        _base_queryset(turma, aplicacao, data_inicio, data_fim)
+        _base_queryset(turma, aplicacao, data_inicio, data_fim, escopo)
         .values('questao__dificuldade')
         .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
         .order_by()
@@ -140,21 +146,24 @@ def _classificar_facilidade(indice: float) -> tuple[str, str]:
     return 'medio', 'Médio'
 
 
-def indice_facilidade_por_questao(min_respostas: int = 1) -> list[dict]:
+def indice_facilidade_por_questao(min_respostas: int = 1, escopo=None) -> list[dict]:
     """
     Índice de facilidade (p) de cada questão = **média global de `acertou`** entre
     todas as aplicações da questão (não apenas uma prova). p alto ⇒ questão fácil;
     p baixo ⇒ difícil. Considera só registros corrigidos (`acertou` definido).
 
-    ``min_respostas`` descarta questões com poucas respostas (índice instável).
+    ``min_respostas`` descarta questões com poucas respostas (índice instável); com
+    ``escopo``, o índice usa só as respostas que o usuário enxerga.
 
     Retorna dicts com dados da questão, ``total_respostas``, ``acertos``,
     ``indice_facilidade`` e a ``classe`` (difícil/médio/fácil), ordenados do menor
     índice (mais difícil) para o maior.
     """
+    base = Desempenho.objects.filter(acertou__isnull=False)
+    if escopo is not None:
+        base = base.filter(escopo)
     linhas = (
-        Desempenho.objects.filter(acertou__isnull=False)
-        .values(
+        base.values(
             'questao',
             'questao__enunciado',
             'questao__dificuldade',
@@ -194,6 +203,7 @@ def questoes_fora_do_esperado(
     limite_baixo: float = 0.20,
     limite_alto: float = 0.90,
     min_respostas: int = 5,
+    escopo=None,
 ) -> list[dict]:
     """
     Questões com índice de facilidade **muito baixo** (≤ ``limite_baixo``) ou **muito
@@ -201,7 +211,7 @@ def questoes_fora_do_esperado(
     ambíguo ou trivial), não apenas "difícil". Cada item recebe ``motivo``.
     """
     fora = []
-    for item in indice_facilidade_por_questao(min_respostas=min_respostas):
+    for item in indice_facilidade_por_questao(min_respostas=min_respostas, escopo=escopo):
         indice = item['indice_facilidade']
         if indice <= limite_baixo:
             fora.append(

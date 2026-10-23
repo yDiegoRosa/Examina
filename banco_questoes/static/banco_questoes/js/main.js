@@ -88,3 +88,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   updateCorrectAlternativeHighlight();
 });
+
+// ---------------------------------------------------------------------------
+// Página restaurada da memória pelo botão voltar (back/forward cache): recarrega
+// para o servidor conferir a sessão. Sem isso, depois de "Sair" o celular podia
+// mostrar a tela anterior como se o usuário ainda estivesse logado. O servidor já
+// manda "no-store" nessas páginas; isto cobre navegadores que restauram mesmo assim.
+// ---------------------------------------------------------------------------
+window.addEventListener('pageshow', function (e) {
+  if (e.persisted) {
+    window.location.reload();
+  }
+});

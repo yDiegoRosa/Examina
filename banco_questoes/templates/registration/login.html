@@ -81,7 +81,7 @@
             <div class="login-input-wrapper">
               <i class="bi bi-person input-icon"></i>
               <input type="text" name="username" id="id_username" class="form-input"
-                     placeholder="Digite seu usuário (ex.: docente)" required autofocus
+                     placeholder="Digite seu usuário" required autofocus
                      value="{{ form.username.value|default:'' }}">
             </div>
           </div>
@@ -107,16 +107,6 @@
             <i class="bi bi-box-arrow-in-right"></i>
             <span>Entrar no Examina</span>
           </button>
-
-          <!-- Acesso Rápido para Demonstração/Teste -->
-          <div id="btn-autofill" class="login-test-box" role="button" title="Clique para preencher as credenciais de teste">
-            <i class="bi bi-lightning-charge-fill login-test-icon"></i>
-            <div class="login-test-info">
-              <strong>Acesso de Demonstração:</strong>
-              <span class="font-mono ml-1">docente / faetec</span>
-            </div>
-            <span class="login-test-btn">Preencher</span>
-          </div>
 
         </form>
 
@@ -156,9 +146,6 @@
       const toggleBtn = document.getElementById('btn-toggle-password');
       const passwordInput = document.getElementById('id_password');
       const toggleIcon = document.getElementById('icon-toggle-password');
-      const usernameInput = document.getElementById('id_username');
-      const autoFillBtn = document.getElementById('btn-autofill');
-      const submitBtn = document.getElementById('btn-submit-login');
 
       // Alternar visualização de senha
       if (toggleBtn && passwordInput && toggleIcon) {
@@ -167,17 +154,6 @@
           passwordInput.type = isPassword ? 'text' : 'password';
           toggleIcon.className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
           passwordInput.focus();
-        });
-      }
-
-      // Preenchimento de credenciais com 1 clique
-      if (autoFillBtn && usernameInput && passwordInput) {
-        autoFillBtn.addEventListener('click', function () {
-          usernameInput.value = 'docente';
-          passwordInput.value = 'faetec';
-          if (submitBtn) {
-            submitBtn.focus();
-          }
         });
       }
     });

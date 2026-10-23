@@ -118,8 +118,9 @@
             <span id="resumo-composicao" class="text-muted small ms-2">Nenhuma questão marcada ainda</span>
             <div class="small text-muted mt-1">
               <i class="bi bi-calculator"></i> Pontuação total: <strong id="total-pontos">0,00</strong> pts
-              — ajuste os pontos de cada questão na coluna "Pontos". A nota final é proporcional aos pontos obtidos,
-              na escala de 0 a {{ escala_nota|floatformat:"-2" }}.
+              — ajuste os pontos de cada questão na coluna "Pontos".
+              {% if escala_nota %}A nota final é proporcional aos pontos obtidos, na escala de 0 a {{ escala_nota|floatformat:"-2" }} (valor da máscara guia).
+              {% else %}A prova vale a pontuação total, e a nota de cada aluno é a soma dos pontos que ele obtiver.{% endif %}
             </div>
           </div>
           <div class="flex gap-2">
@@ -245,7 +246,7 @@
   </div>
 
   <!-- Botões de Ação -->
-  <div class="flex gap-3 mb-6">
+  <div class="flex flex-wrap gap-3 mb-6">
     <button type="submit" class="btn btn-primary" id="btn-submeter-prova" style="padding: 0.75rem 2rem; font-size: 0.95rem;">
       <i class="bi bi-clipboard2-check-fill"></i> Criar e Revisar Avaliação
     </button>

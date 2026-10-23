@@ -43,7 +43,7 @@
 <div class="card-surface">
   <div class="p-3 flex items-center justify-between" style="border-bottom: 1px solid var(--border-color);">
     <h3 class="font-bold text-main mb-0"><i class="bi bi-images"></i> Cartões enviados ({{ total }})</h3>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <a href="{% url 'provas:aplicacao_revisao_manual' aplicacao.pk %}" class="btn btn-outline" title="Tratar manualmente folhas com erro e questões em branco/dupla marcação">
         <i class="bi bi-clipboard-check"></i> Revisão manual{% if pendencias_revisao %} ({{ pendencias_revisao }}){% endif %}
       </a>

@@ -11,6 +11,10 @@
 # O app escuta só em 127.0.0.1:8000 do host (o proxy HTTPS da instituição encaminha para
 # ele). Para proxy em outra máquina, defina WEB_BIND=0.0.0.0 — nunca exponha sem HTTPS.
 # O timeout do proxy deve ser >= GUNICORN_TIMEOUT (padrão 120 s).
+#
+# Servidor próprio (VPS) sem proxy da instituição: COMPOSE_PROFILES=caddy e DOMINIO=<domínio>
+# no .env sobem também o Caddy, que faz o HTTPS com certificado automático (Let's Encrypt)
+# nas portas 80/443 — ver docs/deploy.md, "Instalação numa VPS".
 services:
   db:
     image: mysql:8.0
@@ -54,10 +58,32 @@ services:
       db:
         condition: service_healthy
 
+  caddy:
+    image: caddy:2.11.2-alpine
+    container_name: examina_caddy
+    restart: always
+    profiles: ["caddy"]  # só sobe com COMPOSE_PROFILES=caddy (servidor sem proxy HTTPS próprio)
+    environment:
+      DOMINIO: ${DOMINIO:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data  # certificados — não apague
+      - caddy_config:/config
+    networks:
+      - examina_net
+    depends_on:
+      - web
+
 volumes:
   mysql_data:
   media_data:
   logs_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   examina_net:

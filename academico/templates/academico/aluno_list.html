@@ -19,9 +19,11 @@
     </p>
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
+    {% if perfil_admin %}
     <a href="{% url 'academico:aluno_create' %}" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-plus-circle-fill"></i> Novo Aluno
     </a>
+    {% endif %}
   </div>
 </div>
 
@@ -95,6 +97,7 @@
           </td>
           <td class="text-right">
             <div class="flex items-center justify-end gap-1">
+              {% if perfil_admin %}
               <a href="{% url 'academico:aluno_update' pk=aluno.pk %}" class="btn-table-action" title="Editar aluno">
                 <i class="bi bi-pencil-square"></i>
               </a>
@@ -106,6 +109,9 @@
                   <i class="bi {% if aluno.ativo %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}" aria-hidden="true"></i>
                 </button>
               </form>
+              {% else %}
+              <span class="small text-muted">—</span>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -115,7 +121,7 @@
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-person-x"></i></div>
             <h4 class="font-bold text-main">Nenhum aluno encontrado</h4>
             <p class="text-muted mb-3">Cadastre o primeiro aluno da instituição.</p>
-            <a href="{% url 'academico:aluno_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Novo Aluno</a>
+            {% if perfil_admin %}<a href="{% url 'academico:aluno_create' %}" class="btn btn-gold"><i class="bi bi-plus-circle-fill"></i> Novo Aluno</a>{% endif %}
           </td>
         </tr>
         {% endfor %}

@@ -208,7 +208,7 @@ class MatriculaModelTest(TestCase):
 class AlunoCrudViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='coord', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])  # cadastros: só o administrador
         self.client.login(username='coord', password='segredo123')  # noqa: S106
 
     def test_login_obrigatorio(self):
@@ -265,7 +265,7 @@ class AlunoCrudViewTest(TestCase):
 class TurmaCrudViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='coord2', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])  # cadastros: só o administrador
         self.client.login(username='coord2', password='segredo123')  # noqa: S106
 
     def test_list_ok(self):
@@ -332,7 +332,7 @@ class TurmaCrudViewTest(TestCase):
 class TurmaMatriculaViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='coord3', password='segredo123')  # noqa: S106
-        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.user.groups.add(Group.objects.get_or_create(name='Administrador')[0])  # cadastros: só o administrador
         self.client.login(username='coord3', password='segredo123')  # noqa: S106
         self.turma = Turma.objects.create(periodo='2026.2', nome='MAC Noite')
         self.ana = Aluno.objects.create(nome='Ana', matricula='A1')

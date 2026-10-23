@@ -179,10 +179,19 @@ class TestQuestaoUpdatePermissoes:
         assert response.status_code == 200
 
     def test_usuario_com_perm_change_acessa_200(self, user_com_perm_change, questao_objetiva):
+        # Acesso por perfil: só o autor da questão (ou o administrador) a edita.
+        questao_objetiva.autor = user_com_perm_change
+        questao_objetiva.save(update_fields=['autor'])
         client = Client()
         client.force_login(user_com_perm_change)
         response = client.get(self._url(questao_objetiva.pk))
         assert response.status_code == 200
+
+    def test_usuario_com_perm_change_nao_edita_questao_de_outro_autor(self, user_com_perm_change, questao_objetiva):
+        client = Client()
+        client.force_login(user_com_perm_change)
+        response = client.get(self._url(questao_objetiva.pk))
+        assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------

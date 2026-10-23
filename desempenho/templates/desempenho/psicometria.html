@@ -1,4 +1,5 @@
 {% extends "banco_questoes/base.html" %}
+{% load l10n %}
 
 {% block title %}Psicometria — Índice de facilidade — Examina{% endblock %}
 
@@ -20,6 +21,9 @@
       aplicações</strong> (não uma prova). p alto ⇒ questão fácil; p baixo ⇒ difícil.
       Índices muito baixos ou muito altos podem indicar itens mal formulados, ambíguos ou triviais.
     </p>
+    {% if not perfil_ve_tudo %}
+    <p class="small text-muted mb-0"><i class="bi bi-funnel" aria-hidden="true"></i> Mostrando só as turmas e disciplinas que você leciona (inclusive o Simulado ENADE aplicado a elas).</p>
+    {% endif %}
   </div>
 </div>
 
@@ -32,13 +36,13 @@
     </div>
     <div class="col-span-3">
       <label class="form-label" for="f_baixo">Limite baixo (p ≤)</label>
-      <input type="number" id="f_baixo" name="limite_baixo" class="form-input" min="0" max="1" step="0.05" value="{{ limite_baixo }}">
+      <input type="number" id="f_baixo" name="limite_baixo" class="form-input" min="0" max="1" step="0.05" value="{{ limite_baixo|unlocalize }}">
     </div>
     <div class="col-span-3">
       <label class="form-label" for="f_alto">Limite alto (p ≥)</label>
-      <input type="number" id="f_alto" name="limite_alto" class="form-input" min="0" max="1" step="0.05" value="{{ limite_alto }}">
+      <input type="number" id="f_alto" name="limite_alto" class="form-input" min="0" max="1" step="0.05" value="{{ limite_alto|unlocalize }}">
     </div>
-    <div class="col-span-3 flex gap-2">
+    <div class="col-span-3 flex flex-wrap gap-2">
       <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill"></i> Aplicar</button>
       <a class="btn btn-outline" href="?formato=csv&min_respostas={{ min_respostas }}&limite_baixo={{ limite_baixo }}&limite_alto={{ limite_alto }}" title="Exportar CSV"><i class="bi bi-filetype-csv"></i></a>
       <a class="btn btn-outline" href="?formato=pdf&min_respostas={{ min_respostas }}&limite_baixo={{ limite_baixo }}&limite_alto={{ limite_alto }}" title="Exportar PDF" target="_blank"><i class="bi bi-file-earmark-pdf"></i></a>
