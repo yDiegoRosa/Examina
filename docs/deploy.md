@@ -144,9 +144,20 @@ E-mail do administrador — recebe o aviso de falha no backup e os erros interno
 | `EMAIL_HOST` / `EMAIL_PORT` | `smtp.provedor.com` / `587` | Servidor SMTP. Sem `EMAIL_HOST`, nada é enviado (os e-mails só aparecem no log). |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | | Login do SMTP (em Gmail, uma senha de app). |
 | `EMAIL_USE_SSL` | `False` | `True` para a porta 465; na 587 o padrão é STARTTLS. |
-| `EMAIL_REMETENTE` | `examina@instituicao.edu.br` | Remetente dos e-mails (precisa ser aceito pelo SMTP). |
+| `EMAIL_REMETENTE` | `examina@instituicao.edu.br` | Remetente dos e-mails (precisa ser aceito pelo SMTP). Vazio = a própria conta do SMTP. |
 
-Para testar: `docker compose -f docker-compose.prod.yml exec web python manage.py sendtestemail --admins`.
+**Qual conta usar para enviar:** contas pessoais do Outlook.com/Hotmail **não servem** — a Microsoft
+desligou o login por senha no SMTP (set/2024) e o Django só envia com usuário e senha. Elas podem
+**receber** os avisos (em `ADMINS`). Para enviar, o mais simples é uma conta Gmail só do sistema:
+
+1. Crie a conta e ligue a verificação em duas etapas (myaccount.google.com → Segurança).
+2. Gere uma senha de app em myaccount.google.com/apppasswords (nome: "Examina") — 16 letras.
+3. No `.env`: `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`, `EMAIL_USE_SSL=False`,
+   `EMAIL_HOST_USER` = a conta, `EMAIL_HOST_PASSWORD` = a senha de app sem espaços.
+4. Recrie o `web` para ler o `.env`: `docker compose -f docker-compose.prod.yml up -d`.
+
+Para testar: `docker compose -f docker-compose.prod.yml exec web python manage.py sendtestemail --admins`
+(confira também a caixa de spam na primeira vez).
 
 O `.env` tem senhas: mantenha-o fora do Git (já está no `.gitignore`) e com acesso restrito (`chmod 600 .env`).
 
