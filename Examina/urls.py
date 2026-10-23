@@ -20,17 +20,13 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from banco_questoes.forms import AlterarSenhaForm, LoginForm
+from banco_questoes.forms import AlterarSenhaForm
 
-from .views import media_protegida
+from .views import LoginView, media_protegida
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path(
-        'login/',
-        auth_views.LoginView.as_view(template_name='registration/login.html', authentication_form=LoginForm),
-        name='login',
-    ),
+    path('login/', LoginView.as_view(), name='login'),
     path(
         'logout/',
         auth_views.LogoutView.as_view(),
