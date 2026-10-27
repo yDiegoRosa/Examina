@@ -312,23 +312,23 @@ def itens_versao_para_lancamento(folha) -> list[dict]:
 
 
 @transaction.atomic
-def lancar_nota_discursiva(folha, questao, nota, corte, usuario=None):
+def lancar_nota_discursiva(folha, questao, nota, usuario=None):
     """
-    Lança/atualiza a nota (0–10) de uma questão discursiva; define
-    ``acertou = nota >= corte`` (unificação binária p/ os dashboards) e
-    ``tipo_correcao='MANUAL'``.
+    Lança/atualiza a nota (0–10) de uma questão discursiva, com ``tipo_correcao='MANUAL'``.
+
+    A discursiva não é "acertou/errou": conta pela nota, proporcional, na nota final e nos
+    relatórios (``desempenho.services.FRACAO_ACERTO``) — por isso ``acertou`` fica vazio.
     """
     from desempenho.models import Desempenho
 
     nota = validar_nota(nota)
-    corte = Decimal(str(corte))
     desempenho, _ = Desempenho.objects.update_or_create(
         folha_resposta=folha,
         questao=questao,
         defaults={
             'tipo_correcao': Desempenho.TipoCorrecao.MANUAL,
             'nota': nota,
-            'acertou': nota >= corte,
+            'acertou': None,
             'resposta_marcada': '',
             'corrigido_por': usuario,
             'data_correcao': timezone.now(),
@@ -365,22 +365,3 @@ def lancar_objetiva_manual(folha, questao, resposta, usuario=None):
         },
     )
     return desempenho
-
-
-@transaction.atomic
-def recalcular_acertou_discursivas(aplicacao, corte) -> int:
-    """
-    Reaplica ``acertou = nota >= corte`` aos `Desempenho` que têm nota lançada
-    (discursivas) da aplicação. Retorna quantos registros mudaram.
-    """
-    from desempenho.models import Desempenho
-
-    corte = Decimal(str(corte))
-    alterados = 0
-    for desempenho in Desempenho.objects.filter(folha_resposta__prova_aplicacao=aplicacao, nota__isnull=False):
-        novo = desempenho.nota >= corte
-        if desempenho.acertou != novo:
-            desempenho.acertou = novo
-            desempenho.save(update_fields=['acertou', 'atualizado_em'])
-            alterados += 1
-    return alterados

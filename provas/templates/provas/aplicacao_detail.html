@@ -15,8 +15,7 @@
     </div>
     <h1 class="mb-1">{{ aplicacao.prova.titulo }}</h1>
     <p class="text-secondary" style="max-width: 680px;">
-      {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }} • nota de corte das discursivas:
-      <strong>{{ aplicacao.nota_corte }}</strong>
+      {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}
       {% if aplicacao.observacao %}<br><span class="small">{{ aplicacao.observacao }}</span>{% endif %}
     </p>
   </div>

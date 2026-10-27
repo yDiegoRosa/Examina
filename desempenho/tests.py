@@ -174,6 +174,60 @@ class TaxaErroAnaliseTest(TestCase):
         por_topico = {linha['topico']: linha for linha in taxa_erro_por_topico(turma=self.turma)}
         self.assertEqual(por_topico['Tópico A']['total'], 4)  # o registro sem acertou não conta
 
+    def _discursiva_com_notas(self, *notas):
+        questao = Questao.objects.create(
+            disciplina=self.disc, topico=self.top_b, tipo='DIS', dificuldade='M', enunciado='Discursiva'
+        )
+        for folha, nota in zip((self.folha1, self.folha2), notas, strict=False):
+            Desempenho.objects.create(
+                folha_resposta=folha,
+                questao=questao,
+                tipo_correcao=Desempenho.TipoCorrecao.MANUAL,
+                nota=Decimal(str(nota)),
+                acertou=None,
+            )
+        return questao
+
+    def test_discursiva_conta_pela_nota_com_o_peso_de_uma_objetiva(self):
+        # Tópico B: 2 objetivas erradas (0 + 0) + discursiva com 7 e 4 (0,7 + 0,4) = 1,1 em 4 respostas.
+        self._discursiva_com_notas(7, 4)
+        topico_b = {linha['topico']: linha for linha in taxa_erro_por_topico(turma=self.turma)}['Tópico B']
+        self.assertEqual(topico_b['total'], 4)
+        self.assertEqual(topico_b['acertos'], 1.1)
+        self.assertEqual(topico_b['erros'], 2.9)
+        self.assertEqual(topico_b['taxa_erro'], 0.725)
+        medio = {linha['dificuldade']: linha for linha in taxa_erro_por_dificuldade(turma=self.turma)}['M']
+        self.assertEqual((medio['total'], medio['taxa_erro']), (4, 0.725))
+
+    def test_discursiva_nota_dez_vale_um_acerto_inteiro(self):
+        self._discursiva_com_notas(10, 10)
+        topico_b = {linha['topico']: linha for linha in taxa_erro_por_topico(turma=self.turma)}['Tópico B']
+        self.assertEqual((topico_b['acertos'], topico_b['erros'], topico_b['taxa_erro']), (2, 2, 0.5))
+
+    def test_indice_de_facilidade_da_discursiva_e_a_media_das_notas(self):
+        questao = self._discursiva_com_notas(8, 3)
+        item = {i['questao_id']: i for i in indice_facilidade_por_questao(min_respostas=1)}[questao.pk]
+        self.assertEqual(item['total_respostas'], 2)
+        self.assertEqual(item['indice_facilidade'], 0.55)
+        self.assertEqual(item['classe'], 'medio')
+
+    def test_migration_limpa_o_acertou_que_vinha_da_nota_de_corte(self):
+        import importlib
+
+        from django.apps import apps
+
+        questao = self._discursiva_com_notas(8)
+        Desempenho.objects.filter(questao=questao).update(acertou=True)  # gravado pelo corte antigo
+        migracao = importlib.import_module('provas.migrations.0015_remove_nota_corte')
+        migracao.limpar_acertou_das_discursivas(apps, None)
+
+        discursiva = Desempenho.objects.get(questao=questao)
+        self.assertIsNone(discursiva.acertou)
+        self.assertEqual(discursiva.nota, Decimal('8'))
+        self.assertTrue(
+            Desempenho.objects.get(folha_resposta=self.folha1, questao=self.q_a1).acertou
+        )  # objetiva intacta
+
 
 class DashboardFragilidadesViewTest(TestCase):
     """Dashboard RF13: renderização, contexto e filtros (turma/aplicação/período)."""

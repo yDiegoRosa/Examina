@@ -57,7 +57,6 @@ from .services.correcao import (
     corrigir_questao_manual,
     lancar_nota_discursiva,
     lancar_objetiva_manual,
-    recalcular_acertou_discursivas,
 )
 from .services.fiducial import gerar_qr_data_uri, montar_payload_folha
 from .services.folha_service import (
@@ -4066,17 +4065,20 @@ class LancamentoManualTest(TestCase):
             prova_aplicacao=self.aplicacao, aluno=self.aluno, prova_versao=self.versao
         )
 
-    def test_nota_corte_padrao_seis(self):
-        self.assertEqual(self.aplicacao.nota_corte, Decimal('6.00'))
-
-    def test_campos_numericos_mostram_os_valores_atuais(self):
-        # <input type="number"> só aceita ponto: o valor localizado ("6,00") apareceria vazio.
-        lancar_nota_discursiva(self.folha, self.dis, Decimal('7.5'), Decimal('6'), usuario=self.user)
+    def test_tela_nao_tem_mais_nota_de_corte(self):
         self.client.force_login(self.user)
         resp = self.client.get(reverse('provas:folha_lancamento_manual', args=[self.folha.pk]))
-        self.assertContains(resp, 'name="nota_corte" class="form-input"')
-        self.assertContains(resp, 'value="6.00"')
+        self.assertNotContains(resp, 'nota_corte')
+        self.assertNotContains(resp, 'Nota de corte')
+        self.assertFalse(hasattr(self.aplicacao, 'nota_corte'))
+
+    def test_campos_numericos_mostram_os_valores_atuais(self):
+        # <input type="number"> só aceita ponto: o valor localizado ("7,50") apareceria vazio.
+        lancar_nota_discursiva(self.folha, self.dis, Decimal('7.5'), usuario=self.user)
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('provas:folha_lancamento_manual', args=[self.folha.pk]))
         self.assertContains(resp, 'value="7.50"')
+        self.assertContains(resp, 'Corrigida')  # discursiva: sem "Acertou/Errou"
 
     def test_tela_de_lancamento_usa_os_rotulos_do_caderno(self):
         # Versão antiga (discursiva gravada com número 2): a tela mostra "D01", como no caderno.
@@ -4085,21 +4087,17 @@ class LancamentoManualTest(TestCase):
         self.assertEqual([linha['rotulo_curto'] for linha in resp.context['linhas']], ['Q01', 'D01'])
         self.assertContains(resp, '>D01<')
 
-    def test_lancar_discursiva_acima_do_corte_acertou(self):
+    def test_lancar_discursiva_grava_a_nota_sem_acertou(self):
         from desempenho.models import Desempenho
 
-        dsp = lancar_nota_discursiva(self.folha, self.dis, 7, Decimal('6'), usuario=self.user)
+        dsp = lancar_nota_discursiva(self.folha, self.dis, 7, usuario=self.user)
         self.assertEqual(dsp.nota, Decimal('7'))
-        self.assertTrue(dsp.acertou)
+        self.assertIsNone(dsp.acertou)  # a discursiva conta pela nota, não por acertou/errou
         self.assertEqual(dsp.tipo_correcao, Desempenho.TipoCorrecao.MANUAL)
-
-    def test_lancar_discursiva_abaixo_do_corte_errou(self):
-        dsp = lancar_nota_discursiva(self.folha, self.dis, 4, Decimal('6'), usuario=self.user)
-        self.assertFalse(dsp.acertou)
 
     def test_nota_fora_do_intervalo_levanta_erro(self):
         with self.assertRaises(ValueError):
-            lancar_nota_discursiva(self.folha, self.dis, 11, Decimal('6'), usuario=self.user)
+            lancar_nota_discursiva(self.folha, self.dis, 11, usuario=self.user)
 
     def test_fallback_objetiva_por_gabarito(self):
         acerto = lancar_objetiva_manual(self.folha, self.obj, 'B', usuario=self.user)
@@ -4108,14 +4106,6 @@ class LancamentoManualTest(TestCase):
         erro = lancar_objetiva_manual(self.folha, self.obj, 'C', usuario=self.user)
         self.assertFalse(erro.acertou)
 
-    def test_recalcular_ao_mudar_corte(self):
-        dsp = lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)
-        self.assertFalse(dsp.acertou)
-        alterados = recalcular_acertou_discursivas(self.aplicacao, Decimal('5'))
-        self.assertEqual(alterados, 1)
-        dsp.refresh_from_db()
-        self.assertTrue(dsp.acertou)
-
     def test_view_post_lanca_discursiva_e_objetiva(self):
         from desempenho.models import Desempenho
 
@@ -4123,34 +4113,30 @@ class LancamentoManualTest(TestCase):
         url = reverse('provas:folha_lancamento_manual', args=[self.folha.pk])
         resp = self.client.post(
             url,
-            {'nota_corte': '6', f'nota_{self.dis.id}': '8', f'resp_{self.obj.id}': 'B'},
+            {f'nota_{self.dis.id}': '8', f'resp_{self.obj.id}': 'B'},
         )
         self.assertRedirects(resp, url)
         d_dis = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
         self.assertEqual(d_dis.nota, Decimal('8'))
-        self.assertTrue(d_dis.acertou)
+        self.assertIsNone(d_dis.acertou)
         d_obj = Desempenho.objects.get(folha_resposta=self.folha, questao=self.obj)
         self.assertEqual(d_obj.resposta_marcada, 'B')
         self.assertTrue(d_obj.acertou)
-
-    def test_view_mudar_corte_recalcula(self):
-        lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)  # errou (corte 6)
-        self.client.login(username='prof', password='segredo123')  # noqa: S106
-        url = reverse('provas:folha_lancamento_manual', args=[self.folha.pk])
-        # muda só o corte para 4 (sem lançar nada): a discursiva deve passar a acertou
-        self.client.post(url, {'nota_corte': '4', f'resp_{self.obj.id}': '__skip__'})
-        self.aplicacao.refresh_from_db()
-        self.assertEqual(self.aplicacao.nota_corte, Decimal('4.00'))
-        from desempenho.models import Desempenho
-
-        d_dis = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
-        self.assertTrue(d_dis.acertou)
 
     def test_pagina_folhas_lista_aluno(self):
         self.client.login(username='prof', password='segredo123')  # noqa: S106
         resp = self.client.get(reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk]))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Ana')
+
+    def test_pagina_folhas_separa_objetivas_e_discursivas(self):
+        lancar_objetiva_manual(self.folha, self.obj, 'B', usuario=self.user)
+        lancar_nota_discursiva(self.folha, self.dis, 6, usuario=self.user)
+        self.client.login(username='prof', password='segredo123')  # noqa: S106
+        resp = self.client.get(reverse('provas:aplicacao_folhas', args=[self.aplicacao.pk]))
+        self.assertContains(resp, '1 de 1 objetiva(s) certa(s)')
+        self.assertContains(resp, '1 discursiva(s) corrigida(s)')
+        self.assertNotContains(resp, 'Nota de corte')
 
     def test_model_valida_intervalo_da_nota(self):
         from desempenho.models import Desempenho
@@ -4174,12 +4160,11 @@ class LancamentoManualTest(TestCase):
     def test_relancamento_atualiza_sem_duplicar(self):
         from desempenho.models import Desempenho
 
-        lancar_nota_discursiva(self.folha, self.dis, 5, Decimal('6'), usuario=self.user)
-        lancar_nota_discursiva(self.folha, self.dis, 9, Decimal('6'), usuario=self.user)
+        lancar_nota_discursiva(self.folha, self.dis, 5, usuario=self.user)
+        lancar_nota_discursiva(self.folha, self.dis, 9, usuario=self.user)
         self.assertEqual(Desempenho.objects.filter(folha_resposta=self.folha, questao=self.dis).count(), 1)
         registro = Desempenho.objects.get(folha_resposta=self.folha, questao=self.dis)
         self.assertEqual(registro.nota, Decimal('9'))
-        self.assertTrue(registro.acertou)
 
 
 class TravaProvaAplicadaTest(TestCase):

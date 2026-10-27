@@ -1,7 +1,7 @@
 import contextlib
 import logging
 import uuid
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -1476,13 +1476,18 @@ def aplicacao_folhas(request, pk):
         row['folha_resposta_id']: row
         for row in Desempenho.objects.filter(folha_resposta__prova_aplicacao=aplicacao)
         .values('folha_resposta_id')
-        .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
+        .annotate(
+            objetivas=Count('id', filter=Q(nota__isnull=True, acertou__isnull=False)),
+            acertos=Count('id', filter=Q(nota__isnull=True, acertou=True)),
+            discursivas=Count('id', filter=Q(nota__isnull=False)),
+        )
     }
     linhas = [
         {
             'folha': folha,
-            'total': resumo.get(folha.id, {}).get('total', 0),
+            'objetivas': resumo.get(folha.id, {}).get('objetivas', 0),
             'acertos': resumo.get(folha.id, {}).get('acertos', 0),
+            'discursivas': resumo.get(folha.id, {}).get('discursivas', 0),
         }
         for folha in folhas
     ]
@@ -1498,14 +1503,13 @@ def aplicacao_folhas(request, pk):
 @docente_ou_coordenador_required
 def folha_lancamento_manual(request, pk):
     """
-    Lançamento manual de notas de uma folha (aluno): notas 0–10 de discursivas
-    (``acertou = nota >= corte``) e resposta das objetivas (fallback sem scan).
+    Lançamento manual de notas de uma folha (aluno): notas 0–10 de discursivas (contam pela
+    nota, proporcional) e resposta das objetivas (fallback sem scan).
     """
     from .services.correcao import (
         itens_versao_para_lancamento,
         lancar_nota_discursiva,
         lancar_objetiva_manual,
-        recalcular_acertou_discursivas,
     )
 
     folha = get_object_or_404(
@@ -1518,22 +1522,6 @@ def folha_lancamento_manual(request, pk):
 
     if request.method == 'POST':
         _alteravel(request, aplicacao.prova)
-        corte = aplicacao.nota_corte
-        corte_raw = (request.POST.get('nota_corte') or '').strip().replace(',', '.')
-        if corte_raw:
-            try:
-                novo_corte = Decimal(corte_raw)
-            except InvalidOperation:
-                novo_corte = None
-            if novo_corte is None or not (Decimal('0') <= novo_corte <= Decimal('10')):
-                messages.error(request, 'Nota de corte inválida (use um valor entre 0 e 10).')
-            else:
-                if novo_corte != aplicacao.nota_corte:
-                    aplicacao.nota_corte = novo_corte
-                    aplicacao.save(update_fields=['nota_corte', 'atualizado_em'])
-                    recalcular_acertou_discursivas(aplicacao, novo_corte)
-                corte = novo_corte
-
         lancados = 0
         erros = 0
         for linha in itens_versao_para_lancamento(folha):
@@ -1552,7 +1540,7 @@ def folha_lancamento_manual(request, pk):
                 if not bruto:
                     continue
                 try:
-                    lancar_nota_discursiva(folha, questao, bruto, corte, usuario=request.user)
+                    lancar_nota_discursiva(folha, questao, bruto, usuario=request.user)
                     lancados += 1
                 except ValueError:
                     erros += 1
