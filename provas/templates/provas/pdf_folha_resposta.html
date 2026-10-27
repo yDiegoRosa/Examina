@@ -54,9 +54,11 @@
     /* Grade de respostas: números das questões. */
     .fr-qnum { position: absolute; font-size: 7pt; font-weight: bold; color: #111827; transform: translate(-50%, -50%); white-space: nowrap; }
 
-    /* Bolhas (resposta e matrícula). */
-    .fr-bubble { position: absolute; display: flex; align-items: center; justify-content: center; border: 0.3mm solid #334155; border-radius: 50%; color: #b8bfc9; text-align: center; overflow: hidden; }
-    .fr-bubble-ans { font-size: 5pt; line-height: 1; }
+    /* Bolhas (resposta e matrícula). A letra é cinza médio: visível na impressão (o cinza
+       claro anterior, #b8bfc9, quase sumia) e ainda fina o bastante para o leitor óptico
+       não confundir com marcação — ocupa bem menos que omr.MIN_FILL do disco lido. */
+    .fr-bubble { position: absolute; display: flex; align-items: center; justify-content: center; border: 0.3mm solid #334155; border-radius: 50%; color: #6b7280; text-align: center; overflow: hidden; }
+    .fr-bubble-ans { font-size: 6pt; line-height: 1; }
     .fr-bubble-id { font-size: 4.2pt; line-height: 1; }
   </style>
 </head>

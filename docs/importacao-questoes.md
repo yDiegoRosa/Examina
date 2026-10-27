@@ -16,18 +16,20 @@ origem,questao,tipo,disciplina,topico,dificuldade,enunciado,opcao_a,opcao_b,opca
 | `origem` | Não | Texto livre (ex.: `ENADE ADS 2021`) | vazio |
 | `questao` | Não | Nº da questão na origem | vazio |
 | `tipo` | Não | `OBJ`/`OBJETIVA` ou `DIS`/`DISCURSIVA` | inferido: com alternativas → `OBJ`, senão `DIS` |
-| `disciplina` | **Recomendada** | Texto livre; criada automaticamente se não existir | **`Não Classificada`** ⚠️ |
+| `disciplina` | **Sim** | Uma das 34 disciplinas da matriz, pelo nome ou pela sigla, sem diferenciar acentos/maiúsculas: `Segurança da Informação (SEG)`, `Segurança da Informação`, `SEG` ou `4SEG`. **A importação não cria disciplinas.** | linha rejeitada |
 | `topico` | Não | Texto livre; criado dentro da disciplina | sem tópico |
 | `dificuldade` | **Recomendada** | `F`/`M`/`D` (ou `FÁCIL`/`MÉDIO`/`DIFÍCIL`) | **`M` (Médio)** ⚠️ |
-| `enunciado` | **Sim** (único header obrigatório) | Texto; aceita quebras de linha | linha rejeitada |
+| `enunciado` | **Sim** | Texto; aceita quebras de linha | linha rejeitada |
 | `opcao_a` … `opcao_e` | Condicional | Texto/número da alternativa | vazio (obrigatórias em objetivas) |
 | `gabarito` | Condicional | Letra da correta: `A`–`E` | vazio (obrigatório em objetivas) |
 | `tags` | Não | Uma ou mais, separadas por `,` ou `;` | sem tags |
 | `comentarios` | Não | Justificativa (objetiva) / critérios de correção (discursiva) | vazio |
 
-> ⚠️ **Por que classificar importa:** sem `disciplina`/`dificuldade`/`tipo`/`topico`, a questão entra
-> como *Não Classificada / Médio*. Isso **passa** na importação, mas a geração de provas por máscara
-> (inclusive o simulado ENADE) depende dessa classificação para selecionar questões.
+> ⚠️ **Por que classificar importa:** sem `dificuldade`/`tipo`/`topico`, a questão entra como *Médio* e
+> sem tópico. Isso **passa** na importação, mas a geração de provas por máscara (inclusive o simulado
+> ENADE) depende dessa classificação para selecionar questões. A disciplina é obrigatória: vazia ou fora
+> da matriz (ex.: `Computação`) recusa a linha com o motivo, para a lista de disciplinas não ganhar
+> duplicatas. Nome certo com a sigla errada (ex.: `Estrutura de Dados (EDA)`) é aceito pelo nome.
 
 ### Aliases de cabeçalho aceitos
 
@@ -41,7 +43,7 @@ O parser é tolerante a variações de nome (não diferencia maiúsculas/acentos
 
 ## Regras de ouro (importar sem erro)
 
-1. **Cabeçalho na 1ª linha.** Só `enunciado` é obrigatório como cabeçalho.
+1. **Cabeçalho na 1ª linha.** `enunciado` e `disciplina` são obrigatórios.
 2. **Objetiva:** no mínimo **2 alternativas** preenchidas + `gabarito` apontando uma delas (`A`–`E`).
 3. **Discursiva:** deixe `opcao_*` e `gabarito` **vazios**; use `comentarios` para os critérios de correção.
 4. **Enunciado único:** o sistema rejeita duplicatas dentro do arquivo e contra o banco (ignora caixa e espaços).

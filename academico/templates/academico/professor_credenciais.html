@@ -1,0 +1,62 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Acesso do professor — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-person-badge-fill"></i> Acadêmico • Professores</span>
+    </div>
+    <h1 class="mb-1">{% if acao == 'criado' %}Professor cadastrado{% else %}Senha redefinida{% endif %}</h1>
+    <p class="text-secondary">{{ professor.get_full_name|default:professor.username }}</p>
+  </div>
+</div>
+
+<div class="card-surface credenciais-professor" style="max-width: 680px;">
+  <div class="aviso-primeiro-acesso" role="status">
+    <i class="bi bi-eye-slash-fill" aria-hidden="true"></i>
+    <div>
+      <strong>Anote ou repasse agora:</strong> esta senha aparece só nesta tela. Se ela se perder, use
+      "Redefinir senha" na lista de professores.
+    </div>
+  </div>
+
+  <dl class="credenciais-lista">
+    <div>
+      <dt>Login</dt>
+      <dd class="font-mono">{{ professor.username }}</dd>
+    </div>
+    <div>
+      <dt>Senha temporária</dt>
+      <dd class="font-mono" id="senha-temporaria">{{ senha }}</dd>
+    </div>
+  </dl>
+
+  <p class="small text-muted">
+    No primeiro acesso, o sistema pede que o professor escolha uma senha nova antes de abrir qualquer outra tela.
+  </p>
+
+  <div class="flex flex-wrap gap-2 mt-4">
+    <button type="button" class="btn btn-outline" id="btn-copiar-acesso"
+            data-texto="Examina — login: {{ professor.username }} | senha temporária: {{ senha }}">
+      <i class="bi bi-clipboard"></i> Copiar login e senha
+    </button>
+    <a href="{% url 'academico:professor_list' %}" class="btn btn-primary"><i class="bi bi-check-lg"></i> Concluir</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const botao = document.getElementById('btn-copiar-acesso');
+  if (!botao || !navigator.clipboard) { if (botao) botao.hidden = true; return; }
+  botao.addEventListener('click', function () {
+    navigator.clipboard.writeText(botao.dataset.texto).then(function () {
+      botao.innerHTML = '<i class="bi bi-clipboard-check"></i> Copiado';
+    });
+  });
+})();
+</script>
+{% endblock %}

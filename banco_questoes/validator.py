@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .disciplinas import EXEMPLO as EXEMPLO_DISCIPLINA
+from .disciplinas import CatalogoDisciplinas
 from .models import Questao
 from .utils import alternativas_repetidas
 
@@ -47,8 +49,8 @@ class CSVValidationReport:
         return self.total_invalidas == 0 and self.total_processadas > 0
 
 
-# Disciplina e dificuldade padrão para importação do formato de 10 colunas
-DISCIPLINA_PADRAO = 'Não Classificada'
+# Dificuldade padrão quando a planilha não informa. A disciplina não tem padrão: precisa ser uma
+# das oficiais (banco_questoes.disciplinas) — a importação não cria disciplinas.
 DIFICULDADE_PADRAO = Questao.Dificuldade.MEDIO
 
 
@@ -75,12 +77,13 @@ class CSVQuestaoValidator:
     }
 
     @classmethod
-    def validate_row(cls, row: dict[str, Any]) -> RowValidationResult:
+    def validate_row(cls, row: dict[str, Any], catalogo: CatalogoDisciplinas | None = None) -> RowValidationResult:
         """
         Aplica todas as regras sintáticas e condicionais a uma linha estruturada pelo parser.
 
         Suporta tanto o formato novo (10 colunas) quanto o legado (13 colunas).
-        Campos ausentes recebem valores-padrão.
+        Campos ausentes recebem valores-padrão, menos a disciplina, que precisa ser uma oficial
+        (``catalogo``: índice das disciplinas oficiais; montado aqui se não for passado).
 
         Retorna uma instância de RowValidationResult contendo erros e dados limpos.
         """
@@ -100,9 +103,19 @@ class CSVQuestaoValidator:
             cleaned['enunciado'] = enunciado
             cleaned['enunciado_normalizado'] = normalize_enunciado(enunciado)
 
-        # 2. Disciplina — usa valor do CSV ou fallback para padrão
-        disciplina = (row.get('disciplina') or '').strip()
-        cleaned['disciplina'] = disciplina if disciplina else DISCIPLINA_PADRAO
+        # 2. Disciplina — obrigatória e oficial (nome ou sigla); a importação não cria disciplinas
+        disciplina_texto = str(row.get('disciplina') or '').strip()
+        if not disciplina_texto:
+            errors.append(f'Linha {linha_num}: Informe a disciplina (nome ou sigla, ex.: {EXEMPLO_DISCIPLINA}).')
+        else:
+            disciplina = (catalogo or CatalogoDisciplinas()).resolver(disciplina_texto)
+            if disciplina is None:
+                errors.append(
+                    f'Linha {linha_num}: A disciplina "{disciplina_texto}" não está na lista oficial. '
+                    f'Use o nome ou a sigla (ex.: {EXEMPLO_DISCIPLINA}).'
+                )
+            else:
+                cleaned['disciplina'] = disciplina
 
         # 3. Tópico (opcional)
         topico = row.get('topico')
@@ -260,9 +273,10 @@ class CSVQuestaoValidator:
         """
         report = CSVValidationReport(total_processadas=len(parsed_rows))
         seen_enunciados_no_arquivo: dict[str, int] = {}
+        catalogo = CatalogoDisciplinas()  # uma consulta para o arquivo inteiro
 
         for row in parsed_rows:
-            result = cls.validate_row(row)
+            result = cls.validate_row(row, catalogo)
 
             # Se a linha já tiver erros de sintaxe básicos, não valida duplicata
             if not result.is_valid:

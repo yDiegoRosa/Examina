@@ -144,9 +144,20 @@ E-mail do administrador — recebe o aviso de falha no backup e os erros interno
 | `EMAIL_HOST` / `EMAIL_PORT` | `smtp.provedor.com` / `587` | Servidor SMTP. Sem `EMAIL_HOST`, nada é enviado (os e-mails só aparecem no log). |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | | Login do SMTP (em Gmail, uma senha de app). |
 | `EMAIL_USE_SSL` | `False` | `True` para a porta 465; na 587 o padrão é STARTTLS. |
-| `EMAIL_REMETENTE` | `examina@instituicao.edu.br` | Remetente dos e-mails (precisa ser aceito pelo SMTP). |
+| `EMAIL_REMETENTE` | `examina@instituicao.edu.br` | Remetente dos e-mails (precisa ser aceito pelo SMTP). Vazio = a própria conta do SMTP. |
 
-Para testar: `docker compose -f docker-compose.prod.yml exec web python manage.py sendtestemail --admins`.
+**Qual conta usar para enviar:** contas pessoais do Outlook.com/Hotmail **não servem** — a Microsoft
+desligou o login por senha no SMTP (set/2024) e o Django só envia com usuário e senha. Elas podem
+**receber** os avisos (em `ADMINS`). Para enviar, o mais simples é uma conta Gmail só do sistema:
+
+1. Crie a conta e ligue a verificação em duas etapas (myaccount.google.com → Segurança).
+2. Gere uma senha de app em myaccount.google.com/apppasswords (nome: "Examina") — 16 letras.
+3. No `.env`: `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`, `EMAIL_USE_SSL=False`,
+   `EMAIL_HOST_USER` = a conta, `EMAIL_HOST_PASSWORD` = a senha de app sem espaços.
+4. Recrie o `web` para ler o `.env`: `docker compose -f docker-compose.prod.yml up -d`.
+
+Para testar: `docker compose -f docker-compose.prod.yml exec web python manage.py sendtestemail --admins`
+(confira também a caixa de spam na primeira vez).
 
 O `.env` tem senhas: mantenha-o fora do Git (já está no `.gitignore`) e com acesso restrito (`chmod 600 .env`).
 
@@ -171,12 +182,19 @@ docker compose -f docker-compose.prod.yml exec web python manage.py seed_topicos
 
 Depois, entrando como administrador:
 
-1. **Usuários** (`/admin/`): uma conta para cada professor, no grupo **Docente**. Quem vê os dados
-   de todos fica no grupo **Coordenador** (vê tudo, altera só o que é seu); quem gerencia cadastros,
-   no grupo **Administrador** (ou é superusuário). Cada um troca a própria senha no ícone de conta.
-2. **Acadêmico:** turmas, alunos e matrículas (só o administrador cadastra).
-3. **Docências** (Acadêmico → Turmas → ícone "Docentes da turma"): qual professor leciona qual
-   disciplina em cada turma. **Sem docência, o professor não vê turmas nem desempenho.**
+1. **Professores** (Acadêmico → Professores): informe o nome completo; o sistema cria o login
+   `nome.sobrenome` (ex.: Ana Maria de Souza → `ana.souza`; repetido vira `ana.souza2`), coloca no
+   grupo **Docente** e mostra **uma única vez** a senha temporária para repassar. No primeiro acesso o
+   professor só consegue usar a tela de troca de senha até escolher a dele. Perdeu a senha? Ícone da
+   chave ("Redefinir senha") na lista: gera outra temporária e volta a exigir a troca.
+   Coordenador (vê tudo, altera só o que é seu) e Administrador (gerencia cadastros) continuam sendo
+   criados em `/admin/`, nos grupos **Coordenador** e **Administrador**.
+2. **Acadêmico:** turmas, alunos e matrículas (só o administrador cadastra). A turma é criada pela
+   **disciplina**: o nome é a sigla dela (Segurança da Informação → `SEG`); se houver mais de uma turma
+   da mesma disciplina no mesmo período e turno, use o complemento (`SEG-A`, `SEG-B`).
+3. **Docências:** ao criar a turma, escolha o professor — a docência (professor × disciplina × turma) é
+   criada junto. Outros professores: Acadêmico → Turmas → ícone "Docentes da turma".
+   **Sem docência, o professor não vê turmas nem desempenho.**
 4. **Questões:** a importação grava como autor quem importou, e o professor monta provas só com as
    questões dele — cada professor importa as suas (ou o administrador, se for ele a montar as provas).
 
@@ -235,7 +253,8 @@ A imagem é reconstruída, os estáticos são coletados de novo e as migrations 
 
 | Tarefa | Como |
 |---|---|
-| Ver os logs | `docker compose -f docker-compose.prod.yml logs -f web` (os logs do Django também ficam no volume `logs_data`, em `/app/logs/examina.log`). |
+| Ver os logs | `docker compose -f docker-compose.prod.yml logs -f web` (os logs do Django também ficam no volume `logs_data`, em `/app/logs/examina.log`). Cada container guarda no máximo 5 arquivos de 10 MB de log (`x-logging` no compose); o mais antigo é descartado. |
+| Tempo de sessão | No login, **Manter conectado neste computador** marcado = 2 semanas; desmarcado (padrão) = termina ao fechar o navegador ou após `SESSAO_INATIVIDADE_MINUTOS` sem uso (120 por padrão, no `.env`). |
 | Abrir um shell do Django | `docker compose -f docker-compose.prod.yml exec web python manage.py shell` |
 | Desbloquear um usuário (limite de tentativas) | Admin → **Tentativas de login malsucedidas** → apagar as do usuário. |
 | Redefinir a senha de um professor | Admin → **Usuários** → o usuário → formulário de senha. |

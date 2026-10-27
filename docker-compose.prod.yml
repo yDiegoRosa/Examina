@@ -15,11 +15,22 @@
 # Servidor próprio (VPS) sem proxy da instituição: COMPOSE_PROFILES=caddy e DOMINIO=<domínio>
 # no .env sobem também o Caddy, que faz o HTTPS com certificado automático (Let's Encrypt)
 # nas portas 80/443 — ver docs/deploy.md, "Instalação numa VPS".
+
+# Logs dos containers (docker logs): no máximo 5 arquivos de 10 MB por serviço. Sem isso o
+# Docker guarda tudo para sempre (IPs dos acessos no Caddy) e um dia o disco enche.
+# Mudou aqui? "docker compose -f docker-compose.prod.yml up -d" recria os containers.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: mysql:8.0
     container_name: examina_mysql  # nome esperado pelos scripts de backup/restore
     restart: always
+    logging: *logging
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:?defina MYSQL_DATABASE no .env}
       MYSQL_USER: ${MYSQL_USER:?defina MYSQL_USER no .env}
@@ -41,6 +52,7 @@ services:
     build: .
     container_name: examina_django
     restart: always
+    logging: *logging
     # Aplica migrations pendentes e sobe o gunicorn (estáticos já coletados na imagem).
     command: sh -c "python manage.py migrate --noinput && exec gunicorn Examina.wsgi:application"
     env_file:
@@ -62,6 +74,7 @@ services:
     image: caddy:2.11.2-alpine
     container_name: examina_caddy
     restart: always
+    logging: *logging
     profiles: ["caddy"]  # só sobe com COMPOSE_PROFILES=caddy (servidor sem proxy HTTPS próprio)
     environment:
       DOMINIO: ${DOMINIO:-}

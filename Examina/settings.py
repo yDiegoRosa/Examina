@@ -83,7 +83,13 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Páginas de usuário logado não ficam no cache do navegador (voltar depois de "Sair").
+    'Examina.middleware.SemCacheParaUsuarioLogadoMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # Login sem "Manter conectado": sai após SESSAO_INATIVIDADE_MINUTOS sem uso (depois de messages).
+    'Examina.middleware.EncerraSessaoInativaMiddleware',
+    # Professor com senha temporária só acessa "Alterar senha" até escolher a dele.
+    'academico.middleware.TrocaDeSenhaObrigatoriaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
 ]
@@ -213,6 +219,11 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'banco_questoes:questao_list'
 LOGOUT_REDIRECT_URL = 'login'
 
+# Sessão: com "Manter conectado neste computador" marcado no login, dura SESSION_COOKIE_AGE
+# (2 semanas, padrão do Django); desmarcado, termina ao fechar o navegador e depois de
+# SESSAO_INATIVIDADE_MINUTOS sem uso (Examina.middleware.EncerraSessaoInativaMiddleware).
+SESSAO_INATIVIDADE_MINUTOS = env.int('SESSAO_INATIVIDADE_MINUTOS', default=120)
+
 # Limite de tentativas de login (banco_questoes.seguranca_login): depois de
 # LOGIN_MAX_TENTATIVAS senhas erradas do mesmo usuário em LOGIN_BLOQUEIO_MINUTOS, o login
 # desse usuário fica bloqueado até a janela passar (também no /admin/).
@@ -241,7 +252,9 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)  # porta 465
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=not EMAIL_USE_SSL)  # porta 587 (STARTTLS)
 EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=10)
-DEFAULT_FROM_EMAIL = env('EMAIL_REMETENTE', default=EMAIL_HOST_USER or 'examina@localhost')
+# "EMAIL_REMETENTE=" vazio (como o criar_env_producao.sh gera) vale como não definido: sem o
+# "or", o remetente ficaria em branco e o servidor SMTP recusaria a mensagem.
+DEFAULT_FROM_EMAIL = env('EMAIL_REMETENTE', default='') or EMAIL_HOST_USER or 'examina@localhost'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL  # remetente dos e-mails aos ADMINS
 EMAIL_SUBJECT_PREFIX = '[Examina] '
 

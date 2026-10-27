@@ -1,14 +1,78 @@
 """Views de nível de projeto."""
 
 import os
+import time
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404
 from django.utils._os import safe_join
 
+from academico.models import PerfilProfessor
+from academico.professores import troca_de_senha_pendente
+from banco_questoes.forms import AlterarSenhaForm, LoginForm
 from banco_questoes.permissions import docente_ou_coordenador_required
+
+from .middleware import SESSAO_CURTA, ULTIMO_ACESSO
+
+
+def texto_duracao(minutos: int) -> str:
+    """120 → "2 h", 90 → "1 h 30 min", 45 → "45 min" (texto de ajuda do login)."""
+    horas, resto = divmod(minutos, 60)
+    if not horas:
+        return f'{resto} min'
+    return f'{horas} h' + (f' {resto} min' if resto else '')
+
+
+class LoginView(auth_views.LoginView):
+    """
+    Login com "Manter conectado neste computador":
+
+    - marcado: a sessão dura SESSION_COOKIE_AGE (2 semanas, padrão do Django), como antes;
+    - desmarcado (padrão, pensando no computador compartilhado): a sessão termina ao fechar o
+      navegador e depois de SESSAO_INATIVIDADE_MINUTOS sem uso (EncerraSessaoInativaMiddleware).
+    """
+
+    template_name = 'registration/login.html'
+    authentication_form = LoginForm
+
+    def form_valid(self, form):
+        resposta = super().form_valid(form)  # faz o login (a sessão ganha uma chave nova)
+        sessao = self.request.session
+        if form.cleaned_data.get('lembrar'):
+            sessao.set_expiry(None)
+        else:
+            sessao.set_expiry(0)
+            sessao[SESSAO_CURTA] = True
+            sessao[ULTIMO_ACESSO] = int(time.time())
+        return resposta
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        contexto['inatividade_texto'] = texto_duracao(settings.SESSAO_INATIVIDADE_MINUTOS)
+        return contexto
+
+
+class AlterarSenhaView(auth_views.PasswordChangeView):
+    """
+    Troca de senha pelo próprio usuário. No primeiro acesso do professor (senha temporária) ela é
+    obrigatória (``academico.middleware.TrocaDeSenhaObrigatoriaMiddleware``); trocar libera o sistema.
+    """
+
+    template_name = 'registration/alterar_senha.html'
+    form_class = AlterarSenhaForm
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        contexto['troca_obrigatoria'] = troca_de_senha_pendente(self.request.user)
+        return contexto
+
+    def form_valid(self, form):
+        resposta = super().form_valid(form)
+        PerfilProfessor.objects.filter(usuario=self.request.user).update(troca_senha_pendente=False)
+        return resposta
 
 
 def _midia_visivel(user, nome: str) -> bool:

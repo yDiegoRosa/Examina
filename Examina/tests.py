@@ -1,9 +1,11 @@
 """Testes de nível de projeto: mídia autenticada, entradas inválidas e páginas de erro."""
 
 import tempfile
+import time
 from datetime import date
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -212,3 +214,153 @@ class PaginasDeErroTest(TestCase):
         resp = server_error(RequestFactory().get('/'))
         self.assertEqual(resp.status_code, 500)
         self.assertIn('Erro interno do servidor (500)', resp.content.decode())
+
+
+class SemCacheDepoisDeSairTest(TestCase):
+    """
+    Depois de "Sair", o botão voltar não pode mostrar a tela anterior (o celular guardava a
+    página inteira na memória): páginas de usuário logado vão com "no-store" e a sessão acaba.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='doc_cache', password='segredo123')  # noqa: S106
+        self.user.groups.add(Group.objects.get(name='Docente'))
+
+    def test_pagina_de_usuario_logado_nao_fica_no_cache(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('banco_questoes:questao_list'))
+        self.assertEqual(resp.status_code, 200)
+        cache = resp['Cache-Control']
+        for diretiva in ('no-store', 'no-cache', 'private'):
+            self.assertIn(diretiva, cache)
+
+    def test_download_de_usuario_logado_tambem_nao_fica_no_cache(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('banco_questoes:download_modelo_csv'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('no-store', resp['Cache-Control'])
+
+    def test_visitante_nao_recebe_o_cabecalho_do_middleware(self):
+        resp = self.client.get(reverse('banco_questoes:questao_list'))  # redireciona para o login
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(resp.has_header('Cache-Control'))
+
+    def test_depois_de_sair_a_pagina_manda_para_o_login(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse('banco_questoes:questao_list')).status_code, 200)
+
+        self.client.post(reverse('logout'))
+
+        resp = self.client.get(reverse('banco_questoes:questao_list'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(resp['Location'].startswith(reverse('login')))
+
+    def test_pagina_restaurada_pelo_voltar_e_recarregada(self):
+        js = (Path(__file__).resolve().parent.parent / 'banco_questoes/static/banco_questoes/js/main.js').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn("addEventListener('pageshow'", js)
+        self.assertIn('e.persisted', js)
+        self.assertIn('window.location.reload()', js)
+
+
+class ManterConectadoTest(TestCase):
+    """
+    "Manter conectado neste computador" no login: desmarcado, a sessão termina ao fechar o
+    navegador e após SESSAO_INATIVIDADE_MINUTOS sem uso; marcado, dura 2 semanas como antes.
+    """
+
+    SENHA = 'segredo123'  # noqa: S105
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='doc_sessao', password=self.SENHA)
+        self.user.groups.add(Group.objects.get(name='Docente'))
+        self.pagina = reverse('banco_questoes:questao_list')
+
+    def _entrar(self, lembrar=False):
+        dados = {'username': 'doc_sessao', 'password': self.SENHA}
+        if lembrar:
+            dados['lembrar'] = 'on'
+        resp = self.client.post(reverse('login'), dados)
+        self.assertEqual(resp.status_code, 302)
+
+    def _ultimo_acesso_ha(self, segundos):
+        from Examina.middleware import ULTIMO_ACESSO
+
+        sessao = self.client.session
+        sessao[ULTIMO_ACESSO] = int(time.time()) - segundos
+        sessao.save()
+
+    def test_tela_de_login_mostra_a_caixa_desmarcada_e_o_prazo(self):
+        resp = self.client.get(reverse('login'))
+        self.assertContains(resp, 'name="lembrar"')
+        self.assertNotContains(resp, 'checked')
+        self.assertContains(resp, 'Manter conectado neste computador')
+        self.assertContains(resp, 'ou após 2 h sem uso')
+
+    def test_sem_marcar_a_sessao_termina_ao_fechar_o_navegador(self):
+        from Examina.middleware import SESSAO_CURTA, ULTIMO_ACESSO
+
+        self._entrar()
+        sessao = self.client.session
+        self.assertTrue(sessao.get_expire_at_browser_close())
+        self.assertTrue(sessao[SESSAO_CURTA])
+        self.assertAlmostEqual(sessao[ULTIMO_ACESSO], time.time(), delta=5)
+
+    def test_marcando_a_sessao_dura_duas_semanas(self):
+        from Examina.middleware import SESSAO_CURTA
+
+        self._entrar(lembrar=True)
+        sessao = self.client.session
+        self.assertFalse(sessao.get_expire_at_browser_close())
+        self.assertEqual(sessao.get_expiry_age(), settings.SESSION_COOKIE_AGE)
+        self.assertNotIn(SESSAO_CURTA, sessao)
+
+    def test_sem_uso_alem_do_limite_volta_ao_login_com_aviso(self):
+        self._entrar()
+        self._ultimo_acesso_ha(settings.SESSAO_INATIVIDADE_MINUTOS * 60 + 60)
+
+        resp = self.client.get(self.pagina, follow=True)
+
+        self.assertEqual(resp.redirect_chain[0][1], 302)
+        self.assertTrue(resp.redirect_chain[0][0].startswith(reverse('login')))
+        self.assertContains(resp, 'Sua sessão terminou por falta de uso')
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_uso_dentro_do_limite_continua_e_renova_o_prazo(self):
+        from Examina.middleware import ULTIMO_ACESSO
+
+        self._entrar()
+        self._ultimo_acesso_ha(30 * 60)
+
+        self.assertEqual(self.client.get(self.pagina).status_code, 200)
+        self.assertAlmostEqual(self.client.session[ULTIMO_ACESSO], time.time(), delta=5)
+
+    @override_settings(SESSAO_INATIVIDADE_MINUTOS=1)
+    def test_sessao_mantida_nao_expira_por_falta_de_uso(self):
+        self._entrar(lembrar=True)
+        self._ultimo_acesso_ha(3600)
+        self.assertEqual(self.client.get(self.pagina).status_code, 200)
+
+    def test_texto_do_prazo(self):
+        from Examina.views import texto_duracao
+
+        self.assertEqual(texto_duracao(120), '2 h')
+        self.assertEqual(texto_duracao(90), '1 h 30 min')
+        self.assertEqual(texto_duracao(45), '45 min')
+
+
+class RotacaoDosLogsTest(TestCase):
+    """Os containers de produção limitam o tamanho dos logs (senão crescem para sempre)."""
+
+    def test_todos_os_servicos_usam_o_limite_de_log(self):
+        compose = (Path(__file__).resolve().parent.parent / 'docker-compose.prod.yml').read_text(encoding='utf-8')
+        self.assertIn('x-logging: &logging', compose)
+        self.assertIn('max-size: "10m"', compose)
+        self.assertIn('max-file: "5"', compose)
+        import re
+
+        bloco_servicos = compose.split('\nservices:\n', 1)[1].split('\nvolumes:\n', 1)[0]
+        servicos = re.findall(r'^  ([a-z]+):$', bloco_servicos, flags=re.MULTILINE)
+        self.assertEqual(servicos, ['db', 'web', 'caddy'])
+        self.assertEqual(bloco_servicos.count('logging: *logging'), len(servicos))

@@ -6,6 +6,7 @@
 <div class="flex flex-wrap gap-2 mb-4" aria-label="Navegação acadêmica">
   <a href="{% url 'academico:aluno_list' %}" class="btn btn-primary" aria-current="page">Alunos</a>
   <a href="{% url 'academico:turma_list' %}" class="btn btn-outline">Turmas</a>
+  {% if perfil_admin %}<a href="{% url 'academico:professor_list' %}" class="btn btn-outline">Professores</a>{% endif %}
 </div>
 
 <div class="hero-card mb-4">

@@ -889,6 +889,11 @@ a:hover {
   box-shadow: 0 0 0 2px var(--color-success-border);
 }
 
+/* Colunas da linha de alternativa (letra | texto | gabarito | remover); no celular, ver seção 20. */
+.alt-letra { width: 110px; flex-shrink: 0; }
+.alt-correta { min-width: 110px; flex-shrink: 0; padding-top: 0.25rem; }
+.alt-remover { padding-top: 1.65rem; flex-shrink: 0; }
+
 /* --------------------------------------------------------------------------
    10. Badges Semânticos (Pills)
    -------------------------------------------------------------------------- */
@@ -1243,6 +1248,36 @@ a:hover {
 .login-password-toggle:hover {
   color: #0066CC;
   background: var(--bg-muted);
+}
+
+/* "Manter conectado neste computador" */
+.login-lembrar-grupo {
+  margin: -0.35rem 0 0.25rem;
+}
+
+.login-lembrar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.login-lembrar input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: #0066CC;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.login-lembrar-ajuda {
+  font-size: 0.775rem;
+  color: #64748B;
+  line-height: 1.45;
+  margin: 0.3rem 0 0 1.65rem;
 }
 
 .btn-login-submit {
@@ -1771,3 +1806,99 @@ a:hover {
 :root[data-theme="dark"] .theme-toggle .icon-sun { display: inline-flex; }
 :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
 
+/* ==========================================================================
+   20. Celular e telas estreitas
+   Lado a lado não cabe: o cabeçalho da página empilha texto e botões, e as
+   linhas "conteúdo | botões" quebram em vez de cortar ou vazar da tela.
+   ========================================================================== */
+@media (max-width: 992px) {
+  .hero-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.25rem;
+    padding: 1.5rem 1.25rem 1.5rem 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-card h1 { font-size: 1.6rem; }
+  /* Botões do cabeçalho dividem a linha entre si (alguns ficam dentro de um <form>). */
+  .hero-card > :last-child > .btn,
+  .hero-card > :last-child > form { flex: 1 1 auto; }
+  .hero-card > :last-child > form > .btn { width: 100%; }
+
+  .card-header { flex-wrap: wrap; gap: 0.75rem; padding: 1rem 1.15rem; }
+  .card-body { padding: 1.15rem; }
+
+  .flex.justify-between { flex-wrap: wrap; }
+  .flex.justify-between:not([class*="gap-"]) { gap: 0.5rem 0.75rem; }
+
+  /* Botão com rótulo longo quebra a linha em vez de passar da borda (nas tabelas, a rolagem resolve). */
+  .btn { white-space: normal; max-width: 100%; }
+  .table-responsive .btn { white-space: nowrap; }
+
+  /* Alternativas: letra, gabarito e remover na primeira linha; o texto embaixo, com a largura toda. */
+  .alternativa-row { flex-wrap: wrap; gap: 0.75rem; }
+  .alternativa-row .alt-letra { flex: 1 1 auto; width: auto; }
+  .alternativa-row .alt-texto { order: 1; flex-basis: 100%; }
+  .alternativa-row .alt-correta { min-width: 0; }
+}
+
+
+/* ==========================================================================
+   21. Contas de professor — aviso fixo e quadro de login/senha temporária
+   (caixa própria: os .alert-toast somem sozinhos em 5 s)
+   ========================================================================== */
+.aviso-primeiro-acesso {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--fae-gold);
+  border-left: 5px solid var(--fae-gold);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.1rem;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.aviso-primeiro-acesso > i {
+  color: var(--fae-gold);
+  font-size: 1.25rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.credenciais-professor {
+  padding: 1.5rem;
+}
+
+.credenciais-lista {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 1rem;
+}
+
+.credenciais-lista > div {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+}
+
+.credenciais-lista dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.credenciais-lista dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-main);
+  word-break: break-all;
+}

@@ -37,15 +37,17 @@ def test_template_csv_reimportavel_sem_erros(cliente_logado):
     assert resultado.total_rejeitadas == 0
 
     # Classificação preservada no round-trip
-    assert Questao.objects.filter(disciplina__nome='Redes de Computadores', tipo='OBJ').exists()
-    assert Questao.objects.filter(disciplina__nome='Programação', dificuldade='D').exists()
+    assert Questao.objects.filter(
+        disciplina__nome='Fundamentos de Redes e Sistemas Distribuídos (RSD)', tipo='OBJ'
+    ).exists()
+    assert Questao.objects.filter(disciplina__nome='Fundamentos de Programação (FPR)', dificuldade='D').exists()
 
     discursiva = Questao.objects.get(tipo='DIS')
-    assert discursiva.disciplina.nome == 'Engenharia de Software'
+    assert discursiva.disciplina.nome == 'Gerência e Projeto de Sistemas (GPS)'
     assert discursiva.alternativas.count() == 0
     assert discursiva.criterios_correcao  # critérios vêm da coluna "comentarios"
 
-    objetiva = Questao.objects.get(disciplina__nome='Redes de Computadores')
+    objetiva = Questao.objects.get(disciplina__nome='Fundamentos de Redes e Sistemas Distribuídos (RSD)')
     assert objetiva.alternativas.count() == 5
     assert objetiva.alternativas.get(correta=True).letra == 'C'
     assert objetiva.tags.count() == 2

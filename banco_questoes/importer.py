@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 
 from .importacao_zip import ImagemDoPacote, PacoteImportacao, eh_zip
-from .models import Alternativa, Disciplina, Questao, Topico
+from .models import Alternativa, Questao, Topico
 from .parser import FileQuestaoParser
 from .validator import CSVQuestaoValidator
 
@@ -98,8 +98,8 @@ class QuestaoImportService:
                     continue
                 try:
                     with transaction.atomic():
-                        # Cria ou recupera a disciplina
-                        disc, _ = Disciplina.objects.get_or_create(nome=data['disciplina'])
+                        # Disciplina oficial já reconhecida pelo validador (a importação não cria disciplinas)
+                        disc = data['disciplina']
 
                         # Cria ou recupera o tópico (se informado)
                         topico_obj = None
@@ -146,7 +146,7 @@ class QuestaoImportService:
                             status='SUCESSO',
                             enunciado=data['enunciado'],
                             tipo=data['tipo'],
-                            disciplina=data['disciplina'],
+                            disciplina=disc.nome,
                             questao_id=questao.pk,
                             erros=[],
                             imagem=questao.imagem.name.rsplit('/', 1)[-1] if questao.imagem else '',

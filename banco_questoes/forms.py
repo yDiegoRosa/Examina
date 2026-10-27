@@ -20,6 +20,10 @@ class LoginForm(AuthenticationForm):
 
     login_bloqueado = False
 
+    # Desmarcado: a sessão termina ao fechar o navegador ou após um tempo sem uso
+    # (Examina.views.LoginView); marcado: dura 2 semanas.
+    lembrar = forms.BooleanField(required=False, label='Manter conectado neste computador')
+
     def _recusar_se_bloqueado(self, username):
         minutos = minutos_de_bloqueio(username)
         if minutos:
@@ -47,6 +51,13 @@ class AlterarSenhaForm(PasswordChangeForm):
         super().__init__(*args, **kwargs)
         for campo in self.fields.values():
             campo.widget.attrs['class'] = 'form-input'
+
+    def clean(self):
+        dados = super().clean()
+        # Sobretudo no primeiro acesso: a senha temporária não pode continuar sendo a senha.
+        if dados.get('old_password') and dados.get('old_password') == dados.get('new_password1'):
+            self.add_error('new_password1', 'A nova senha precisa ser diferente da atual.')
+        return dados
 
 
 # ---------------------------------------------------------------------------
