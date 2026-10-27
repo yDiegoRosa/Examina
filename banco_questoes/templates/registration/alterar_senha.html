@@ -8,12 +8,23 @@
     <div class="flex items-center gap-2 mb-2">
       <span class="hero-tag"><i class="bi bi-key-fill"></i> Minha conta</span>
     </div>
-    <h1 class="mb-1">Alterar senha</h1>
+    <h1 class="mb-1">{% if troca_obrigatoria %}Defina sua senha{% else %}Alterar senha{% endif %}</h1>
     <p class="text-secondary" style="max-width: 620px;">
       Informe a senha atual e escolha uma nova. Você continua conectado depois da troca.
     </p>
   </div>
 </div>
+
+{% if troca_obrigatoria %}
+{# Caixa fixa: os .alert-toast somem sozinhos em 5 s (main.js). #}
+<div class="aviso-primeiro-acesso mb-4" role="status">
+  <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+  <div>
+    <strong>Primeiro acesso:</strong> você entrou com uma senha temporária. Para continuar usando o
+    sistema, escolha uma senha só sua. Em "Senha antiga", digite a senha temporária que recebeu.
+  </div>
+</div>
+{% endif %}
 
 <div class="card-surface" style="padding: 1.5rem; max-width: 680px;">
   <form method="post" novalidate>
@@ -34,8 +45,10 @@
     {% endfor %}
 
     <div class="flex gap-2 mt-4">
-      <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Alterar senha</button>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if troca_obrigatoria %}Salvar minha senha{% else %}Alterar senha{% endif %}</button>
+      {% if not troca_obrigatoria %}
       <a href="{% url 'banco_questoes:questao_list' %}" class="btn btn-outline">Cancelar</a>
+      {% endif %}
     </div>
   </form>
 </div>

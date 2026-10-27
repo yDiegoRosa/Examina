@@ -88,6 +88,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     # Login sem "Manter conectado": sai após SESSAO_INATIVIDADE_MINUTOS sem uso (depois de messages).
     'Examina.middleware.EncerraSessaoInativaMiddleware',
+    # Professor com senha temporária só acessa "Alterar senha" até escolher a dele.
+    'academico.middleware.TrocaDeSenhaObrigatoriaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
 ]

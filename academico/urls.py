@@ -22,4 +22,11 @@ urlpatterns = [
     # Docências (professor × disciplina na turma) — só o administrador
     path('turmas/<int:pk>/docencias/', views.turma_docencias, name='turma_docencias'),
     path('turmas/<int:pk>/docencias/alternar/', views.turma_docencia_toggle, name='turma_docencia_toggle'),
+    # Professores (contas do grupo Docente) — só o administrador
+    path('professores/', views.professor_list, name='professor_list'),
+    path('professores/novo/', views.professor_create, name='professor_create'),
+    path('professores/credenciais/', views.professor_credenciais, name='professor_credenciais'),
+    path('professores/<int:pk>/editar/', views.professor_update, name='professor_update'),
+    path('professores/<int:pk>/redefinir-senha/', views.professor_redefinir_senha, name='professor_redefinir_senha'),
+    path('professores/<int:pk>/toggle-ativo/', views.professor_toggle_ativo, name='professor_toggle_ativo'),
 ]

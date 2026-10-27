@@ -1,0 +1,53 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}{{ titulo_pagina }} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'academico:professor_list' %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Voltar aos professores</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-person-badge-fill"></i> Acadêmico • Professores</span>
+    </div>
+    <h1 class="mb-1">{{ titulo_pagina }}</h1>
+    {% if professor %}
+    <p class="text-secondary">Login: <span class="font-mono font-bold">{{ professor.username }}</span> (não muda ao editar o nome).</p>
+    {% else %}
+    <p class="text-secondary" style="max-width: 620px;">
+      Ao salvar, o sistema gera o login (nome.sobrenome) e uma senha temporária, que aparece uma única vez
+      para você repassar ao professor.
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card-surface" style="padding: 1.5rem; max-width: 680px;">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert-toast alert-toast-danger mb-3">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {% for field in form %}
+    <div class="mb-3">
+      <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text and not professor %}<div class="small text-muted mt-1">{{ field.help_text }}</div>{% endif %}
+      {% for error in field.errors %}
+      <div class="small mt-1" style="color: var(--color-danger);">{{ error }}</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="flex flex-wrap gap-2 mt-4">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg"></i> {% if professor %}Salvar{% else %}Cadastrar e gerar senha{% endif %}
+      </button>
+      <a href="{% url 'academico:professor_list' %}" class="btn btn-outline">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

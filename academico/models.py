@@ -9,6 +9,10 @@ periodo_validator = RegexValidator(
     regex=r'^\d{4}\.[1-2]$',
     message='Use o formato Ano.Semestre, por exemplo: 2026.2.',
 )
+complemento_validator = RegexValidator(
+    regex=r'^[A-Z0-9]{1,10}$',
+    message='Use só letras e números, sem espaços (ex.: A, B, 2).',
+)
 
 
 class Aluno(models.Model):
@@ -47,6 +51,11 @@ class Turma(models.Model):
     Cada turma pertence a um único período e turno (ex.: ``2026.2`` + ``RSD`` + Manhã):
     o mesmo nome pode se repetir em turnos ou períodos diferentes. O histórico de
     vínculo de um aluno emerge de suas matrículas em turmas de períodos distintos.
+
+    Na tela, a turma é cadastrada pela disciplina: o nome é a sigla dela, mais o complemento
+    quando há mais de uma turma da mesma disciplina no período e turno ("SEG", "SEG-A").
+    O nome continua gravado (ata, cadernos e arquivos usam ``nome``); ``disciplina`` fica vazia
+    só em turmas antigas que a migration não conseguiu ligar a uma disciplina pela sigla.
     """
 
     class Turno(models.TextChoices):
@@ -72,6 +81,21 @@ class Turma(models.Model):
         blank=True,
         help_text='Turno das aulas da turma. Sai preenchido na ata de avaliação.',
     )
+    disciplina = models.ForeignKey(
+        'banco_questoes.Disciplina',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='turmas',
+        verbose_name='disciplina',
+    )
+    complemento = models.CharField(
+        'complemento',
+        max_length=10,
+        blank=True,
+        validators=[complemento_validator],
+        help_text='Só quando há mais de uma turma da mesma disciplina no período e turno (ex.: A, B).',
+    )
     ativo = models.BooleanField('ativa', default=True)
 
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -87,6 +111,11 @@ class Turma(models.Model):
         # O turno entra no nome exibido: turmas de mesmo nome e período só se distinguem por ele.
         turno = f' ({self.get_turno_display()})' if self.turno else ''
         return f'{self.periodo} — {self.nome}{turno}'
+
+    @staticmethod
+    def montar_nome(disciplina, complemento: str = '') -> str:
+        """Nome da turma a partir da disciplina: "SEG", ou "SEG-A" com complemento."""
+        return f'{disciplina.sigla}-{complemento}' if complemento else disciplina.sigla
 
 
 class Matricula(models.Model):
@@ -185,3 +214,31 @@ class Docencia(models.Model):
     def __str__(self):
         nome = self.professor.get_full_name() or self.professor.get_username()
         return f'{nome} — {self.disciplina} — {self.turma}'
+
+
+class PerfilProfessor(models.Model):
+    """
+    Dados da conta do professor criada em Acadêmico → Professores.
+
+    ``troca_senha_pendente``: a conta foi criada (ou a senha redefinida) com uma senha temporária;
+    até o professor escolher a dele, só a tela "Alterar senha" abre
+    (``academico.middleware.TrocaDeSenhaObrigatoriaMiddleware``).
+    """
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='perfil_professor',
+        verbose_name='usuário',
+    )
+    troca_senha_pendente = models.BooleanField('troca de senha pendente', default=True)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'perfil de professor'
+        verbose_name_plural = 'perfis de professor'
+
+    def __str__(self):
+        return self.usuario.get_username()

@@ -7,6 +7,7 @@ consulta as turmas das suas docências e os alunos delas; o coordenador consulta
 """
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
@@ -17,9 +18,13 @@ from django.views.decorators.http import require_POST
 from banco_questoes.permissions import administrador_required, docente_ou_coordenador_required
 from banco_questoes.utils import parse_pk
 
+from . import professores as contas
 from .acesso import turmas_permitidas, ve_tudo
-from .forms import AlunoForm, DocenciaForm, TurmaForm
+from .forms import AlunoForm, DocenciaForm, ProfessorForm, TurmaForm
 from .models import Aluno, Docencia, Matricula, Turma
+
+# Senha temporária guardada na sessão só entre o POST e a tela que a mostra (uma vez).
+_CREDENCIAIS_NA_SESSAO = 'professor_credenciais'
 
 
 def _paginar(request, queryset, por_pagina=10):
@@ -147,7 +152,7 @@ def aluno_toggle_ativo(request, pk):
 def turma_list(request):
     """Lista turmas com busca, filtro por status e paginação (professor: só as das suas docências)."""
     base_qs = turmas_permitidas(request.user)
-    turmas_qs = base_qs
+    turmas_qs = base_qs.select_related('disciplina')
 
     busca = request.GET.get('q', '').strip()
     status = request.GET.get('status', '')
@@ -324,7 +329,7 @@ def turma_docencias(request, pk):
             messages.success(request, f'Docência {verbo}: {docencia}.')
             return redirect('academico:turma_docencias', pk=turma.pk)
     else:
-        form = DocenciaForm()
+        form = DocenciaForm(initial={'disciplina': turma.disciplina})
 
     docencias = turma.docencias.select_related('professor', 'disciplina').order_by('-ativo', 'disciplina__nome')
     return render(
@@ -346,3 +351,135 @@ def turma_docencia_toggle(request, pk):
     estado = 'reativada' if docencia.ativo else 'encerrada'
     messages.success(request, f'Docência {estado}: {docencia}.')
     return redirect('academico:turma_docencias', pk=turma.pk)
+
+
+# ---------------------------------------------------------------------------
+# Professores (contas do grupo Docente) — só o administrador
+# ---------------------------------------------------------------------------
+def _professores():
+    return get_user_model().objects.filter(groups__name=contas.GRUPO_DOCENTE).distinct()
+
+
+def _guardar_credenciais(request, usuario, senha, acao):
+    request.session[_CREDENCIAIS_NA_SESSAO] = {'pk': usuario.pk, 'senha': senha, 'acao': acao}
+
+
+@login_required
+@administrador_required
+def professor_list(request):
+    """Professores (grupo Docente) com busca por nome/login, filtro por situação e paginação."""
+    base_qs = _professores()
+    professores_qs = base_qs.select_related('perfil_professor').annotate(
+        turmas=Count('docencias', filter=Q(docencias__ativo=True), distinct=True)
+    )
+    busca = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '')
+    if busca:
+        professores_qs = professores_qs.filter(
+            Q(first_name__icontains=busca) | Q(last_name__icontains=busca) | Q(username__icontains=busca)
+        )
+    if status == 'ativo':
+        professores_qs = professores_qs.filter(is_active=True)
+    elif status == 'inativo':
+        professores_qs = professores_qs.filter(is_active=False)
+
+    metricas = base_qs.aggregate(
+        total=Count('pk', distinct=True),
+        ativos=Count('pk', filter=Q(is_active=True), distinct=True),
+        aguardando=Count('pk', filter=Q(perfil_professor__troca_senha_pendente=True), distinct=True),
+    )
+    page_obj, page_range, querystring = _paginar(
+        request, professores_qs.order_by('first_name', 'last_name', 'username')
+    )
+    return render(
+        request,
+        'academico/professor_list.html',
+        {
+            'professores': page_obj,
+            'page_obj': page_obj,
+            'page_range': page_range,
+            'querystring': querystring,
+            'busca': busca,
+            'status_selecionado': status,
+            'metricas': metricas,
+        },
+    )
+
+
+@login_required
+@administrador_required
+def professor_create(request):
+    """Cria a conta do professor (login nome.sobrenome) e mostra a senha temporária uma vez."""
+    if request.method == 'POST':
+        form = ProfessorForm(request.POST)
+        if form.is_valid():
+            usuario, senha = contas.criar_professor(form.cleaned_data['nome_completo'], form.cleaned_data['email'])
+            _guardar_credenciais(request, usuario, senha, 'criado')
+            return redirect('academico:professor_credenciais')
+    else:
+        form = ProfessorForm()
+    return render(request, 'academico/professor_form.html', {'form': form, 'titulo_pagina': 'Novo Professor'})
+
+
+@login_required
+@administrador_required
+def professor_update(request, pk):
+    """Edita nome e e-mail (o login não muda)."""
+    usuario = get_object_or_404(_professores(), pk=pk)
+    if request.method == 'POST':
+        form = ProfessorForm(request.POST)
+        if form.is_valid():
+            usuario.first_name, usuario.last_name = contas.partes_do_nome(form.cleaned_data['nome_completo'])
+            usuario.email = form.cleaned_data['email']
+            usuario.save(update_fields=['first_name', 'last_name', 'email'])
+            messages.success(request, f'Professor "{usuario.get_full_name()}" atualizado.')
+            return redirect('academico:professor_list')
+    else:
+        form = ProfessorForm(initial={'nome_completo': usuario.get_full_name(), 'email': usuario.email})
+    return render(
+        request,
+        'academico/professor_form.html',
+        {'form': form, 'professor': usuario, 'titulo_pagina': f'Editar Professor: {usuario.get_full_name()}'},
+    )
+
+
+@require_POST
+@login_required
+@administrador_required
+def professor_redefinir_senha(request, pk):
+    """Gera nova senha temporária; o professor terá de trocá-la no próximo login."""
+    usuario = get_object_or_404(_professores(), pk=pk)
+    _guardar_credenciais(request, usuario, contas.redefinir_senha(usuario), 'redefinida')
+    return redirect('academico:professor_credenciais')
+
+
+@require_POST
+@login_required
+@administrador_required
+def professor_toggle_ativo(request, pk):
+    """Desativa (não consegue mais entrar) ou reativa a conta; os dados dele ficam."""
+    usuario = get_object_or_404(_professores(), pk=pk)
+    if usuario == request.user:
+        messages.error(request, 'Você não pode desativar a própria conta.')
+        return redirect('academico:professor_list')
+    usuario.is_active = not usuario.is_active
+    usuario.save(update_fields=['is_active'])
+    estado = 'reativada' if usuario.is_active else 'desativada'
+    messages.success(request, f'Conta de "{usuario.get_full_name() or usuario.username}" {estado}.')
+    return redirect('academico:professor_list')
+
+
+@login_required
+@administrador_required
+def professor_credenciais(request):
+    """Mostra login e senha temporária uma única vez (a sessão esquece a senha em seguida)."""
+    dados = request.session.pop(_CREDENCIAIS_NA_SESSAO, None)
+    if not dados:
+        messages.info(request, 'A senha temporária só é mostrada uma vez. Use "Redefinir senha" para gerar outra.')
+        return redirect('academico:professor_list')
+    usuario = get_object_or_404(_professores(), pk=dados['pk'])
+    return render(
+        request,
+        'academico/professor_credenciais.html',
+        {'professor': usuario, 'senha': dados['senha'], 'acao': dados['acao']},
+    )

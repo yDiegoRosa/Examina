@@ -10,7 +10,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404
 from django.utils._os import safe_join
 
-from banco_questoes.forms import LoginForm
+from academico.models import PerfilProfessor
+from academico.professores import troca_de_senha_pendente
+from banco_questoes.forms import AlterarSenhaForm, LoginForm
 from banco_questoes.permissions import docente_ou_coordenador_required
 
 from .middleware import SESSAO_CURTA, ULTIMO_ACESSO
@@ -51,6 +53,26 @@ class LoginView(auth_views.LoginView):
         contexto = super().get_context_data(**kwargs)
         contexto['inatividade_texto'] = texto_duracao(settings.SESSAO_INATIVIDADE_MINUTOS)
         return contexto
+
+
+class AlterarSenhaView(auth_views.PasswordChangeView):
+    """
+    Troca de senha pelo próprio usuário. No primeiro acesso do professor (senha temporária) ela é
+    obrigatória (``academico.middleware.TrocaDeSenhaObrigatoriaMiddleware``); trocar libera o sistema.
+    """
+
+    template_name = 'registration/alterar_senha.html'
+    form_class = AlterarSenhaForm
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        contexto['troca_obrigatoria'] = troca_de_senha_pendente(self.request.user)
+        return contexto
+
+    def form_valid(self, form):
+        resposta = super().form_valid(form)
+        PerfilProfessor.objects.filter(usuario=self.request.user).update(troca_senha_pendente=False)
+        return resposta
 
 
 def _midia_visivel(user, nome: str) -> bool:

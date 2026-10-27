@@ -52,6 +52,13 @@ class AlterarSenhaForm(PasswordChangeForm):
         for campo in self.fields.values():
             campo.widget.attrs['class'] = 'form-input'
 
+    def clean(self):
+        dados = super().clean()
+        # Sobretudo no primeiro acesso: a senha temporária não pode continuar sendo a senha.
+        if dados.get('old_password') and dados.get('old_password') == dados.get('new_password1'):
+            self.add_error('new_password1', 'A nova senha precisa ser diferente da atual.')
+        return dados
+
 
 # ---------------------------------------------------------------------------
 # Extensões e magic bytes aceitos para importação

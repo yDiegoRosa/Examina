@@ -182,12 +182,19 @@ docker compose -f docker-compose.prod.yml exec web python manage.py seed_topicos
 
 Depois, entrando como administrador:
 
-1. **Usuários** (`/admin/`): uma conta para cada professor, no grupo **Docente**. Quem vê os dados
-   de todos fica no grupo **Coordenador** (vê tudo, altera só o que é seu); quem gerencia cadastros,
-   no grupo **Administrador** (ou é superusuário). Cada um troca a própria senha no ícone de conta.
-2. **Acadêmico:** turmas, alunos e matrículas (só o administrador cadastra).
-3. **Docências** (Acadêmico → Turmas → ícone "Docentes da turma"): qual professor leciona qual
-   disciplina em cada turma. **Sem docência, o professor não vê turmas nem desempenho.**
+1. **Professores** (Acadêmico → Professores): informe o nome completo; o sistema cria o login
+   `nome.sobrenome` (ex.: Ana Maria de Souza → `ana.souza`; repetido vira `ana.souza2`), coloca no
+   grupo **Docente** e mostra **uma única vez** a senha temporária para repassar. No primeiro acesso o
+   professor só consegue usar a tela de troca de senha até escolher a dele. Perdeu a senha? Ícone da
+   chave ("Redefinir senha") na lista: gera outra temporária e volta a exigir a troca.
+   Coordenador (vê tudo, altera só o que é seu) e Administrador (gerencia cadastros) continuam sendo
+   criados em `/admin/`, nos grupos **Coordenador** e **Administrador**.
+2. **Acadêmico:** turmas, alunos e matrículas (só o administrador cadastra). A turma é criada pela
+   **disciplina**: o nome é a sigla dela (Segurança da Informação → `SEG`); se houver mais de uma turma
+   da mesma disciplina no mesmo período e turno, use o complemento (`SEG-A`, `SEG-B`).
+3. **Docências:** ao criar a turma, escolha o professor — a docência (professor × disciplina × turma) é
+   criada junto. Outros professores: Acadêmico → Turmas → ícone "Docentes da turma".
+   **Sem docência, o professor não vê turmas nem desempenho.**
 4. **Questões:** a importação grava como autor quem importou, e o professor monta provas só com as
    questões dele — cada professor importa as suas (ou o administrador, se for ele a montar as provas).
 
