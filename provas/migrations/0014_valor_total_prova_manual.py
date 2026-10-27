@@ -5,6 +5,8 @@ já gravam ``valor_total`` no snapshot; aqui ele é preenchido nas antigas, para
 ficarem coerentes. Só altera provas manuais sem máscara que ainda não têm o valor.
 """
 
+from decimal import Decimal
+
 from django.db import migrations
 from django.db.models import Sum
 
@@ -24,6 +26,9 @@ def preencher_valor_total(apps, schema_editor):
             continue
         soma = ProvaQuestao.objects.filter(prova=prova).aggregate(total=Sum('pontuacao'))['total']
         if soma:
+            # O Sum() volta com escala diferente conforme o banco ("7" ou "7.00"); normaliza como
+            # ``criar_prova_manual`` grava nas provas novas.
+            soma = Decimal(str(soma)).quantize(Decimal('0.01'))
             prova.snapshot_mascara = {**snap, 'valor_total': str(soma)}
             prova.save(update_fields=['snapshot_mascara'])
 
