@@ -125,19 +125,17 @@ class ProvaAplicacaoForm(forms.ModelForm):
 
     class Meta:
         model = ProvaAplicacao
-        fields = ['prova', 'turma', 'data_aplicacao', 'nota_corte', 'observacao']
+        fields = ['prova', 'turma', 'data_aplicacao', 'observacao']
         labels = {
             'prova': 'Prova',
             'turma': 'Turma',
             'data_aplicacao': 'Data da aplicação',
-            'nota_corte': 'Nota de corte das discursivas (0–10)',
             'observacao': 'Observação',
         }
         widgets = {
             'prova': forms.Select(attrs={'class': 'form-select'}),
             'turma': forms.Select(attrs={'class': 'form-select'}),
             'data_aplicacao': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
-            'nota_corte': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.5', 'min': '0', 'max': '10'}),
             'observacao': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
         }
 

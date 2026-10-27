@@ -1,10 +1,11 @@
 """
 Agregações analíticas do Módulo 4 (base do RF13/RF14) sobre o ``Desempenho``.
 
-Calculam a **taxa de erro** (``1 - média(acertou)`` = erros/total) por tópico e por
-nível de dificuldade, filtráveis por turma (ou por uma aplicação específica), para os
-relatórios de fragilidades/forças da turma. Consideram apenas registros já corrigidos
-(``acertou`` definido) — objetivas (OMR/manual) e discursivas (nota ≥ corte).
+Calculam a **taxa de erro** (``1 - média da fração de acerto``) por tópico e por nível de
+dificuldade, filtráveis por turma (ou por uma aplicação específica), para os relatórios de
+fragilidades/forças da turma. Consideram apenas respostas já corrigidas: objetivas (OMR/manual)
+valem 1 ou 0; discursivas valem nota/10 (proporcional — não há nota de corte desde 2026-10-27),
+com o mesmo peso de uma objetiva. Ver ``FRACAO_ACERTO``.
 
 O parâmetro ``escopo`` (um ``Q`` sobre ``Desempenho``) recorta pelo acesso do usuário: o
 professor vê só os pares turma + disciplina das suas docências — ver
@@ -15,7 +16,7 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
-from django.db.models import Count, Q
+from django.db.models import Case, Count, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When
 
 from banco_questoes.models import Questao
 
@@ -24,13 +25,31 @@ from .models import Desempenho
 # Ordem pedagógica canônica dos níveis de dificuldade.
 ORDEM_DIFICULDADE = {'F': 0, 'M': 1, 'D': 2}
 
+# Resposta corrigida: objetiva com acerto definido ou discursiva com nota lançada.
+CORRIGIDO = Q(acertou__isnull=False) | Q(nota__isnull=False)
+
+# Fração de acerto de cada resposta (0–1): discursiva = nota/10; objetiva = 1 se acertou, 0 se errou.
+_FRACAO = DecimalField(max_digits=7, decimal_places=4)
+FRACAO_ACERTO = Case(
+    When(nota__isnull=False, then=ExpressionWrapper(F('nota') / Value(Decimal('10')), output_field=_FRACAO)),
+    When(acertou=True, then=Value(Decimal('1'))),
+    default=Value(Decimal('0')),
+    output_field=_FRACAO,
+)
+
+
+def _quantidade(valor) -> float | int:
+    """Soma de frações para exibir: 3 (inteira) ou 2.7 (com discursivas)."""
+    numero = round(float(valor or 0), 2)
+    return int(numero) if numero.is_integer() else numero
+
 
 def _base_queryset(turma=None, aplicacao=None, data_inicio=None, data_fim=None, escopo=None):
     """
     Desempenhos corrigidos (dentro do ``escopo``), filtrados por aplicação (se dada; tem
     precedência) ou por turma e período (intervalo de ``data_aplicacao``).
     """
-    qs = Desempenho.objects.filter(acertou__isnull=False)
+    qs = Desempenho.objects.filter(CORRIGIDO)
     if escopo is not None:
         qs = qs.filter(escopo)
     if aplicacao is not None:
@@ -44,8 +63,8 @@ def _base_queryset(turma=None, aplicacao=None, data_inicio=None, data_fim=None, 
     return qs
 
 
-def _taxa_erro(erros: int, total: int) -> float:
-    return round(erros / total, 4) if total else 0.0
+def _taxa_erro(erros, total: int) -> float:
+    return round(float(erros) / total, 4) if total else 0.0
 
 
 def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=None, escopo=None) -> list[dict]:
@@ -59,15 +78,15 @@ def taxa_erro_por_topico(turma=None, aplicacao=None, data_inicio=None, data_fim=
     linhas = (
         _base_queryset(turma, aplicacao, data_inicio, data_fim, escopo)
         .values('questao__topico', 'questao__topico__nome', 'questao__topico__disciplina__nome')
-        .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
+        .annotate(total=Count('id'), acertos=Sum(FRACAO_ACERTO))
         .order_by()
     )
 
     resultado = []
     for linha in linhas:
         total = linha['total']
-        acertos = linha['acertos']
-        erros = total - acertos
+        acertos = _quantidade(linha['acertos'])
+        erros = _quantidade(total - acertos)
         resultado.append(
             {
                 'topico_id': linha['questao__topico'],
@@ -94,7 +113,7 @@ def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data
     linhas = (
         _base_queryset(turma, aplicacao, data_inicio, data_fim, escopo)
         .values('questao__dificuldade')
-        .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
+        .annotate(total=Count('id'), acertos=Sum(FRACAO_ACERTO))
         .order_by()
     )
 
@@ -102,8 +121,8 @@ def taxa_erro_por_dificuldade(turma=None, aplicacao=None, data_inicio=None, data
     for linha in linhas:
         codigo = linha['questao__dificuldade']
         total = linha['total']
-        acertos = linha['acertos']
-        erros = total - acertos
+        acertos = _quantidade(linha['acertos'])
+        erros = _quantidade(total - acertos)
         try:
             rotulo = Questao.Dificuldade(codigo).label
         except ValueError:
@@ -148,9 +167,9 @@ def _classificar_facilidade(indice: float) -> tuple[str, str]:
 
 def indice_facilidade_por_questao(min_respostas: int = 1, escopo=None) -> list[dict]:
     """
-    Índice de facilidade (p) de cada questão = **média global de `acertou`** entre
-    todas as aplicações da questão (não apenas uma prova). p alto ⇒ questão fácil;
-    p baixo ⇒ difícil. Considera só registros corrigidos (`acertou` definido).
+    Índice de facilidade (p) de cada questão = **média global da fração de acerto** entre
+    todas as aplicações da questão (não apenas uma prova): objetiva 1/0, discursiva nota/10.
+    p alto ⇒ questão fácil; p baixo ⇒ difícil. Considera só respostas corrigidas.
 
     ``min_respostas`` descarta questões com poucas respostas (índice instável); com
     ``escopo``, o índice usa só as respostas que o usuário enxerga.
@@ -159,7 +178,7 @@ def indice_facilidade_por_questao(min_respostas: int = 1, escopo=None) -> list[d
     ``indice_facilidade`` e a ``classe`` (difícil/médio/fácil), ordenados do menor
     índice (mais difícil) para o maior.
     """
-    base = Desempenho.objects.filter(acertou__isnull=False)
+    base = Desempenho.objects.filter(CORRIGIDO)
     if escopo is not None:
         base = base.filter(escopo)
     linhas = (
@@ -170,14 +189,14 @@ def indice_facilidade_por_questao(min_respostas: int = 1, escopo=None) -> list[d
             'questao__topico__nome',
             'questao__disciplina__nome',
         )
-        .annotate(total=Count('id'), acertos=Count('id', filter=Q(acertou=True)))
+        .annotate(total=Count('id'), acertos=Sum(FRACAO_ACERTO))
         .filter(total__gte=min_respostas)
     )
 
     resultado = []
     for linha in linhas:
         total = linha['total']
-        acertos = linha['acertos']
+        acertos = _quantidade(linha['acertos'])
         indice = round(acertos / total, 4) if total else 0.0
         classe, classe_label = _classificar_facilidade(indice)
         resultado.append(

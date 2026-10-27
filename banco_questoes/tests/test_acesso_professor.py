@@ -399,7 +399,7 @@ class AplicacoesPorPerfilTest(CenarioAcesso):
         lancamento = reverse('provas:folha_lancamento_manual', args=[self.folha_b.pk])
         self.assertContains(self.client.get(lancamento), 'Só consulta')
 
-        self.assertEqual(self.client.post(lancamento, {'nota_corte': '5'}).status_code, 403)
+        self.assertEqual(self.client.post(lancamento, {}).status_code, 403)
         upload = reverse('provas:aplicacao_upload_folhas', args=[self.ap_b.pk])
         self.assertEqual(self.client.get(upload).status_code, 403)
         gerar = self.client.post(reverse('provas:aplicacao_folhas', args=[self.ap_b.pk]), {'acao': 'gerar'})
@@ -422,7 +422,7 @@ class AplicacoesPorPerfilTest(CenarioAcesso):
         self.assertEqual(list(tela.context['form'].fields['prova'].queryset), [self.p_a])
         self.assertEqual(list(tela.context['form'].fields['turma'].queryset), [self.t1])
 
-        dados = {'prova': self.p_a.pk, 'data_aplicacao': '2026-12-01', 'nota_corte': '6'}
+        dados = {'prova': self.p_a.pk, 'data_aplicacao': '2026-12-01'}
         self.client.post(url, {**dados, 'turma': self.t2.pk})
         self.assertFalse(ProvaAplicacao.objects.filter(prova=self.p_a, turma=self.t2).exists())
         self.client.post(url, {**dados, 'turma': self.t1.pk})

@@ -1,6 +1,5 @@
 import logging
 import uuid
-from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -723,14 +722,8 @@ class ProvaAplicacao(models.Model):
     )
     data_aplicacao = models.DateField('data de aplicação')
     observacao = models.TextField('observação', blank=True)
-    nota_corte = models.DecimalField(
-        'nota de corte para "acertou"',
-        max_digits=4,
-        decimal_places=2,
-        default=Decimal('6.00'),
-        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('10'))],
-        help_text='Nota mínima (0–10) para considerar uma questão discursiva como acerto nos dashboards.',
-    )
+    # Sem nota de corte (removida em 2026-10-27): a discursiva conta pela nota, proporcional, na
+    # nota final e nos relatórios de desempenho — ver desempenho.services.FRACAO_ACERTO.
 
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)

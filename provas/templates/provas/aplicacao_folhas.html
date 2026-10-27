@@ -32,8 +32,7 @@
     <p class="text-secondary" style="max-width: 660px;">
       {{ aplicacao.prova.titulo }} — {{ aplicacao.turma }} • {{ aplicacao.data_aplicacao|date:"d/m/Y" }}.
       Lance manualmente as notas das discursivas e, quando necessário, as respostas das
-      objetivas (fallback sem escaneamento). Nota de corte atual:
-      <strong>{{ aplicacao.nota_corte }}</strong>.
+      objetivas (fallback sem escaneamento). A discursiva conta pela nota (7 de 10 = 70% dos pontos dela).
     </p>
   </div>
 </div>
@@ -76,7 +75,12 @@
             <span class="badge-pill badge-pill-inactive">{{ l.folha.get_status_display }}</span>
             {% endif %}
           </td>
-          <td class="small text-muted">{{ l.acertos }} acerto(s) / {{ l.total }} corrigida(s)</td>
+          <td class="small text-muted">
+            {% if l.objetivas %}{{ l.acertos }} de {{ l.objetivas }} objetiva(s) certa(s){% endif %}
+            {% if l.objetivas and l.discursivas %} • {% endif %}
+            {% if l.discursivas %}{{ l.discursivas }} discursiva(s) corrigida(s){% endif %}
+            {% if not l.objetivas and not l.discursivas %}nada corrigido ainda{% endif %}
+          </td>
           <td>
             <div class="flex flex-wrap gap-2">
               <a href="{% url 'provas:folha_lancamento_manual' l.folha.pk %}" class="btn btn-primary small">
