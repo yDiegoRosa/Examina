@@ -17,9 +17,9 @@ def test_descreve_as_letras_repetidas():
 @pytest.mark.django_db
 def test_importacao_recusa_so_a_objetiva_com_alternativas_repetidas():
     csv = (
-        'enunciado,opcao_a,opcao_b,opcao_c,gabarito\n'
-        'Questão com repetidas,Alternativa gráfica,Outra,alternativa  GRÁFICA,A\n'
-        'Questão normal,Sim,Não,Talvez,A\n'
+        'disciplina,enunciado,opcao_a,opcao_b,opcao_c,gabarito\n'
+        'SEG,Questão com repetidas,Alternativa gráfica,Outra,alternativa  GRÁFICA,A\n'
+        'SEG,Questão normal,Sim,Não,Talvez,A\n'
     ).encode()
     resultado = QuestaoImportService.import_file(csv, filename='questoes.csv')
 

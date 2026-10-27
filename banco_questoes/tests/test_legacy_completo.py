@@ -23,8 +23,8 @@ class CSVQuestaoParserTest(TestCase):
     def test_parse_valid_objective_question_10col(self):
         """Verifica a estruturação correta de uma questão objetiva no formato de 10 colunas."""
         csv_content = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'ENADE ADS 2021,26,Qual é a capital do RJ?,Niterói,Rio de Janeiro,Petrópolis,Cabo Frio,,B,Alternativa correta é B.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE ADS 2021,26,RSD,Qual é a capital do RJ?,Niterói,Rio de Janeiro,Petrópolis,Cabo Frio,,B,Alternativa correta é B.\n'
         )
         result = CSVQuestaoParser.parse(csv_content)
 
@@ -47,8 +47,8 @@ class CSVQuestaoParserTest(TestCase):
     def test_parse_valid_discursive_question_10col(self):
         """Verifica inferência automática de tipo DIS quando não há alternativas."""
         csv_content = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'POSCOMP 2025,15,Explique o conceito de polimorfismo em POO.,,,,,,, O aluno deve conceituar sobrescrita e sobrecarga.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'POSCOMP 2025,15,RSD,Explique o conceito de polimorfismo em POO.,,,,,,, O aluno deve conceituar sobrescrita e sobrecarga.\n'
         )
         result = CSVQuestaoParser.parse(csv_content)
 
@@ -79,8 +79,8 @@ class CSVQuestaoParserTest(TestCase):
         """Verifica remoção correta do BOM UTF-8 (\ufeff) gerado pelo Microsoft Excel."""
         csv_bytes = (
             '\ufeff'
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'ENADE 2023,5,Questão com BOM,Alt A,Alt B,,,,A,\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE 2023,5,RSD,Questão com BOM,Alt A,Alt B,,,,A,\n'
         ).encode()
 
         result = CSVQuestaoParser.parse(csv_bytes)
@@ -284,7 +284,7 @@ class CSVQuestaoValidatorTest(TestCase):
             'numero_questao': '26',
             'enunciado': 'Qual é a fórmula da água?',
             'tipo': 'OBJ',
-            'disciplina': '',
+            'disciplina': 'SEG',
             'topico': None,
             'dificuldade': '',
             'tags': [],
@@ -300,7 +300,7 @@ class CSVQuestaoValidatorTest(TestCase):
         self.assertEqual(len(res.errors), 0)
         self.assertEqual(res.cleaned_data['tipo'], Questao.Tipo.OBJETIVA)
         self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.MEDIO)  # Default
-        self.assertEqual(res.cleaned_data['disciplina'], 'Não Classificada')  # Default
+        self.assertEqual(res.cleaned_data['disciplina'].nome, 'Segurança da Informação (SEG)')  # pela sigla
         self.assertEqual(res.cleaned_data['origem'], 'ENADE ADS 2021')
         self.assertEqual(res.cleaned_data['numero_questao'], '26')
         self.assertEqual(len(res.cleaned_data['alternativas']), 2)
@@ -313,7 +313,7 @@ class CSVQuestaoValidatorTest(TestCase):
             'numero_questao': '',
             'enunciado': 'Explique o princípio da inércia de Newton.',
             'tipo': 'DIS',
-            'disciplina': '',
+            'disciplina': 'SEG',
             'topico': None,
             'dificuldade': '',
             'tags': [],
@@ -332,6 +332,7 @@ class CSVQuestaoValidatorTest(TestCase):
             'linha': 4,
             'enunciado': '',
             'tipo': 'OBJ',
+            'disciplina': 'SEG',
             'alternativas': [
                 {'letra': 'A', 'texto': 'A', 'correta': True},
                 {'letra': 'B', 'texto': 'B', 'correta': False},
@@ -348,6 +349,7 @@ class CSVQuestaoValidatorTest(TestCase):
             'linha': 5,
             'enunciado': 'Enunciado de teste',
             'tipo': 'INVALIDO',
+            'disciplina': 'SEG',
             'dificuldade': 'X',
         }
         res = CSVQuestaoValidator.validate_row(row)
@@ -361,6 +363,7 @@ class CSVQuestaoValidatorTest(TestCase):
             'linha': 6,
             'enunciado': 'Questão com 1 alternativa',
             'tipo': 'OBJ',
+            'disciplina': 'SEG',
             'alternativas': [{'letra': 'A', 'texto': 'Única alternativa', 'correta': True}],
             'correta': 'A',
         }
@@ -374,6 +377,7 @@ class CSVQuestaoValidatorTest(TestCase):
             'linha': 7,
             'enunciado': 'Questão com gabarito inexistente',
             'tipo': 'OBJ',
+            'disciplina': 'SEG',
             'alternativas': [
                 {'letra': 'A', 'texto': 'Alt A', 'correta': False},
                 {'letra': 'B', 'texto': 'Alt B', 'correta': False},
@@ -385,7 +389,7 @@ class CSVQuestaoValidatorTest(TestCase):
         self.assertTrue(any('não corresponde a nenhuma alternativa preenchida' in err for err in res.errors))
 
     def test_validate_defaults_applied_when_fields_absent(self):
-        """Verifica que disciplina e dificuldade recebem valores-padrão quando ausentes."""
+        """Dificuldade ausente vira Médio; disciplina ausente recusa a linha (não há mais padrão)."""
         row = {
             'linha': 8,
             'enunciado': 'Questão sem disciplina e dificuldade',
@@ -399,8 +403,11 @@ class CSVQuestaoValidatorTest(TestCase):
             'correta': 'A',
         }
         res = CSVQuestaoValidator.validate_row(row)
+        self.assertFalse(res.is_valid)
+        self.assertTrue(any('Informe a disciplina' in err for err in res.errors))
+
+        res = CSVQuestaoValidator.validate_row({**row, 'disciplina': '4SEG'})
         self.assertTrue(res.is_valid)
-        self.assertEqual(res.cleaned_data['disciplina'], 'Não Classificada')
         self.assertEqual(res.cleaned_data['dificuldade'], Questao.Dificuldade.MEDIO)
 
     def test_validate_batch_rows_report(self):
@@ -410,6 +417,7 @@ class CSVQuestaoValidatorTest(TestCase):
                 'linha': 2,
                 'enunciado': 'Questão Válida',
                 'tipo': 'OBJ',
+                'disciplina': 'SEG',
                 'alternativas': [
                     {'letra': 'A', 'texto': 'A', 'correta': True},
                     {'letra': 'B', 'texto': 'B', 'correta': False},
@@ -420,6 +428,7 @@ class CSVQuestaoValidatorTest(TestCase):
                 'linha': 3,
                 'enunciado': '',
                 'tipo': 'OBJ',
+                'disciplina': 'SEG',
             },
         ]
         report = CSVQuestaoValidator.validate_rows(rows)
@@ -439,6 +448,7 @@ class CSVQuestaoValidatorTest(TestCase):
                 'linha': 2,
                 'enunciado': 'Qual é a velocidade da luz?',
                 'tipo': 'OBJ',
+                'disciplina': 'SEG',
                 'alternativas': [
                     {'letra': 'A', 'texto': '300.000 km/s', 'correta': True},
                     {'letra': 'B', 'texto': '150.000 km/s', 'correta': False},
@@ -449,6 +459,7 @@ class CSVQuestaoValidatorTest(TestCase):
                 'linha': 3,
                 'enunciado': '   QUAL É A   VELOCIDADE DA LUZ?   ',
                 'tipo': 'OBJ',
+                'disciplina': 'SEG',
                 'alternativas': [
                     {'letra': 'A', 'texto': '300.000 km/s', 'correta': True},
                     {'letra': 'B', 'texto': '150.000 km/s', 'correta': False},
@@ -485,6 +496,7 @@ class CSVQuestaoValidatorTest(TestCase):
                 'linha': 2,
                 'enunciado': '  qual é a constante gravitacional na terra?  ',
                 'tipo': 'OBJ',
+                'disciplina': 'SEG',
                 'alternativas': [
                     {'letra': 'A', 'texto': '9.8 m/s²', 'correta': True},
                     {'letra': 'B', 'texto': '10.5 m/s²', 'correta': False},
@@ -532,9 +544,9 @@ class QuestaoImportViewTest(TestCase):
         from django.urls import reverse
 
         csv_content = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'ENADE ADS 2021,26,Qual é a capital da França?,Londres,Paris,Berlim,Madrid,,B,Paris é a capital desde o século X.\n'
-            'POSCOMP 2025,15,Discorra sobre a Revolução Industrial.,,,,,,, Destacar a transição da manufatura para maquinofatura.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE ADS 2021,26,RSD,Qual é a capital da França?,Londres,Paris,Berlim,Madrid,,B,Paris é a capital desde o século X.\n'
+            'POSCOMP 2025,15,RSD,Discorra sobre a Revolução Industrial.,,,,,,, Destacar a transição da manufatura para maquinofatura.\n'
         ).encode()
 
         uploaded_file = SimpleUploadedFile(
@@ -572,6 +584,7 @@ class QuestaoImportViewTest(TestCase):
             [
                 'Origem',
                 'Questão',
+                'Disciplina',
                 'Enunciado',
                 'Opção A',
                 'Opção B',
@@ -586,6 +599,7 @@ class QuestaoImportViewTest(TestCase):
             [
                 'ENADE ADS 2021',
                 26,
+                'RSD',
                 'Qual é a capital da Itália?',
                 'Milão',
                 'Roma',
@@ -600,6 +614,7 @@ class QuestaoImportViewTest(TestCase):
             [
                 'POSCOMP 2025',
                 15,
+                'RSD',
                 'Explique o algoritmo Bubble Sort.',
                 None,
                 None,
@@ -646,9 +661,9 @@ class QuestaoImportViewTest(TestCase):
         from django.urls import reverse
 
         csv_content = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'ENADE,1,,Alt A,Alt B,,,,A,\n'
-            'ENADE,2,Questão Objetiva Sem Gabarito,Alt A,Alt B,,,,, \n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE,1,RSD,,Alt A,Alt B,,,,A,\n'
+            'ENADE,2,RSD,Questão Objetiva Sem Gabarito,Alt A,Alt B,,,,, \n'
         ).encode()
 
         uploaded_file = SimpleUploadedFile(
@@ -674,9 +689,9 @@ class CSVImportServiceTest(TestCase):
         from ..importer import CSVImportService
 
         csv_text = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'POSCOMP 2025,15,Qual a fórmula da fotossíntese?,,,,,,,Explicar fase clara e escura.\n'
-            'ENADE ADS 2021,26,O que é 5 x 5?,10,20,25,30,,C,Alternativa C é correta.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'POSCOMP 2025,15,RSD,Qual a fórmula da fotossíntese?,,,,,,,Explicar fase clara e escura.\n'
+            'ENADE ADS 2021,26,RSD,O que é 5 x 5?,10,20,25,30,,C,Alternativa C é correta.\n'
         )
 
         res = CSVImportService.import_csv(csv_text)
@@ -690,7 +705,7 @@ class CSVImportServiceTest(TestCase):
         q_obj = Questao.objects.get(enunciado='O que é 5 x 5?')
         self.assertEqual(q_obj.origem, 'ENADE ADS 2021')
         self.assertEqual(q_obj.numero_questao, '26')
-        self.assertEqual(q_obj.disciplina.nome, 'Não Classificada')  # Default
+        self.assertEqual(q_obj.disciplina.nome, 'Fundamentos de Redes e Sistemas Distribuídos (RSD)')
         self.assertEqual(q_obj.dificuldade, 'M')  # Default
         self.assertEqual(q_obj.alternativas.count(), 4)
         self.assertEqual(q_obj.alternativas.get(correta=True).letra, 'C')
@@ -711,6 +726,7 @@ class CSVImportServiceTest(TestCase):
             [
                 'Origem',
                 'Questão',
+                'Disciplina',
                 'Enunciado',
                 'Opção A',
                 'Opção B',
@@ -718,7 +734,7 @@ class CSVImportServiceTest(TestCase):
                 'Comentários',
             ]
         )
-        ws.append(['ENADE', 1, 'Quanto é 10 + 20?', '30', '40', 'A', '10 + 20 = 30'])
+        ws.append(['ENADE', 1, 'RSD', 'Quanto é 10 + 20?', '30', '40', 'A', '10 + 20 = 30'])
         buf = io.BytesIO()
         wb.save(buf)
 
@@ -736,9 +752,9 @@ class CSVImportServiceTest(TestCase):
         from ..importer import CSVImportService
 
         csv_text = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'ENADE,1,,,,,,,,\n'
-            'ENADE,2,Capital de SP?,Santos,São Paulo,Campinas,,,B,\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE,1,RSD,,,,,,,,\n'
+            'ENADE,2,RSD,Capital de SP?,Santos,São Paulo,Campinas,,,B,\n'
         )
 
         res = CSVImportService.import_csv(csv_text)
@@ -756,8 +772,8 @@ class CSVImportServiceTest(TestCase):
         from ..importer import CSVImportService
 
         csv_text = (
-            'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-            'ENADE 2026,1,Questão Unica 2026,Opcao 1,Opcao 2,,,,A,\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+            'ENADE 2026,1,RSD,Questão Unica 2026,Opcao 1,Opcao 2,,,,A,\n'
         )
 
         res1 = CSVImportService.import_csv(csv_text)
@@ -1891,7 +1907,7 @@ class CSVUploadFormTest(TestCase):
         # 5 MB exatos — usa conteúdo CSV válido (sem bytes nulos)
         limit_bytes = 5 * 1024 * 1024
         # Cabeçalho CSV preenchido até o limite
-        header = b'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+        header = b'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
         padding = b'x' * (limit_bytes - len(header))
         content = header + padding
 

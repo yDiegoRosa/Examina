@@ -162,8 +162,8 @@ def questao_discursiva(db, disciplina, user_docente):
 def csv_objetivo_valido():
     """CSV 10 colunas com questão objetiva válida (vírgula, gabarito C)."""
     return (
-        'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-        'ENADE ADS 2021,26,Qual protocolo opera na camada de transporte?,'
+        'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+        'ENADE ADS 2021,26,RSD,Qual protocolo opera na camada de transporte?,'
         'HTTP,FTP,TCP,DNS,,C,TCP é o protocolo da camada de transporte.\n'
     )
 
@@ -172,8 +172,8 @@ def csv_objetivo_valido():
 def csv_discursivo_valido():
     """CSV 10 colunas com questão discursiva válida (sem alternativas)."""
     return (
-        'origem,questao,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
-        'POSCOMP 2025,5,Descreva o funcionamento do algoritmo QuickSort.,,,,,,,'
+        'origem,questao,disciplina,enunciado,opcao_a,opcao_b,opcao_c,opcao_d,opcao_e,gabarito,comentarios\n'
+        'POSCOMP 2025,5,RSD,Descreva o funcionamento do algoritmo QuickSort.,,,,,,,'
         'O aluno deve descrever a divisão por pivô e a recursão.\n'
     )
 

@@ -34,7 +34,7 @@ def linha(enunciado, imagem='', tipo='OBJ'):
         'ENADE teste',
         '1',
         tipo,
-        'Disciplina ZIP',
+        'Estrutura de Dados (ESD)',
         'Tópico ZIP',
         'M',
         enunciado,
@@ -169,7 +169,7 @@ class ImportacaoZipTest(ComMidiaTemporaria):
         self.assertIn('O limite é', self.erros(resultado)[0])
 
     def test_planilha_csv_dentro_do_zip(self):
-        csv = 'enunciado,opcao_a,opcao_b,gabarito,imagem\nCSV com figura,Sim,Não,A,figuras/x.jpg\n'.encode()
+        csv = 'disciplina,enunciado,opcao_a,opcao_b,gabarito,imagem\nESD,CSV com figura,Sim,Não,A,figuras/x.jpg\n'.encode()
         resultado = self.importar(pacote({'dados.csv': csv, 'figuras/x.jpg': png(formato='JPEG')}))
         self.assertEqual((resultado.total_sucesso, resultado.total_com_imagem), (1, 1), self.erros(resultado))
 

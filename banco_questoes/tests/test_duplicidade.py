@@ -82,7 +82,7 @@ class TestValidateRowsDuplicataArquivo:
             'linha': linha,
             'enunciado': enunciado,
             'tipo': 'OBJ',
-            'disciplina': 'Computação',
+            'disciplina': 'SEG',
             'topico': None,
             'dificuldade': 'M',
             'origem': 'ENADE',
@@ -136,7 +136,7 @@ class TestValidateRowsDuplicataArquivo:
                 'linha': 2,
                 'enunciado': questao_objetiva.enunciado,  # já existe no banco
                 'tipo': 'OBJ',
-                'disciplina': 'Computação',
+                'disciplina': 'SEG',
                 'topico': None,
                 'dificuldade': 'M',
                 'origem': 'X',
@@ -167,7 +167,7 @@ class TestValidateRowsDuplicataDB:
             'linha': 2,
             'enunciado': questao_objetiva.enunciado,
             'tipo': 'OBJ',
-            'disciplina': 'Computação',
+            'disciplina': 'SEG',
             'topico': None,
             'dificuldade': 'M',
             'origem': 'X',
@@ -197,9 +197,9 @@ class TestCSVImportServiceDuplicidade:
     def test_importacao_com_uma_nova_e_uma_duplicata(self, user_docente):
         """Pipeline deve importar 1 questão e rejeitar a duplicata (mesmo arquivo)."""
         csv = (
-            'origem,questao,enunciado,opcao_a,opcao_b,gabarito,comentarios\n'
-            'ENADE,1,Qual é o protocolo de transporte?,TCP,UDP,A,TCP é confiável.\n'
-            'ENADE,2,Qual é o protocolo de transporte?,TCP,UDP,A,Linha duplicada.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,gabarito,comentarios\n'
+            'ENADE,1,RSD,Qual é o protocolo de transporte?,TCP,UDP,A,TCP é confiável.\n'
+            'ENADE,2,RSD,Qual é o protocolo de transporte?,TCP,UDP,A,Linha duplicada.\n'
         )
         result = CSVImportService.import_csv(csv, autor=user_docente)
 
@@ -210,9 +210,9 @@ class TestCSVImportServiceDuplicidade:
     def test_importacao_sem_duplicatas_importa_tudo(self, user_docente):
         """CSV com 2 questões diferentes deve importar ambas com sucesso."""
         csv = (
-            'origem,questao,enunciado,opcao_a,opcao_b,gabarito,comentarios\n'
-            'ENADE,1,O que é TCP?,Protocolo de transporte,Protocolo de rede,A,TCP é confiável.\n'
-            'POSCOMP,2,O que é UDP?,Sem conexão,Com conexão,A,UDP é sem conexão.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,gabarito,comentarios\n'
+            'ENADE,1,RSD,O que é TCP?,Protocolo de transporte,Protocolo de rede,A,TCP é confiável.\n'
+            'POSCOMP,2,RSD,O que é UDP?,Sem conexão,Com conexão,A,UDP é sem conexão.\n'
         )
         result = CSVImportService.import_csv(csv, autor=user_docente)
 
@@ -222,8 +222,8 @@ class TestCSVImportServiceDuplicidade:
     def test_reimportacao_do_mesmo_arquivo_rejeita_todos(self, user_docente):
         """Segunda importação do mesmo CSV deve rejeitar todas as linhas (já no banco)."""
         csv = (
-            'origem,questao,enunciado,opcao_a,opcao_b,gabarito,comentarios\n'
-            'ENADE,1,O que é HTTP?,Protocolo de aplicação,Protocolo de rede,A,HTTP usa TCP.\n'
+            'origem,questao,disciplina,enunciado,opcao_a,opcao_b,gabarito,comentarios\n'
+            'ENADE,1,RSD,O que é HTTP?,Protocolo de aplicação,Protocolo de rede,A,HTTP usa TCP.\n'
         )
         # Primeira importação
         r1 = CSVImportService.import_csv(csv, autor=user_docente)
