@@ -1,0 +1,140 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Professores — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4" aria-label="Navegação acadêmica">
+  <a href="{% url 'academico:aluno_list' %}" class="btn btn-outline">Alunos</a>
+  <a href="{% url 'academico:turma_list' %}" class="btn btn-outline">Turmas</a>
+  <a href="{% url 'academico:professor_list' %}" class="btn btn-primary" aria-current="page">Professores</a>
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-person-badge-fill"></i> Acadêmico • Contas de Professores</span>
+    </div>
+    <h1 class="mb-1">Professores</h1>
+    <p class="text-secondary" style="max-width: 620px;">
+      O login é gerado no formato nome.sobrenome e a primeira senha é temporária: no primeiro acesso,
+      o professor é obrigado a escolher a dele.
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'academico:professor_create' %}" class="btn btn-gold flex items-center gap-2">
+      <i class="bi bi-person-plus-fill"></i> Novo Professor
+    </a>
+  </div>
+</div>
+
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-person-badge-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Total de Professores</div>
+      <div class="stat-num-unified">{{ metricas.total }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-success"><i class="bi bi-check-circle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Contas ativas</div>
+      <div class="stat-num-unified text-success">{{ metricas.ativos }}</div>
+    </div>
+  </div>
+  <div class="col-span-4 stat-card-unified">
+    <div class="stat-icon-unified stat-icon-warning"><i class="bi bi-hourglass-split"></i></div>
+    <div>
+      <div class="stat-label-unified">Aguardando 1º acesso</div>
+      <div class="stat-num-unified">{{ metricas.aguardando }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-surface p-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-3">
+    <input type="text" name="q" value="{{ busca }}" class="form-input flex-1" style="min-width: 220px;"
+           placeholder="Buscar por nome ou login…">
+    <select name="status" class="form-select" onchange="this.form.submit()">
+      <option value="">Todas as contas</option>
+      <option value="ativo" {% if status_selecionado == 'ativo' %}selected{% endif %}>Somente ativas</option>
+      <option value="inativo" {% if status_selecionado == 'inativo' %}selected{% endif %}>Somente desativadas</option>
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
+    {% if busca or status_selecionado %}
+    <a href="{% url 'academico:professor_list' %}" class="btn btn-outline"><i class="bi bi-x-lg"></i> Limpar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card-surface">
+  <div class="table-responsive">
+    <table class="saas-table">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th style="width: 190px;">Login</th>
+          <th style="width: 100px;">Turmas</th>
+          <th style="width: 200px;">Situação</th>
+          <th style="width: 140px;" class="text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for professor in professores %}
+        <tr>
+          <td>
+            <span class="font-bold text-main">{{ professor.get_full_name|default:"—" }}</span>
+            {% if professor.email %}<div class="small text-muted">{{ professor.email }}</div>{% endif %}
+          </td>
+          <td><span class="font-mono">{{ professor.username }}</span></td>
+          <td>{{ professor.turmas }}</td>
+          <td>
+            {% if not professor.is_active %}
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-slash-circle"></i> Desativada</span>
+            {% elif professor.perfil_professor.troca_senha_pendente %}
+            <span class="badge-pill badge-pill-warning" title="Ainda não trocou a senha temporária"><i class="bi bi-hourglass-split"></i> Aguardando 1º acesso</span>
+            {% else %}
+            <span class="badge-pill badge-pill-active"><i class="bi bi-check-circle-fill"></i> Ativa</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-1">
+              <a href="{% url 'academico:professor_update' pk=professor.pk %}" class="btn-table-action" title="Editar professor" aria-label="Editar {{ professor.username }}">
+                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+              </a>
+              <form method="post" action="{% url 'academico:professor_redefinir_senha' pk=professor.pk %}" style="display: inline;"
+                    onsubmit="return confirm('Gerar uma nova senha temporária para {{ professor.username }}? A senha atual deixa de valer.');">
+                {% csrf_token %}
+                <button type="submit" class="btn-table-action" title="Redefinir senha" aria-label="Redefinir senha de {{ professor.username }}">
+                  <i class="bi bi-key-fill" aria-hidden="true"></i>
+                </button>
+              </form>
+              <form method="post" action="{% url 'academico:professor_toggle_ativo' pk=professor.pk %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-table-action"
+                        title="{% if professor.is_active %}Desativar conta{% else %}Reativar conta{% endif %}"
+                        aria-label="{% if professor.is_active %}Desativar{% else %}Reativar{% endif %} {{ professor.username }}">
+                  <i class="bi {% if professor.is_active %}bi-toggle-on text-success{% else %}bi-toggle-off text-muted{% endif %}" aria-hidden="true"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center p-5">
+            <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-person-x"></i></div>
+            <h4 class="font-bold text-main">Nenhum professor encontrado</h4>
+            <p class="text-muted mb-3">Cadastre o primeiro professor: o login e a senha temporária são gerados na hora.</p>
+            <a href="{% url 'academico:professor_create' %}" class="btn btn-gold"><i class="bi bi-person-plus-fill"></i> Novo Professor</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj %}
+  {% include "banco_questoes/includes/pagination.html" %}
+  {% endif %}
+</div>
+{% endblock %}

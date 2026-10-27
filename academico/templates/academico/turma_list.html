@@ -6,6 +6,7 @@
 <div class="flex flex-wrap gap-2 mb-4" aria-label="Navegação acadêmica">
   <a href="{% url 'academico:aluno_list' %}" class="btn btn-outline">Alunos</a>
   <a href="{% url 'academico:turma_list' %}" class="btn btn-primary" aria-current="page">Turmas</a>
+  {% if perfil_admin %}<a href="{% url 'academico:professor_list' %}" class="btn btn-outline">Professores</a>{% endif %}
 </div>
 
 <div class="hero-card mb-4">
@@ -15,7 +16,7 @@
     </div>
     <h1 class="mb-1">Turmas</h1>
     <p class="text-secondary" style="max-width: 620px;">
-      Cadastro e manutenção das turmas por período letivo (ex.: 2026.2 — MAC Noite).
+      Cadastro e manutenção das turmas por período letivo. A turma é criada pela disciplina e leva a sigla dela (ex.: 2026.2 — SEG).
     </p>
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
@@ -77,7 +78,8 @@
         <tr>
           <th style="width: 70px;">ID</th>
           <th style="width: 140px;">Período</th>
-          <th>Nome da Turma</th>
+          <th style="width: 150px;">Turma</th>
+          <th>Disciplina</th>
           <th style="width: 110px;">Turno</th>
           <th style="width: 110px;">Status</th>
           <th style="width: 120px;" class="text-right">Ações</th>
@@ -89,6 +91,7 @@
           <td><span class="font-bold text-muted font-mono">#{{ turma.pk }}</span></td>
           <td><span class="font-bold font-mono" style="color: var(--fae-blue-primary);">{{ turma.periodo }}</span></td>
           <td><span class="font-bold text-main">{{ turma.nome }}</span></td>
+          <td>{% if turma.disciplina %}{{ turma.disciplina.nome }}{% else %}<span class="text-muted" title="Turma antiga sem disciplina; edite para escolher.">— (edite para escolher)</span>{% endif %}</td>
           <td>{% if turma.turno %}{{ turma.get_turno_display }}{% else %}<span class="text-muted" title="Turma cadastrada antes do campo turno; edite para informar.">—</span>{% endif %}</td>
           <td>
             {% if turma.ativo %}
@@ -125,7 +128,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="6" class="text-center p-5">
+          <td colspan="7" class="text-center p-5">
             <div class="text-muted mb-2" style="font-size: 2.5rem;"><i class="bi bi-folder-x"></i></div>
             <h4 class="font-bold text-main">Nenhuma turma encontrada</h4>
             <p class="text-muted mb-3">Cadastre a primeira turma do período.</p>

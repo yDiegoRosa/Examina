@@ -20,9 +20,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from banco_questoes.forms import AlterarSenhaForm
-
-from .views import LoginView, media_protegida
+from .views import AlterarSenhaView, LoginView, media_protegida
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -34,13 +32,8 @@ urlpatterns = [
     ),
     # Troca de senha pelo próprio usuário (templates com nome próprio: os padrões
     # "registration/password_change_*" do admin teriam precedência).
-    path(
-        'senha/alterar/',
-        auth_views.PasswordChangeView.as_view(
-            template_name='registration/alterar_senha.html', form_class=AlterarSenhaForm
-        ),
-        name='password_change',
-    ),
+    # Obrigatória no primeiro acesso do professor (senha temporária) — ver AlterarSenhaView.
+    path('senha/alterar/', AlterarSenhaView.as_view(), name='password_change'),
     path(
         'senha/alterada/',
         auth_views.PasswordChangeDoneView.as_view(template_name='registration/alterar_senha_ok.html'),
