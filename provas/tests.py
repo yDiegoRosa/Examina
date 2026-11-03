@@ -3484,6 +3484,15 @@ class UploadFolhasViewTest(TestCase):
             self.assertContains(resp, 'câmera do próprio sistema')
         self.assertEqual(FolhaDigitalizada.objects.count(), 0)
 
+    def test_tela_reduz_fotos_grandes_antes_do_envio(self):
+        # O navegador reduz as fotos (lado maior 3200 px, JPEG 0,88) — ver OmrLerRespostasTest
+        # .test_foto_reduzida_le_igual, que garante que a leitura não muda com essa redução.
+        self.client.login(username='coord_up', password='segredo123')  # noqa: S106
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'data-reduzir-lado="3200"')
+        self.assertContains(resp, 'data-reduzir-qualidade="0.88"')
+        self.assertContains(resp, "canvas.toBlob(ok, 'image/jpeg', QUALIDADE)")
+
 
 class FolhaDigitalizadaModelTest(TestCase):
     def test_status_default_pendente(self):
@@ -3674,6 +3683,29 @@ class OmrLerRespostasTest(SimpleTestCase):
         self.assertEqual(leituras[3].marcada, 'E')
         self.assertEqual(leituras[4].status, 'branco')
         self.assertIsNone(leituras[4].marcada)
+
+    def test_foto_reduzida_le_igual(self):
+        """
+        A tela de envio reduz as fotos no navegador (lado maior 3200 px, JPEG 0,88). Um cartão
+        desenhado a 14 px/mm (foto de ~12 MP) e reduzido para 3200 e até 1600 px continua com o
+        mesmo QR e as mesmas respostas — a imagem canônica do OMR tem 10 px/mm (2100 × 2970).
+        """
+        marcadas = {(1, 'B'), (2, 'E'), (3, 'A'), (5, 'C')}
+        payload = montar_payload_folha(TOKEN_QR_CORRECAO)
+        canvas, geo = _canvas_bolhas(marcadas, num_questoes=6, qr_payload=payload, px=14)
+        canvas = cv2.GaussianBlur(canvas, (0, 0), 1.0)
+        esperado = {q: le.marcada for q, le in ler_respostas(corrigir_perspectiva(canvas), geo.answer_bubbles).items()}
+        self.assertEqual(sum(1 for letra in esperado.values() if letra), 4)
+        for lado in (3200, 1600):
+            with self.subTest(lado=lado):
+                fator = lado / max(canvas.shape[:2])
+                menor = cv2.resize(canvas, None, fx=fator, fy=fator, interpolation=cv2.INTER_AREA)
+                _, jpg = cv2.imencode('.jpg', menor, [cv2.IMWRITE_JPEG_QUALITY, 88])
+                foto = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
+                canonica = corrigir_perspectiva(foto)
+                self.assertEqual(decodificar_qr(canonica), payload)
+                lidas = ler_respostas(canonica, geo.answer_bubbles)
+                self.assertEqual({q: le.marcada for q, le in lidas.items()}, esperado)
 
     def test_ambigua_com_duas_marcadas(self):
         canvas, geo = _canvas_bolhas({(1, 'A'), (1, 'B')}, num_questoes=2)

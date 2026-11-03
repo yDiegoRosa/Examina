@@ -26,16 +26,24 @@
 </div>
 
 <div class="card-surface p-4 mb-4" style="max-width: 720px;">
-  <form method="post" enctype="multipart/form-data">
+  {# Fotos grandes são reduzidas no navegador antes do envio (lado maior 3200 px, JPEG 0,88): a imagem  #}
+  {# que o OMR usa tem 2100 × 2970 px, e o teste de 2026-11-03 leu igual até 1600 px. Se algo falhar,  #}
+  {# o arquivo original é enviado.                                                                      #}
+  <form method="post" enctype="multipart/form-data" id="form-enviar-cartoes"
+        data-reduzir-lado="3200" data-reduzir-qualidade="0.88" data-reduzir-acima-kb="1500">
     {% csrf_token %}
     <label class="form-label" for="{{ form.imagens.id_for_label }}">{{ form.imagens.label }}</label>
     {{ form.imagens }}
     {% for error in form.imagens.errors %}
     <div class="small mt-1" style="color: var(--color-danger);">{{ error }}</div>
     {% endfor %}
-    <div class="small text-muted mt-1">Selecione várias imagens (JPG/PNG). No celular, permite usar a câmera traseira.</div>
-    <div class="mt-3">
-      <button type="submit" class="btn btn-primary"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar cartões</button>
+    <div class="small text-muted mt-1">
+      Selecione várias imagens (JPG/PNG). No celular, permite usar a câmera traseira.
+      Fotos grandes são reduzidas no próprio aparelho antes do envio (fica mais rápido e a leitura não muda).
+    </div>
+    <div class="mt-3 flex flex-wrap items-center gap-3">
+      <button type="submit" class="btn btn-primary" id="btn-enviar-cartoes"><i class="bi bi-cloud-arrow-up-fill"></i> Enviar cartões</button>
+      <span class="small text-muted" id="progresso-cartoes" aria-live="polite"></span>
     </div>
   </form>
 </div>
@@ -102,4 +110,95 @@
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  const form = document.getElementById('form-enviar-cartoes');
+  const input = form && form.querySelector('input[type=file]');
+  if (!form || !input || !window.DataTransfer || !HTMLCanvasElement.prototype.toBlob) return;
+
+  const LADO = Number(form.dataset.reduzirLado);
+  const QUALIDADE = Number(form.dataset.reduzirQualidade);
+  const ACIMA = Number(form.dataset.reduzirAcimaKb) * 1024;
+  const botao = document.getElementById('btn-enviar-cartoes');
+  const progresso = document.getElementById('progresso-cartoes');
+  const REDUZIVEIS = ['image/jpeg', 'image/png', 'image/webp'];
+
+  // Decodifica respeitando a orientação da câmera (EXIF); sem createImageBitmap, usa <img>.
+  function decodificar(arquivo) {
+    if (window.createImageBitmap) {
+      return createImageBitmap(arquivo, { imageOrientation: 'from-image' });
+    }
+    return new Promise((ok, falha) => {
+      const url = URL.createObjectURL(arquivo);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); falha(new Error('imagem ilegível')); };
+      img.src = url;
+    });
+  }
+
+  async function reduzir(arquivo) {
+    if (!REDUZIVEIS.includes(arquivo.type)) return arquivo;  // HEIC etc.: o servidor explica
+    const imagem = await decodificar(arquivo);
+    const largura = imagem.width, altura = imagem.height;
+    const maior = Math.max(largura, altura);
+    if (maior <= LADO && arquivo.size <= ACIMA) {
+      if (imagem.close) imagem.close();
+      return arquivo;
+    }
+    const fator = Math.min(1, LADO / maior);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(largura * fator);
+    canvas.height = Math.round(altura * fator);
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
+    if (imagem.close) imagem.close();
+    const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', QUALIDADE));
+    canvas.width = canvas.height = 0;  // libera a memória logo (celulares com muitas fotos)
+    if (!blob || blob.size >= arquivo.size) return arquivo;
+    const nome = arquivo.name.replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], nome, { type: 'image/jpeg', lastModified: arquivo.lastModified });
+  }
+
+  let preparado = false;
+  form.addEventListener('submit', async (evento) => {
+    if (preparado || !input.files.length) return;  // segunda passada: envia de verdade
+    evento.preventDefault();
+    botao.disabled = true;
+    const originais = Array.from(input.files);
+    const prontos = new DataTransfer();
+    let antes = 0, depois = 0;
+    try {
+      for (let i = 0; i < originais.length; i++) {
+        progresso.textContent = 'Preparando as fotos: ' + (i + 1) + ' de ' + originais.length + '…';
+        let arquivo = originais[i];
+        try {
+          arquivo = await reduzir(originais[i]);
+        } catch (erro) {
+          arquivo = originais[i];  // não deu para reduzir: vai o original
+        }
+        antes += originais[i].size;
+        depois += arquivo.size;
+        prontos.items.add(arquivo);
+      }
+      input.files = prontos.files;
+      if (depois < antes) {
+        progresso.textContent = 'Enviando ' + (depois / 1048576).toFixed(1) + ' MB (eram ' + (antes / 1048576).toFixed(1) + ' MB)…';
+      } else {
+        progresso.textContent = 'Enviando…';
+      }
+    } catch (erro) {
+      progresso.textContent = 'Enviando…';  // qualquer falha geral: envia os arquivos como estão
+    }
+    preparado = true;
+    form.submit();
+  });
+})();
+</script>
 {% endblock %}

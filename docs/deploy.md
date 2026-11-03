@@ -207,7 +207,7 @@ O proxy precisa:
 
 - encaminhar para `http://127.0.0.1:8000` com os cabeçalhos `Host` e `X-Forwarded-Proto`;
 - ter timeout de leitura maior ou igual ao `GUNICORN_TIMEOUT` (120 s);
-- aceitar requisições grandes: o envio de cartões escaneados aceita até 100 imagens de até 10 MB cada.
+- aceitar requisições grandes: o envio de cartões escaneados aceita até 100 imagens de até 10 MB cada (o navegador já reduz as fotos grandes para 3200 px no lado maior antes de enviar, cerca de 1 MB cada).
 
 Exemplo com Nginx:
 
