@@ -6,17 +6,21 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from .filters import QuestaoFilter
-from .forms import AlternativaFormSet, CSVUploadForm, QuestaoForm
+from .forms import AlternativaFormSet, CSVUploadForm, QuestaoForm, TransferirAutoriaForm
 from .importer import CSVImportService
 from .models import Disciplina, Questao, Topico
 from .parser import CSVParseError
 from .permissions import (
+    administrador_required,
     can_change_questao,
     docente_ou_coordenador_required,
+    eh_administrador,
     is_docente_ou_coordenador,
     pode_editar_questao_required,
 )
@@ -110,6 +114,8 @@ def questao_list(request):
                     'pk', flat=True
                 )
             ),
+            # Só o administrador transfere a autoria (corrige questões importadas com o login errado).
+            'transferir_form': TransferirAutoriaForm() if eh_administrador(request.user) else None,
         },
     )
 
@@ -269,6 +275,62 @@ def questao_toggle_ativo(request, pk):
         )
 
     return redirect('banco_questoes:questao_list')
+
+
+# ---------------------------------------------------------------------------
+# Transferir autoria em lote (administrador)
+# ---------------------------------------------------------------------------
+@require_POST
+@login_required
+@administrador_required
+def questao_transferir_autor(request):
+    """
+    Passa as questões marcadas na lista (ou todas as do filtro atual) para outro professor.
+    Como o professor só vê e usa as questões que são dele, é assim que o administrador corrige
+    uma importação feita com o próprio login. Cada questão alterada ganha uma versão no
+    histórico, com o motivo e quem fez.
+    """
+    from academico.acesso import questoes_visiveis
+
+    filtros = request.POST.get('filtros', '')
+    destino = reverse('banco_questoes:questao_list') + (f'?{filtros}' if filtros else '')
+
+    form = TransferirAutoriaForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Escolha o professor que vai receber as questões.')
+        return redirect(destino)
+    novo_autor = form.cleaned_data['novo_autor']
+
+    if form.cleaned_data['todas_do_filtro']:
+        consulta = QueryDict(filtros)
+        # Sem filtro, "todas" seria o acervo inteiro: exige ao menos um filtro aplicado.
+        if not any(consulta.get(campo) for campo in QuestaoFilter.Meta.fields):
+            messages.error(request, 'Para transferir todas de uma vez, filtre a lista antes (por exemplo, pelo autor).')
+            return redirect(destino)
+        questoes = QuestaoFilter(consulta, queryset=questoes_visiveis(request.user)).qs
+    else:
+        ids = [pk for pk in map(parse_pk, request.POST.getlist('questoes')) if pk]
+        if not ids:
+            messages.info(request, 'Marque ao menos uma questão (ou "todas do filtro atual").')
+            return redirect(destino)
+        questoes = questoes_visiveis(request.user).filter(pk__in=ids)
+
+    nome = novo_autor.get_full_name() or novo_autor.username
+    total = 0
+    with transaction.atomic():
+        for questao in questoes.exclude(autor=novo_autor):
+            questao.autor = novo_autor
+            questao._history_user = request.user
+            questao._change_reason = f'Autoria transferida para {novo_autor.username}'[:100]
+            questao.save(update_fields=['autor', 'atualizado_em'])
+            total += 1
+
+    if total:
+        logger.info('Autoria de %d questão(ões) transferida para %s por %s.', total, novo_autor, request.user)
+        messages.success(request, f'{total} questão(ões) transferida(s) para {nome}.')
+    else:
+        messages.info(request, f'Nenhuma questão alterada: as escolhidas já eram de {nome}.')
+    return redirect(destino)
 
 
 # ---------------------------------------------------------------------------
@@ -653,7 +715,7 @@ def questao_import(request):
     relatorio = None
 
     if request.method == 'POST':
-        upload_form = CSVUploadForm(request.POST, request.FILES)
+        upload_form = CSVUploadForm(request.POST, request.FILES, usuario=request.user)
 
         if not upload_form.is_valid():
             # Mensagem de erro vinda de clean_arquivo() (extensão, tamanho, magic bytes)
@@ -666,16 +728,18 @@ def questao_import(request):
             )
 
         arquivo = upload_form.cleaned_data['arquivo']
+        # Administrador pode importar "em nome de" um professor; senão o autor é quem importa.
+        autor = upload_form.cleaned_data.get('autor') or request.user
 
         try:
-            relatorio = CSVImportService.import_file(arquivo, filename=arquivo.name, autor=request.user)
+            relatorio = CSVImportService.import_file(arquivo, filename=arquivo.name, autor=autor)
         except CSVParseError as err:
             logger.warning('Erro de formato durante importação: %s', err)
             messages.error(request, f'Erro ao ler o arquivo: {err}')
             return render(
                 request,
                 'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm(usuario=request.user)},
             )
         except Exception as exc:
             logger.exception('Erro inesperado durante importação: %s', exc)
@@ -683,7 +747,7 @@ def questao_import(request):
             return render(
                 request,
                 'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm(usuario=request.user)},
             )
 
         if relatorio.total_processadas == 0:
@@ -691,15 +755,16 @@ def questao_import(request):
             return render(
                 request,
                 'banco_questoes/questao_import.html',
-                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm()},
+                {'titulo': 'Importação em Lote', 'upload_form': CSVUploadForm(usuario=request.user)},
             )
 
         if relatorio.total_sucesso > 0:
             com_imagem = f', {relatorio.total_com_imagem} com imagem' if relatorio.total_com_imagem else ''
+            em_nome = '' if autor == request.user else f' em nome de {autor.get_full_name() or autor.username}'
             messages.success(
                 request,
                 f'Importação concluída: {relatorio.total_sucesso} questão(ões) importada(s) e comitadas no acervo'
-                f'{com_imagem}.',
+                f'{em_nome}{com_imagem}.',
             )
         if relatorio.total_rejeitadas > 0:
             messages.warning(
@@ -707,7 +772,7 @@ def questao_import(request):
                 f'Atenção: {relatorio.total_rejeitadas} questão(ões) foram rejeitadas devido a inconsistências/duplicidade.',
             )
     else:
-        upload_form = CSVUploadForm()
+        upload_form = CSVUploadForm(usuario=request.user)
 
     return render(
         request,

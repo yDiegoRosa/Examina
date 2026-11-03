@@ -195,8 +195,11 @@ Depois, entrando como administrador:
 3. **Docências:** ao criar a turma, escolha o professor — a docência (professor × disciplina × turma) é
    criada junto. Outros professores: Acadêmico → Turmas → ícone "Docentes da turma".
    **Sem docência, o professor não vê turmas nem desempenho.**
-4. **Questões:** a importação grava como autor quem importou, e o professor monta provas só com as
-   questões dele — cada professor importa as suas (ou o administrador, se for ele a montar as provas).
+4. **Questões:** o professor vê e monta provas só com as questões de que é autor. A importação grava
+   como autor quem importou; o administrador pode escolher **"Autor das questões"** na tela de
+   importação para já colocá-las no acervo do professor. Entrou com o login errado? Na lista de
+   questões, filtre (por exemplo, pelo autor), marque as questões — ou "Todas do filtro atual" — e use
+   **Transferir autoria**. Cada transferência fica no histórico da questão (quem fez e para quem).
 
 ## 5. Proxy HTTPS
 

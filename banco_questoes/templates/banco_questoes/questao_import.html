@@ -65,6 +65,17 @@
           <input type="file" name="arquivo" id="id_arquivo" accept=".xlsx,.xls,.csv,.zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/zip" class="form-input" style="max-width: 400px; margin: 0 auto; display: block;" required>
         </div>
 
+        {% if upload_form.autor %}
+        {# Só o administrador: importar em nome de um professor (as questões ficam no acervo dele). #}
+        <div class="importar-em-nome mt-4">
+          <label class="form-label" for="{{ upload_form.autor.id_for_label }}">
+            <i class="bi bi-person-badge"></i> {{ upload_form.autor.label }}
+          </label>
+          {{ upload_form.autor }}
+          <p class="small text-muted mt-1 mb-0">{{ upload_form.autor.help_text }}</p>
+        </div>
+        {% endif %}
+
         <div class="flex items-center justify-between mt-4">
           <div class="flex items-center gap-2 text-muted small">
             <i class="bi bi-shield-check" style="color: var(--color-success); font-size: 1.1rem;"></i>
