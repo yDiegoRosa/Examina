@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from banco_questoes.permissions import administrador_required, docente_ou_coordenador_required
+from banco_questoes.permissions import GRUPO_ADMINISTRADOR, administrador_required, docente_ou_coordenador_required
 from banco_questoes.utils import parse_pk
 
 from . import professores as contas
@@ -357,7 +357,17 @@ def turma_docencia_toggle(request, pk):
 # Professores (contas do grupo Docente) — só o administrador
 # ---------------------------------------------------------------------------
 def _professores():
-    return get_user_model().objects.filter(groups__name=contas.GRUPO_DOCENTE).distinct()
+    """
+    Contas do grupo Docente, menos as de administração (superusuário ou grupo Administrador):
+    essas não aparecem na aba nem podem ter a senha redefinida ou ser desativadas por aqui.
+    """
+    return (
+        get_user_model()
+        .objects.filter(groups__name=contas.GRUPO_DOCENTE)
+        .exclude(is_superuser=True)
+        .exclude(groups__name=GRUPO_ADMINISTRADOR)
+        .distinct()
+    )
 
 
 def _guardar_credenciais(request, usuario, senha, acao):

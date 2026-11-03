@@ -173,7 +173,7 @@
                   {% if form.imagem.errors %}
                   <div class="invalid-feedback">{{ form.imagem.errors|join:", " }}</div>
                   {% endif %}
-                  <div class="form-help">Diagrama, gráfico, figura ou esquema ilustrativo (PNG, JPG, WebP).</div>
+                  <div class="form-help">Diagrama, gráfico, figura ou esquema ilustrativo (PNG, JPG, GIF ou WebP, até {{ form.limite_imagem_mb }} MB).</div>
 
                   <!-- Container de Preview de Imagem (ao vivo e existente) -->
                   <div id="image-preview-box" class="mt-3 {% if not form.instance.imagem %}d-none{% endif %}">

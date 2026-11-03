@@ -79,6 +79,10 @@ _MAGIC_BYTES: dict[str, bytes] = {
 }
 
 
+# Formatos da imagem de apoio (formulário da questão); a importação por ZIP aceita só PNG/JPG.
+FORMATOS_IMAGEM_QUESTAO = {'PNG', 'JPEG', 'GIF', 'WEBP'}
+
+
 def _validate_upload_file(arquivo):
     """
     Valida extensão, tamanho e assinatura binária (magic bytes) de um arquivo
@@ -324,7 +328,7 @@ class QuestaoForm(forms.ModelForm):
             'imagem': forms.ClearableFileInput(
                 attrs={
                     'class': 'form-input form-file-input',
-                    'accept': 'image/*',
+                    'accept': '.png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp',
                 },
             ),
             'enunciado': forms.Textarea(
@@ -346,6 +350,7 @@ class QuestaoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.limite_imagem_mb = f'{float(getattr(settings, "IMPORT_IMAGEM_MAX_SIZE_MB", 5)):g}'
         self.fields['disciplina'].queryset = Disciplina.objects.filter(ativo=True).order_by('nome')
 
         disciplina_id = None
@@ -364,6 +369,33 @@ class QuestaoForm(forms.ModelForm):
     # ------------------------------------------------------------------
     # Field-level validation
     # ------------------------------------------------------------------
+    def clean_imagem(self):
+        """Imagem nova: PNG, JPG, GIF ou WebP de verdade, até IMPORT_IMAGEM_MAX_SIZE_MB (o mesmo limite do ZIP)."""
+        from django.core.files.uploadedfile import UploadedFile
+        from PIL import Image, UnidentifiedImageError
+
+        imagem = self.cleaned_data.get('imagem')
+        if not isinstance(imagem, UploadedFile):
+            return imagem  # sem envio novo (mantém a atual) ou "remover" marcado
+        limite_mb = float(getattr(settings, 'IMPORT_IMAGEM_MAX_SIZE_MB', 5))
+        if imagem.size > limite_mb * 1024 * 1024:
+            raise forms.ValidationError(
+                f'A imagem tem {imagem.size / (1024 * 1024):.1f} MB; o limite é {limite_mb:g} MB. '
+                'Recorte só a figura ou reduza a resolução.'
+            )
+        try:
+            imagem.seek(0)
+            with Image.open(imagem) as img:
+                formato = img.format
+                img.verify()
+        except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
+            raise forms.ValidationError('O arquivo não é uma imagem válida (corrompido ou de outro tipo).') from exc
+        finally:
+            imagem.seek(0)
+        if formato not in FORMATOS_IMAGEM_QUESTAO:
+            raise forms.ValidationError(f'Imagem em {formato}: use PNG, JPG, GIF ou WebP.')
+        return imagem
+
     def clean_topico(self):
         """Garante que o tópico pertence à disciplina selecionada."""
         topico = self.cleaned_data.get('topico')

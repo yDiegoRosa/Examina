@@ -59,8 +59,11 @@ class LoginView(auth_views.LoginView):
         return resposta
 
     def get_context_data(self, **kwargs):
+        from banco_questoes.disciplinas import total_oficiais
+
         contexto = super().get_context_data(**kwargs)
         contexto['inatividade_texto'] = texto_duracao(settings.SESSAO_INATIVIDADE_MINUTOS)
+        contexto['total_disciplinas'] = total_oficiais()
         return contexto
 
 

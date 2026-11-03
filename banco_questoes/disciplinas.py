@@ -25,6 +25,12 @@ def normalizar(texto: str) -> str:
     return ' '.join(sem_acento.casefold().split())
 
 
+def total_oficiais() -> int:
+    """Quantas disciplinas oficiais ativas ("Nome (SIGLA)") existem — exibido na tela de login."""
+    nomes = Disciplina.objects.filter(ativo=True).values_list('nome', flat=True)
+    return sum(1 for nome in nomes if _COM_SIGLA.match(nome))
+
+
 class CatalogoDisciplinas:
     """Índice das disciplinas oficiais por nome completo, nome sem a sigla e sigla."""
 

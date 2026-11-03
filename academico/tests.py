@@ -556,6 +556,28 @@ class ProfessorCrudViewTest(TestCase):
         professor.refresh_from_db()
         self.assertTrue(professor.is_active)
 
+    def test_contas_de_administracao_ficam_fora_da_aba(self):
+        # Admin/superusuário que também está no grupo Docente não aparece nem pode ter a senha
+        # redefinida ou ser desativado por aqui; o coordenador que dá aula continua na lista.
+        docente = Group.objects.get(name='Docente')
+        self.admin.groups.add(docente)
+        raiz = User.objects.create_superuser('raiz_prof', 'r@exemplo.com', 'segredo123')  # noqa: S106
+        raiz.groups.add(docente)
+        coord = User.objects.create_user(username='coord.prof', password='segredo123')  # noqa: S106
+        coord.groups.add(docente, Group.objects.get(name='Coordenador'))
+
+        resp = self.client.get(reverse('academico:professor_list'))
+        self.assertEqual({u.username for u in resp.context['professores']}, {'coord.prof'})
+        self.assertEqual(resp.context['metricas']['total'], 1)
+
+        for conta in (self.admin, raiz):
+            for rota in ('academico:professor_redefinir_senha', 'academico:professor_toggle_ativo'):
+                with self.subTest(conta=conta.username, rota=rota):
+                    self.assertEqual(self.client.post(reverse(rota, args=[conta.pk])).status_code, 404)
+            conta.refresh_from_db()
+            self.assertTrue(conta.is_active)
+            self.assertTrue(conta.check_password('segredo123'))
+
     def test_so_o_administrador_acessa(self):
         docente = User.objects.create_user(username='doc_sem_admin', password='segredo123')  # noqa: S106
         docente.groups.add(Group.objects.get(name='Docente'))
