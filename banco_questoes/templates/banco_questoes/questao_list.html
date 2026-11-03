@@ -150,10 +150,40 @@
 
 <!-- Tabela de Questões SaaS -->
 <div class="card-surface">
+  {% if transferir_form %}
+  {# Administrador: passar questões para outro professor (ex.: importadas com o login errado). #}
+  <form method="post" action="{% url 'banco_questoes:questao_transferir_autor' %}" id="form-transferir"
+        class="transferir-autoria" data-total-filtro="{{ page_obj.paginator.count }}">
+    {% csrf_token %}
+    <input type="hidden" name="filtros" value="{{ querystring }}">
+    <div class="transferir-autoria-titulo">
+      <i class="bi bi-arrow-left-right"></i>
+      <span class="font-bold">Transferir autoria</span>
+      <span class="small text-muted" id="transferir-marcadas" aria-live="polite">Marque as questões na tabela.</span>
+    </div>
+    <div class="transferir-autoria-campos">
+      {{ transferir_form.novo_autor }}
+      {% if has_active_filters %}
+      <label class="switch-container small">
+        <input type="checkbox" name="todas_do_filtro" value="1" class="form-checkbox" id="transferir-todas">
+        Todas as {{ page_obj.paginator.count }} do filtro atual
+      </label>
+      {% endif %}
+      <button type="submit" class="btn btn-outline btn-sm">
+        <i class="bi bi-person-check"></i> Transferir
+      </button>
+    </div>
+  </form>
+  {% endif %}
   <div class="table-responsive">
     <table class="saas-table">
       <thead>
         <tr>
+          {% if transferir_form %}
+          <th style="width: 44px;">
+            <input type="checkbox" class="form-checkbox" id="marcar-todas" title="Marcar todas desta página" aria-label="Marcar todas as questões desta página">
+          </th>
+          {% endif %}
           <th style="width: 80px;">ID</th>
           <th style="width: 130px;">Tipo</th>
           <th style="width: 120px;">Dificuldade</th>
@@ -167,6 +197,12 @@
       <tbody>
         {% for q in questoes %}
         <tr>
+          {% if transferir_form %}
+          <td>
+            <input type="checkbox" name="questoes" value="{{ q.pk }}" form="form-transferir"
+                   class="form-checkbox marcar-questao" aria-label="Selecionar a questão #{{ q.pk }}">
+          </td>
+          {% endif %}
           <td>
             <span class="font-bold text-muted font-mono">#{{ q.pk }}</span>
           </td>
@@ -272,7 +308,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="text-center" style="padding: 4rem 1.5rem;">
+          <td colspan="{% if transferir_form %}9{% else %}8{% endif %}" class="text-center" style="padding: 4rem 1.5rem;">
             <div class="text-muted mb-3" style="font-size: 2.5rem; opacity: 0.4;">
               <i class="bi bi-funnel"></i>
             </div>
@@ -345,6 +381,58 @@
         })
         .catch(err => console.error('Erro ao atualizar tópicos no filtro:', err));
     });
+  }
+
+  // Transferir autoria (só aparece para o administrador)
+  const formTransferir = document.getElementById('form-transferir');
+  if (formTransferir) {
+    const caixas = Array.from(document.querySelectorAll('.marcar-questao'));
+    const marcarTodas = document.getElementById('marcar-todas');
+    const todasDoFiltro = document.getElementById('transferir-todas');
+    const aviso = document.getElementById('transferir-marcadas');
+    const contar = () => caixas.filter(c => c.checked).length;
+    const atualizar = () => {
+      const n = contar();
+      if (todasDoFiltro && todasDoFiltro.checked) {
+        aviso.textContent = 'Todas as ' + formTransferir.dataset.totalFiltro + ' questões do filtro atual.';
+      } else {
+        aviso.textContent = n ? n + ' questão(ões) marcada(s).' : 'Marque as questões na tabela.';
+      }
+      if (marcarTodas) {
+        marcarTodas.checked = n > 0 && n === caixas.length;
+        marcarTodas.indeterminate = n > 0 && n < caixas.length;
+      }
+    };
+    caixas.forEach(c => c.addEventListener('change', atualizar));
+    if (marcarTodas) {
+      marcarTodas.addEventListener('change', () => {
+        caixas.forEach(c => { c.checked = marcarTodas.checked; });
+        atualizar();
+      });
+    }
+    if (todasDoFiltro) todasDoFiltro.addEventListener('change', atualizar);
+
+    formTransferir.addEventListener('submit', (ev) => {
+      const select = formTransferir.querySelector('select[name=novo_autor]');
+      const destino = select.options[select.selectedIndex];
+      const todas = todasDoFiltro && todasDoFiltro.checked;
+      const n = todas ? Number(formTransferir.dataset.totalFiltro) : contar();
+      if (!select.value) {
+        ev.preventDefault();
+        alert('Escolha o professor que vai receber as questões.');
+        select.focus();
+        return;
+      }
+      if (!n) {
+        ev.preventDefault();
+        alert('Marque ao menos uma questão na tabela.');
+        return;
+      }
+      if (!confirm('Transferir ' + n + ' questão(ões) para ' + destino.text + '? Elas passam a ser do novo autor e saem do acervo de quem as tinha.')) {
+        ev.preventDefault();
+      }
+    });
+    atualizar();
   }
 })();
 </script>

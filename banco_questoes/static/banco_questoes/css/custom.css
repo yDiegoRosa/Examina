@@ -1902,3 +1902,47 @@ a:hover {
   color: var(--text-main);
   word-break: break-all;
 }
+
+/* Lista de questões: transferir autoria (administrador) */
+.transferir-autoria {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-surface);
+}
+
+.transferir-autoria-titulo,
+.transferir-autoria-campos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.transferir-autoria-campos .form-select {
+  width: auto;
+  min-width: 14rem;
+  max-width: 100%;
+}
+
+.importar-em-nome {
+  max-width: 28rem;
+}
+
+@media (max-width: 576px) {
+  .transferir-autoria-campos,
+  .transferir-autoria-campos .form-select {
+    width: 100%;
+  }
+}
+
+/* Página de Privacidade */
+.privacidade-lista {
+  margin: 0 0 0.75rem 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+}

@@ -250,6 +250,20 @@ Vá em **Actions → 🗄️ Backup — Restore Test → Run workflow**.
 | Cópia externa | 35 dias (ciclo de vida); protegida contra exclusão nos primeiros 30 (bloqueio) | Cloudflare R2, `examina-backups/examina/` |
 | Artefatos do CI | 7 dias | GitHub Actions |
 
+### Retenção dos dados no sistema (LGPD)
+
+Depois de um backup bem-sucedido, o `backup_completo.sh` roda `manage.py aplicar_retencao`, que aplica os
+prazos aprovados pela coordenação (configuráveis no `.env`, `0` desliga a regra):
+
+| Dado | Prazo (padrão) | O que acontece |
+|---|---|---|
+| Fotos dos cartões-resposta | `RETENCAO_FOTOS_DIAS=180` após a aplicação | Foto e arquivo apagados; a nota lançada continua |
+| Alunos sem matrícula ativa | `RETENCAO_ALUNOS_DIAS=730` desde a última atividade | Nome vira "Aluno anonimizado" e a matrícula `ANON-<id>`; notas e estatísticas continuam, anônimas |
+| Tentativas de login | `RETENCAO_TENTATIVAS_LOGIN_DIAS=30` | Apagadas; as sessões vencidas também |
+
+Para ver o que seria afetado sem alterar nada: `docker compose -f docker-compose.prod.yml exec web python manage.py aplicar_retencao --simular`.
+O que é apagado ainda fica nas cópias de segurança por até 35 dias. Os prazos aparecem para todos em `/privacidade/`.
+
 ---
 
 ## Troubleshooting

@@ -1,0 +1,89 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Privacidade — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-shield-lock-fill"></i> Privacidade e dados pessoais</span>
+    </div>
+    <h1 class="mb-1">Como o Examina trata os dados</h1>
+    <p class="text-secondary" style="max-width: 680px;">
+      O Examina é a ferramenta de avaliações da FAETERJ-Rio. Ele guarda só o necessário para montar provas,
+      corrigir e acompanhar o desempenho das turmas, e apaga ou anonimiza os dados quando deixam de ser necessários.
+    </p>
+  </div>
+</div>
+
+<div class="card-surface mb-4" style="max-width: 900px;">
+  <div class="card-body">
+    <h2 class="mb-2" style="font-size: 1.15rem;">Que dados são guardados e para quê</h2>
+    <ul class="privacidade-lista">
+      <li><strong>Alunos:</strong> nome e matrícula — para imprimir cartões e cadernos nominais e lançar as notas.</li>
+      <li><strong>Notas e respostas:</strong> as respostas marcadas e as notas das questões — para a nota final e os relatórios de desempenho da turma.</li>
+      <li><strong>Fotos dos cartões-resposta:</strong> enviadas para a correção automática e para a revisão de nota.</li>
+      <li><strong>Professores e coordenação:</strong> nome, login e e-mail (opcional) — para o acesso ao sistema.</li>
+      <li><strong>Registros técnicos:</strong> tentativas de login (com o endereço IP) e sessões — para proteger as contas.</li>
+    </ul>
+    <p class="small text-muted mb-0">
+      O registro oficial das notas é o sistema acadêmico da faculdade; o Examina é uma ferramenta auxiliar.
+    </p>
+  </div>
+</div>
+
+<div class="card-surface mb-4" style="max-width: 900px;">
+  <div class="card-body">
+    <h2 class="mb-2" style="font-size: 1.15rem;">Quem vê</h2>
+    <p class="mb-0">
+      O professor vê só as turmas em que leciona, as provas e as questões dele. A coordenação e a administração
+      veem os dados de todas as turmas. As fotos dos cartões e as imagens só abrem para quem tem acesso à
+      aplicação ou à questão — não há link público.
+    </p>
+  </div>
+</div>
+
+<div class="card-surface mb-4" style="max-width: 900px;">
+  <div class="card-body">
+    <h2 class="mb-3" style="font-size: 1.15rem;">Por quanto tempo</h2>
+    <div class="table-responsive">
+      <table class="saas-table">
+        <thead>
+          <tr><th>Dado</th><th>Prazo</th><th>O que acontece</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Fotos dos cartões-resposta</td>
+            <td><strong>{{ prazos.fotos.texto }}</strong> após a aplicação da prova</td>
+            <td>A foto é apagada; a nota lançada continua.</td>
+          </tr>
+          <tr>
+            <td>Alunos (com suas notas e respostas)</td>
+            <td><strong>{{ prazos.alunos.texto }}</strong> sem matrícula ativa</td>
+            <td>Nome e matrícula são substituídos por "Aluno anonimizado"; as estatísticas das questões continuam, sem identificar ninguém.</td>
+          </tr>
+          <tr>
+            <td>Tentativas de login</td>
+            <td><strong>{{ prazos.tentativas.texto }}</strong></td>
+            <td>Apagadas, junto com as sessões vencidas.</td>
+          </tr>
+          <tr>
+            <td>Cópias de segurança</td>
+            <td>até <strong>35 dias</strong></td>
+            <td>O que é apagado no sistema some também das cópias de segurança nesse prazo.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card-surface mb-4" style="max-width: 900px;">
+  <div class="card-body">
+    <h2 class="mb-2" style="font-size: 1.15rem;">Dúvidas ou pedidos</h2>
+    <p class="mb-0">
+      Para pedir acesso, correção ou exclusão dos seus dados, procure a coordenação do curso na FAETERJ-Rio.
+    </p>
+  </div>
+</div>
+{% endblock %}

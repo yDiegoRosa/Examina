@@ -232,6 +232,15 @@ LOGIN_MAX_TENTATIVAS = env.int('LOGIN_MAX_TENTATIVAS', default=5)
 LOGIN_BLOQUEIO_MINUTOS = env.int('LOGIN_BLOQUEIO_MINUTOS', default=15)
 
 # ---------------------------------------------------------------------------
+# Retenção de dados pessoais (LGPD) — prazos em dias, aprovados em 2026-11-02; 0 desliga a regra.
+# Aplicados todo dia por "manage.py aplicar_retencao" (no scripts/backup_completo.sh) — ver
+# Examina/retencao.py e a página /privacidade/.
+# ---------------------------------------------------------------------------
+RETENCAO_FOTOS_DIAS = env.int('RETENCAO_FOTOS_DIAS', default=180)  # fotos de cartões, após a aplicação
+RETENCAO_ALUNOS_DIAS = env.int('RETENCAO_ALUNOS_DIAS', default=730)  # aluno sem matrícula ativa → anonimizado
+RETENCAO_TENTATIVAS_LOGIN_DIAS = env.int('RETENCAO_TENTATIVAS_LOGIN_DIAS', default=30)
+
+# ---------------------------------------------------------------------------
 # CSRF trusted origins (required when behind a reverse proxy)
 # ---------------------------------------------------------------------------
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])

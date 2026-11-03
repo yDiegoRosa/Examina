@@ -20,11 +20,12 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from .views import AlterarSenhaView, LoginView, media_protegida
+from .views import AlterarSenhaView, LoginView, media_protegida, privacidade
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('login/', LoginView.as_view(), name='login'),
+    path('privacidade/', privacidade, name='privacidade'),
     path(
         'logout/',
         auth_views.LogoutView.as_view(),

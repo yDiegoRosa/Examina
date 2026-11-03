@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
 
 from .models import Alternativa, Disciplina, Questao, Topico
+from .permissions import eh_administrador
 from .seguranca_login import minutos_de_bloqueio
 from .utils import alternativas_repetidas
 
@@ -158,11 +159,62 @@ class CSVUploadForm(forms.Form):
         f'{getattr(settings, "IMPORT_ZIP_MAX_SIZE_MB", 50)} MB',
     )
 
+    def __init__(self, *args, usuario=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Só o administrador importa "em nome de" outro professor (o professor vê e usa nas provas só
+        # as questões de que é autor — ver academico.acesso).
+        if usuario is not None and eh_administrador(usuario):
+            self.fields['autor'] = _AutorChoiceField(
+                label='Autor das questões',
+                queryset=possiveis_autores(),
+                required=False,
+                empty_label='Eu mesmo',
+                widget=forms.Select(attrs={'class': 'form-select'}),
+                help_text='As questões entram no acervo do professor escolhido, que poderá usá-las nas provas dele.',
+            )
+
     def clean_arquivo(self):
         arquivo = self.cleaned_data.get('arquivo')
         if arquivo:
             _validate_upload_file(arquivo)
         return arquivo
+
+
+# ---------------------------------------------------------------------------
+# Autoria das questões (importar em nome de / transferir em lote)
+# ---------------------------------------------------------------------------
+def possiveis_autores():
+    """Contas ativas que podem ser autoras de questões: professores, coordenação e administração."""
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+
+    from .permissions import GRUPO_ADMINISTRADOR, GRUPO_COORDENADOR
+
+    return (
+        get_user_model()
+        .objects.filter(is_active=True)
+        .filter(Q(is_superuser=True) | Q(groups__name__in=['Docente', GRUPO_COORDENADOR, GRUPO_ADMINISTRADOR]))
+        .distinct()
+        .order_by('first_name', 'last_name', 'username')
+    )
+
+
+class _AutorChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        nome = obj.get_full_name()
+        return f'{nome} ({obj.get_username()})' if nome else obj.get_username()
+
+
+class TransferirAutoriaForm(forms.Form):
+    """Acervo → transferir as questões marcadas (ou todas do filtro atual) para outro professor."""
+
+    novo_autor = _AutorChoiceField(
+        label='Transferir para',
+        queryset=possiveis_autores(),
+        empty_label='Escolha o professor...',
+        widget=forms.Select(attrs={'class': 'form-select', 'aria-label': 'Transferir para'}),
+    )
+    todas_do_filtro = forms.BooleanField(required=False)
 
 
 # ---------------------------------------------------------------------------

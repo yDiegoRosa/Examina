@@ -283,6 +283,10 @@
       </div>
     </div>
 
+    {% if v.record.history_change_reason %}
+    <p class="small text-muted mb-2"><i class="bi bi-info-circle"></i> {{ v.record.history_change_reason }}</p>
+    {% endif %}
+
     <!-- Diff dos campos -->
     {% if v.diffs %}
     <button class="diff-toggle-btn" onclick="toggleDiff(this)" aria-expanded="true">

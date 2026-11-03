@@ -195,8 +195,11 @@ Depois, entrando como administrador:
 3. **Docências:** ao criar a turma, escolha o professor — a docência (professor × disciplina × turma) é
    criada junto. Outros professores: Acadêmico → Turmas → ícone "Docentes da turma".
    **Sem docência, o professor não vê turmas nem desempenho.**
-4. **Questões:** a importação grava como autor quem importou, e o professor monta provas só com as
-   questões dele — cada professor importa as suas (ou o administrador, se for ele a montar as provas).
+4. **Questões:** o professor vê e monta provas só com as questões de que é autor. A importação grava
+   como autor quem importou; o administrador pode escolher **"Autor das questões"** na tela de
+   importação para já colocá-las no acervo do professor. Entrou com o login errado? Na lista de
+   questões, filtre (por exemplo, pelo autor), marque as questões — ou "Todas do filtro atual" — e use
+   **Transferir autoria**. Cada transferência fica no histórico da questão (quem fez e para quem).
 
 ## 5. Proxy HTTPS
 
@@ -254,6 +257,7 @@ A imagem é reconstruída, os estáticos são coletados de novo e as migrations 
 | Tarefa | Como |
 |---|---|
 | Ver os logs | `docker compose -f docker-compose.prod.yml logs -f web` (os logs do Django também ficam no volume `logs_data`, em `/app/logs/examina.log`). Cada container guarda no máximo 5 arquivos de 10 MB de log (`x-logging` no compose); o mais antigo é descartado. |
+| Retenção de dados (LGPD) | Todo dia, depois do backup: fotos de cartões apagadas 6 meses após a aplicação, alunos sem matrícula ativa há 2 anos anonimizados, tentativas de login de mais de 30 dias apagadas (prazos `RETENCAO_*` no `.env`; prévia com `manage.py aplicar_retencao --simular`). Página pública `/privacidade/`. |
 | Tempo de sessão | No login, **Manter conectado neste computador** marcado = 2 semanas; desmarcado (padrão) = termina ao fechar o navegador ou após `SESSAO_INATIVIDADE_MINUTOS` sem uso (120 por padrão, no `.env`). |
 | Abrir um shell do Django | `docker compose -f docker-compose.prod.yml exec web python manage.py shell` |
 | Desbloquear um usuário (limite de tentativas) | Admin → **Tentativas de login malsucedidas** → apagar as do usuário. |

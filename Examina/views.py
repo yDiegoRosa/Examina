@@ -18,6 +18,15 @@ from banco_questoes.permissions import docente_ou_coordenador_required
 from .middleware import SESSAO_CURTA, ULTIMO_ACESSO
 
 
+def privacidade(request):
+    """Página pública: que dados o Examina guarda, quem vê e por quanto tempo (prazos do .env)."""
+    from django.shortcuts import render
+
+    from .retencao import prazos
+
+    return render(request, 'privacidade.html', {'prazos': prazos()})
+
+
 def texto_duracao(minutos: int) -> str:
     """120 → "2 h", 90 → "1 h 30 min", 45 → "45 min" (texto de ajuda do login)."""
     horas, resto = divmod(minutos, 60)

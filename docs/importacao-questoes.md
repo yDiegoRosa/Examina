@@ -51,6 +51,9 @@ O parser é tolerante a variações de nome (não diferencia maiúsculas/acentos
 6. **Excel (.xlsx):** use a 1ª aba. Números viram texto (`26.0` → `26`). Linhas/colunas vazias ao redor são ignoradas.
 7. **Importação transacional por linha:** as linhas válidas são gravadas e as inválidas são reportadas
    individualmente — uma linha ruim **não** derruba o lote inteiro.
+8. **Autor:** as questões entram no acervo de quem importa — e o professor só vê e usa nas provas as
+   questões de que é autor. O administrador pode importar **em nome de** um professor (campo "Autor das
+   questões" na tela) e, depois, corrigir a autoria em lote na lista de questões (**Transferir autoria**).
 
 ## Exemplos
 
