@@ -350,6 +350,20 @@ class ManterConectadoTest(TestCase):
         self.assertEqual(texto_duracao(45), '45 min')
 
 
+class DisciplinasNoLoginTest(TestCase):
+    """O destaque "N Disciplinas" do login conta as disciplinas oficiais ativas (antes era fixo em 34)."""
+
+    def test_conta_so_as_oficiais_ativas(self):
+        from banco_questoes.disciplinas import total_oficiais
+
+        antes = total_oficiais()
+        Disciplina.objects.create(nome='Não Classificada')  # fora do formato "Nome (SIGLA)"
+        Disciplina.objects.create(nome='Disciplina Inativa (DIN)', ativo=False)
+        Disciplina.objects.create(nome='Disciplina Nova (DNV)')
+        self.assertEqual(total_oficiais(), antes + 1)
+        self.assertContains(self.client.get(reverse('login')), f'{antes + 1} Disciplinas')
+
+
 class RotacaoDosLogsTest(TestCase):
     """Os containers de produção limitam o tamanho dos logs (senão crescem para sempre)."""
 
