@@ -4,6 +4,9 @@
 #   1. backup do banco (backup_mysql.sh)
 #   2. backup da mídia (backup_media.sh)
 #   3. cópia dos dois para o Cloudflare R2 (enviar_backups_r2.sh)
+#   4. retenção de dados (manage.py aplicar_retencao): fotos de cartões antigas, alunos
+#      sem matrícula ativa há muito tempo, tentativas de login e sessões vencidas — só
+#      depois de um backup bem-sucedido (o que for apagado fica nas cópias por até 35 dias)
 # Se alguma etapa falhar, avisa o administrador por e-mail (ADMINS do .env do
 # sistema, pelo container web) e termina com código 1.
 #
@@ -36,7 +39,11 @@ bash "${DIR}/backup_media.sh" || FALHAS+=("backup da mídia")
 bash "${DIR}/enviar_backups_r2.sh" || FALHAS+=("cópia para o Cloudflare R2")
 
 if [[ ${#FALHAS[@]} -eq 0 ]]; then
-  exit 0
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] Aplicando a retenção de dados (LGPD)..." | tee -a "$LOG_FILE"
+  if docker exec "$WEB_CONTAINER" python manage.py aplicar_retencao 2>&1 | tee -a "$LOG_FILE"; then
+    exit 0
+  fi
+  FALHAS+=("retenção de dados (aplicar_retencao)")
 fi
 
 # ---------------------------------------------------------------------------

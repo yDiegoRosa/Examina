@@ -254,6 +254,7 @@ A imagem é reconstruída, os estáticos são coletados de novo e as migrations 
 | Tarefa | Como |
 |---|---|
 | Ver os logs | `docker compose -f docker-compose.prod.yml logs -f web` (os logs do Django também ficam no volume `logs_data`, em `/app/logs/examina.log`). Cada container guarda no máximo 5 arquivos de 10 MB de log (`x-logging` no compose); o mais antigo é descartado. |
+| Retenção de dados (LGPD) | Todo dia, depois do backup: fotos de cartões apagadas 6 meses após a aplicação, alunos sem matrícula ativa há 2 anos anonimizados, tentativas de login de mais de 30 dias apagadas (prazos `RETENCAO_*` no `.env`; prévia com `manage.py aplicar_retencao --simular`). Página pública `/privacidade/`. |
 | Tempo de sessão | No login, **Manter conectado neste computador** marcado = 2 semanas; desmarcado (padrão) = termina ao fechar o navegador ou após `SESSAO_INATIVIDADE_MINUTOS` sem uso (120 por padrão, no `.env`). |
 | Abrir um shell do Django | `docker compose -f docker-compose.prod.yml exec web python manage.py shell` |
 | Desbloquear um usuário (limite de tentativas) | Admin → **Tentativas de login malsucedidas** → apagar as do usuário. |

@@ -364,3 +364,195 @@ class RotacaoDosLogsTest(TestCase):
         servicos = re.findall(r'^  ([a-z]+):$', bloco_servicos, flags=re.MULTILINE)
         self.assertEqual(servicos, ['db', 'web', 'caddy'])
         self.assertEqual(bloco_servicos.count('logging: *logging'), len(servicos))
+
+
+@override_settings(
+    MEDIA_ROOT=MEDIA_TMP, RETENCAO_FOTOS_DIAS=180, RETENCAO_ALUNOS_DIAS=730, RETENCAO_TENTATIVAS_LOGIN_DIAS=30
+)
+class RetencaoDeDadosTest(TestCase):
+    """Prazos de guarda (LGPD): fotos 6 meses, alunos 2 anos sem matrícula ativa, tentativas 30 dias."""
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from provas.models import FolhaResposta, ProvaVersao
+
+        self.FolhaResposta = FolhaResposta
+        self.hoje = timezone.localdate()
+        self.prova = Prova.objects.create(titulo='Prova retenção')
+        self.versao = ProvaVersao.objects.create(prova=self.prova, identificador='A', numero_versao=1)
+        self.turma = Turma.objects.create(periodo='2024.1', nome='T Retenção')
+
+    def _dias_atras(self, dias):
+        from datetime import timedelta
+
+        return self.hoje - timedelta(days=dias)
+
+    def _aplicacao(self, dias_atras):
+        return ProvaAplicacao.objects.create(
+            prova=self.prova, turma=self.turma, data_aplicacao=self._dias_atras(dias_atras)
+        )
+
+    def _foto(self, aplicacao, nome):
+        caminho = Path(MEDIA_TMP) / 'folhas_digitalizadas' / nome
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_bytes(b'png')
+        return FolhaDigitalizada.objects.create(
+            prova_aplicacao=aplicacao, imagem=f'folhas_digitalizadas/{nome}'
+        ), caminho
+
+    def _aluno_que_saiu(self, matricula, dias_atras, situacao='CANCELADO'):
+        aluno = Aluno.objects.create(nome=f'Aluno {matricula}', matricula=matricula, ativo=False)
+        vinculo = Matricula.objects.create(
+            aluno=aluno, turma=self.turma, situacao=situacao, observacao='anotação pessoal'
+        )
+        Matricula.objects.filter(pk=vinculo.pk).update(
+            data_matricula=self._dias_atras(dias_atras + 100), data_encerramento=self._dias_atras(dias_atras)
+        )
+        Aluno.objects.filter(pk=aluno.pk).update(atualizado_em=self._datetime(dias_atras))
+        return aluno
+
+    def _datetime(self, dias_atras):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        return timezone.now() - timedelta(days=dias_atras)
+
+    def test_foto_de_aplicacao_com_mais_de_seis_meses_e_apagada_com_o_arquivo(self):
+        from Examina.retencao import aplicar_retencao
+
+        antiga, arquivo_antigo = self._foto(self._aplicacao(200), 'antiga.png')
+        recente, arquivo_recente = self._foto(self._aplicacao(10), 'recente.png')
+
+        resultado = aplicar_retencao()
+
+        self.assertEqual(resultado.fotos, 1)
+        self.assertFalse(FolhaDigitalizada.objects.filter(pk=antiga.pk).exists())
+        self.assertFalse(arquivo_antigo.exists())
+        self.assertTrue(FolhaDigitalizada.objects.filter(pk=recente.pk).exists())
+        self.assertTrue(arquivo_recente.exists())
+
+    def test_aluno_sem_matricula_ativa_ha_dois_anos_e_anonimizado(self):
+        from Examina.retencao import NOME_ANONIMO, aplicar_retencao
+
+        saiu_ha_tres_anos = self._aluno_que_saiu('R001', 3 * 365)
+        saiu_ha_um_ano = self._aluno_que_saiu('R002', 365)
+        ainda_matriculado = self._aluno_que_saiu('R003', 3 * 365, situacao='MATRICULADO')
+        fez_prova_recente = self._aluno_que_saiu('R004', 3 * 365)
+        self.FolhaResposta.objects.create(
+            prova_aplicacao=self._aplicacao(100), aluno=fez_prova_recente, prova_versao=self.versao
+        )
+
+        resultado = aplicar_retencao()
+
+        self.assertEqual(resultado.alunos, 1)
+        saiu_ha_tres_anos.refresh_from_db()
+        self.assertEqual(saiu_ha_tres_anos.nome, NOME_ANONIMO)
+        self.assertEqual(saiu_ha_tres_anos.matricula, f'ANON-{saiu_ha_tres_anos.pk}')
+        self.assertFalse(saiu_ha_tres_anos.ativo)
+        self.assertEqual(Matricula.objects.get(aluno=saiu_ha_tres_anos).observacao, '')
+        for aluno in (saiu_ha_um_ano, ainda_matriculado, fez_prova_recente):
+            aluno.refresh_from_db()
+            self.assertNotEqual(aluno.nome, NOME_ANONIMO)
+        self.assertEqual(aplicar_retencao().alunos, 0)  # já anonimizado não entra de novo
+
+    def test_notas_do_aluno_anonimizado_continuam_nas_estatisticas(self):
+        from desempenho.models import Desempenho
+        from Examina.retencao import NOME_ANONIMO, aplicar_retencao
+
+        aluno = self._aluno_que_saiu('R010', 3 * 365)
+        aplicacao = self._aplicacao(3 * 365)
+        folha = self.FolhaResposta.objects.create(prova_aplicacao=aplicacao, aluno=aluno, prova_versao=self.versao)
+        questao = Questao.objects.create(
+            disciplina=Disciplina.objects.create(nome='Disc Retenção'), tipo='DIS', dificuldade='M', enunciado='Q'
+        )
+        Desempenho.objects.create(folha_resposta=folha, questao=questao, nota=7)
+
+        aplicar_retencao()
+
+        folha.refresh_from_db()
+        self.assertEqual(folha.aluno.nome, NOME_ANONIMO)
+        self.assertEqual(Desempenho.objects.get(folha_resposta=folha).nota, 7)
+
+    def test_tentativas_de_login_e_sessoes_vencidas_sao_apagadas(self):
+        from datetime import timedelta
+
+        from django.contrib.sessions.models import Session
+        from django.utils import timezone
+
+        from banco_questoes.models import TentativaLogin
+        from Examina.retencao import aplicar_retencao
+
+        velha = TentativaLogin.objects.create(username='alguem')
+        TentativaLogin.objects.filter(pk=velha.pk).update(criado_em=self._datetime(40))
+        nova = TentativaLogin.objects.create(username='alguem')
+        agora = timezone.now()
+        Session.objects.create(session_key='vencida1', session_data='x', expire_date=agora - timedelta(days=1))
+        Session.objects.create(session_key='valida01', session_data='x', expire_date=agora + timedelta(days=1))
+
+        resultado = aplicar_retencao()
+
+        self.assertEqual((resultado.tentativas, resultado.sessoes), (1, 1))
+        self.assertEqual(list(TentativaLogin.objects.values_list('pk', flat=True)), [nova.pk])
+        self.assertEqual(list(Session.objects.values_list('session_key', flat=True)), ['valida01'])
+
+    def test_simular_nao_altera_nada(self):
+        from Examina.retencao import aplicar_retencao
+
+        foto, arquivo = self._foto(self._aplicacao(200), 'simulada.png')
+        aluno = self._aluno_que_saiu('R020', 3 * 365)
+
+        resultado = aplicar_retencao(simular=True)
+
+        self.assertEqual((resultado.fotos, resultado.alunos), (1, 1))
+        self.assertTrue(FolhaDigitalizada.objects.filter(pk=foto.pk).exists())
+        self.assertTrue(arquivo.exists())
+        aluno.refresh_from_db()
+        self.assertEqual(aluno.nome, 'Aluno R020')
+
+    @override_settings(RETENCAO_FOTOS_DIAS=0, RETENCAO_ALUNOS_DIAS=0, RETENCAO_TENTATIVAS_LOGIN_DIAS=0)
+    def test_prazo_zero_desliga_a_regra(self):
+        from Examina.retencao import aplicar_retencao
+
+        foto, _ = self._foto(self._aplicacao(2000), 'eterna.png')
+        self._aluno_que_saiu('R030', 10 * 365)
+        resultado = aplicar_retencao()
+        self.assertEqual((resultado.fotos, resultado.alunos, resultado.tentativas), (0, 0, 0))
+        self.assertTrue(FolhaDigitalizada.objects.filter(pk=foto.pk).exists())
+
+    def test_comando_mostra_o_resumo(self):
+        import io
+
+        from django.core.management import call_command
+
+        self._foto(self._aplicacao(200), 'comando.png')
+        saida = io.StringIO()
+        call_command('aplicar_retencao', '--simular', stdout=saida)
+        texto = saida.getvalue()
+        self.assertIn('[simulação] Fotos de cartões (6 meses após a aplicação): 1 seriam apagada(s).', texto)
+        self.assertIn('Alunos sem matrícula ativa há 2 anos', texto)
+        self.assertIn('Tentativas de login com mais de 30 dias', texto)
+
+    def test_texto_dos_prazos(self):
+        from Examina.retencao import texto_prazo
+
+        casos = {730: '2 anos', 365: '1 ano', 180: '6 meses', 30: '30 dias', 1: '1 dia', 0: 'sem prazo (não é apagado)'}
+        for dias, esperado in casos.items():
+            with self.subTest(dias=dias):
+                self.assertEqual(texto_prazo(dias), esperado)
+
+
+class PaginaDePrivacidadeTest(TestCase):
+    def test_pagina_publica_mostra_os_prazos_do_env(self):
+        resp = self.client.get(reverse('privacidade'))
+        self.assertEqual(resp.status_code, 200)
+        for trecho in ('6 meses', '2 anos', '30 dias', 'Aluno anonimizado'):
+            self.assertContains(resp, trecho)
+
+    @override_settings(RETENCAO_FOTOS_DIAS=365)
+    def test_prazo_alterado_no_env_aparece_na_pagina(self):
+        self.assertContains(self.client.get(reverse('privacidade')), '1 ano')
+
+    def test_login_tem_link_para_a_privacidade(self):
+        self.assertContains(self.client.get(reverse('login')), reverse('privacidade'))

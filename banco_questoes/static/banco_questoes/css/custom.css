@@ -1902,3 +1902,10 @@ a:hover {
   color: var(--text-main);
   word-break: break-all;
 }
+
+/* Página de Privacidade */
+.privacidade-lista {
+  margin: 0 0 0.75rem 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+}
