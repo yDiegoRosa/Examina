@@ -7,6 +7,7 @@
   <a href="{% url 'academico:turma_list' %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Voltar às turmas</a>
   {% if perfil_admin %}
   <a href="{% url 'academico:turma_docencias' pk=turma.pk %}" class="btn btn-outline"><i class="bi bi-person-video3"></i> Docentes da turma</a>
+  <a href="{% url 'academico:turma_importar_alunos' pk=turma.pk %}" class="btn btn-outline"><i class="bi bi-file-earmark-arrow-up-fill"></i> Importar planilha</a>
   {% endif %}
 </div>
 

@@ -1,0 +1,157 @@
+{% extends "banco_questoes/base.html" %}
+
+{% block title %}Importar alunos{% if turma %} — {{ turma }}{% endif %} — Examina FAETERJ-Rio{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap gap-2 mb-4">
+  {% if turma %}
+  <a href="{% url 'academico:turma_matriculas' pk=turma.pk %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Voltar às matrículas</a>
+  {% else %}
+  <a href="{% url 'academico:aluno_list' %}" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Voltar aos alunos</a>
+  {% endif %}
+</div>
+
+<div class="hero-card mb-4">
+  <div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="hero-tag"><i class="bi bi-file-earmark-arrow-up-fill"></i> Acadêmico • Importação de alunos</span>
+    </div>
+    <h1 class="mb-1">{% if turma %}Importar alunos para {{ turma }}{% else %}Importar alunos{% endif %}</h1>
+    <p class="text-secondary" style="max-width: 640px;">
+      {% if turma %}
+      Os alunos da planilha que ainda não existem são cadastrados e <strong>todos são matriculados nesta turma</strong>.
+      {% else %}
+      Os alunos da planilha que ainda não existem são cadastrados. Para já matricular numa turma, use
+      <em>Matrículas da turma → Importar planilha</em>.
+      {% endif %}
+      Matrícula que já existe não é alterada.
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-3 items-center">
+    <a href="{% url 'academico:aluno_modelo_planilha' %}" class="btn btn-outline">
+      <i class="bi bi-file-earmark-excel-fill" style="color: #107C41;"></i> Baixar modelo (.xlsx)
+    </a>
+  </div>
+</div>
+
+{% if resultado %}
+<!-- Resumo -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="{% if turma %}col-span-3{% else %}col-span-4{% endif %} stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-person-plus-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Cadastrados agora</div>
+      <div class="stat-num-unified">{{ resultado.criados }}</div>
+    </div>
+  </div>
+  <div class="{% if turma %}col-span-3{% else %}col-span-4{% endif %} stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-person-check-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Já cadastrados</div>
+      <div class="stat-num-unified">{{ resultado.ja_cadastrados }}</div>
+    </div>
+  </div>
+  {% if turma %}
+  <div class="{% if turma %}col-span-3{% else %}col-span-4{% endif %} stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-mortarboard-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Matriculados na turma</div>
+      <div class="stat-num-unified">{{ resultado.matriculados }}{% if resultado.ja_na_turma %} <span class="small text-muted">+{{ resultado.ja_na_turma }} já estavam</span>{% endif %}</div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="{% if turma %}col-span-3{% else %}col-span-4{% endif %} stat-card-unified">
+    <div class="stat-icon-unified stat-icon-navy"><i class="bi bi-exclamation-triangle-fill"></i></div>
+    <div>
+      <div class="stat-label-unified">Avisos / recusadas</div>
+      <div class="stat-num-unified">{{ resultado.avisos }} / {{ resultado.erros }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-surface mb-4">
+  <div class="card-header">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-clipboard-data-fill" style="color: var(--fae-blue-electric);"></i>
+      <span class="font-bold">Resultado linha a linha</span>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="saas-table" id="relatorio-importacao">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Linha</th>
+          <th style="width: 150px;">Matrícula</th>
+          <th>Nome na planilha</th>
+          <th style="width: 150px;">Cadastro</th>
+          {% if turma %}<th style="width: 150px;">Turma</th>{% endif %}
+          <th style="min-width: 240px;">Observação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in resultado.linhas %}
+        <tr>
+          <td><span class="font-mono text-muted">{{ linha.numero }}</span></td>
+          <td><span class="font-mono">{{ linha.matricula|default:"—" }}</span></td>
+          <td>{{ linha.nome|default:"—" }}</td>
+          <td>
+            {% if linha.situacao == 'CRIADO' %}
+            <span class="badge-pill badge-pill-active"><i class="bi bi-plus-lg"></i> Cadastrado</span>
+            {% elif linha.situacao == 'EXISTENTE' %}
+            <span class="badge-pill badge-pill-inactive"><i class="bi bi-check-lg"></i> Já existia</span>
+            {% elif linha.aviso %}
+            <span class="badge-pill badge-pill-warning"><i class="bi bi-exclamation-triangle"></i> Conferir</span>
+            {% else %}
+            <span class="badge-pill badge-pill-dificil"><i class="bi bi-x-lg"></i> Recusada</span>
+            {% endif %}
+          </td>
+          {% if turma %}
+          <td>
+            {% if linha.turma == 'MATRICULADO' %}
+            <span class="badge-pill badge-pill-active">Matriculado</span>
+            {% elif linha.turma == 'REATIVADO' %}
+            <span class="badge-pill badge-pill-active">Matrícula reativada</span>
+            {% elif linha.turma == 'JA_MATRICULADO' %}
+            <span class="badge-pill badge-pill-inactive">Já estava</span>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+          <td><span class="small {% if linha.erro %}text-danger{% else %}text-muted{% endif %}">{{ linha.detalhe|default:"" }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card-surface mb-4">
+  <div class="card-header">
+    <div class="flex items-center gap-2">
+      <i class="bi bi-cloud-arrow-up-fill" style="color: var(--fae-blue-electric);"></i>
+      <span class="font-bold">{% if resultado %}Importar outra planilha{% else %}Enviar planilha{% endif %}</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data" id="form-importar-alunos">
+      {% csrf_token %}
+      <label class="form-label" for="{{ form.arquivo.id_for_label }}">{{ form.arquivo.label }} (.xlsx ou .csv)</label>
+      {{ form.arquivo }}
+      {% if form.arquivo.errors %}
+      <div class="invalid-feedback" style="display:block;">{{ form.arquivo.errors|join:" " }}</div>
+      {% endif %}
+      <ul class="small text-muted mt-3 mb-3 importacao-alunos-regras">
+        <li>Primeira linha com as colunas <code>matricula</code> e <code>nome</code>; um aluno por linha.</li>
+        <li>No Excel, deixe a coluna da matrícula como <strong>texto</strong> (o modelo já vem assim) para não perder zeros à esquerda.</li>
+        <li>Matrícula que já existe não é alterada; se o nome for diferente, o relatório avisa para você conferir.</li>
+        <li>Linhas com problema (matrícula vazia ou repetida, por exemplo) são recusadas; as demais entram.</li>
+      </ul>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-upload"></i> {% if turma %}Importar e matricular{% else %}Importar alunos{% endif %}
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

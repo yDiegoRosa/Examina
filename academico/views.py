@@ -20,7 +20,7 @@ from banco_questoes.utils import parse_pk
 
 from . import professores as contas
 from .acesso import turmas_permitidas, ve_tudo
-from .forms import AlunoForm, DocenciaForm, ProfessorForm, TurmaForm
+from .forms import AlunoForm, DocenciaForm, ImportarAlunosForm, ProfessorForm, TurmaForm
 from .models import Aluno, Docencia, Matricula, Turma
 
 # Senha temporária guardada na sessão só entre o POST e a tela que a mostra (uma vez).
@@ -263,6 +263,62 @@ def turma_matriculas(request, pk):
             'alunos_disponiveis': alunos_disponiveis,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Importação de alunos por planilha (só o administrador)
+# ---------------------------------------------------------------------------
+def _importar_alunos(request, turma=None):
+    """Tela única das duas importações: sem ``turma`` só cadastra; com ela, também matricula."""
+    from .importacao_alunos import PlanilhaInvalidaError, importar_alunos
+
+    resultado = None
+    if request.method == 'POST':
+        form = ImportarAlunosForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                resultado = importar_alunos(form.cleaned_data['arquivo'], turma=turma)
+            except PlanilhaInvalidaError as exc:
+                form.add_error('arquivo', str(exc))
+            else:
+                form = ImportarAlunosForm()
+    else:
+        form = ImportarAlunosForm()
+    return render(
+        request,
+        'academico/aluno_import.html',
+        {'form': form, 'turma': turma, 'resultado': resultado},
+    )
+
+
+@login_required
+@administrador_required
+def aluno_importar(request):
+    """Acadêmico → Alunos → Importar planilha: cadastra os alunos que ainda não existem."""
+    return _importar_alunos(request)
+
+
+@login_required
+@administrador_required
+def turma_importar_alunos(request, pk):
+    """Matrículas da turma → Importar planilha: cadastra quem falta e matricula todos na turma."""
+    return _importar_alunos(request, turma=get_object_or_404(Turma, pk=pk))
+
+
+@login_required
+@administrador_required
+def aluno_modelo_planilha(request):
+    """Modelo .xlsx da importação de alunos (colunas matricula e nome)."""
+    from django.http import HttpResponse
+
+    from .importacao_alunos import gerar_modelo_xlsx
+
+    resposta = HttpResponse(
+        gerar_modelo_xlsx(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resposta['Content-Disposition'] = 'attachment; filename="modelo_alunos.xlsx"'
+    return resposta
 
 
 @require_POST

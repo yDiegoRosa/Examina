@@ -21,6 +21,9 @@
   </div>
   <div class="flex flex-wrap gap-2 mt-3 items-center">
     {% if perfil_admin %}
+    <a href="{% url 'academico:aluno_importar' %}" class="btn btn-outline flex items-center gap-2">
+      <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar planilha
+    </a>
     <a href="{% url 'academico:aluno_create' %}" class="btn btn-gold flex items-center gap-2">
       <i class="bi bi-plus-circle-fill"></i> Novo Aluno
     </a>
