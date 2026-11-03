@@ -37,6 +37,28 @@ class AlunoForm(forms.ModelForm):
         return self.cleaned_data['nome'].strip()
 
 
+class ImportarAlunosForm(forms.Form):
+    """Planilha de alunos (.xlsx ou .csv) com as colunas matricula e nome."""
+
+    arquivo = forms.FileField(
+        label='Planilha de alunos',
+        widget=forms.ClearableFileInput(
+            attrs={
+                'class': 'form-input',
+                'accept': '.xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv',
+            }
+        ),
+    )
+
+    def clean_arquivo(self):
+        from banco_questoes.forms import _validate_upload_file
+
+        arquivo = self.cleaned_data['arquivo']
+        if not arquivo.name.lower().endswith(('.xlsx', '.csv')):
+            raise forms.ValidationError('Envie a planilha em .xlsx (Excel) ou .csv.')
+        return _validate_upload_file(arquivo)  # tamanho (CSV_UPLOAD_MAX_SIZE_MB) e conteúdo real
+
+
 class _ProfessorChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         nome = obj.get_full_name()

@@ -192,6 +192,10 @@ Depois, entrando como administrador:
 2. **Acadêmico:** turmas, alunos e matrículas (só o administrador cadastra). A turma é criada pela
    **disciplina**: o nome é a sigla dela (Segurança da Informação → `SEG`); se houver mais de uma turma
    da mesma disciplina no mesmo período e turno, use o complemento (`SEG-A`, `SEG-B`).
+   **Alunos em lote:** planilha `.xlsx` ou `.csv` com as colunas `matricula` e `nome` (há um modelo
+   para baixar). Em Matrículas da turma → **Importar planilha**, quem falta é cadastrado e todos são
+   matriculados na turma; em Alunos → **Importar planilha**, só cadastra. Matrícula que já existe não é
+   alterada (o relatório avisa se o nome for diferente) e cadastro inativo não é matriculado.
 3. **Docências:** ao criar a turma, escolha o professor — a docência (professor × disciplina × turma) é
    criada junto. Outros professores: Acadêmico → Turmas → ícone "Docentes da turma".
    **Sem docência, o professor não vê turmas nem desempenho.**

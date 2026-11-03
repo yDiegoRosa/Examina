@@ -1940,6 +1940,13 @@ a:hover {
   }
 }
 
+/* Importação de alunos: regras da planilha */
+.importacao-alunos-regras {
+  margin-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
 /* Página de Privacidade */
 .privacidade-lista {
   margin: 0 0 0.75rem 1.1rem;

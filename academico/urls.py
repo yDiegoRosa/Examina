@@ -8,6 +8,8 @@ urlpatterns = [
     # Alunos
     path('alunos/', views.aluno_list, name='aluno_list'),
     path('alunos/novo/', views.aluno_create, name='aluno_create'),
+    path('alunos/importar/', views.aluno_importar, name='aluno_importar'),
+    path('alunos/modelo-planilha/', views.aluno_modelo_planilha, name='aluno_modelo_planilha'),
     path('alunos/<int:pk>/editar/', views.aluno_update, name='aluno_update'),
     path('alunos/<int:pk>/toggle-ativo/', views.aluno_toggle_ativo, name='aluno_toggle_ativo'),
     # Turmas
@@ -18,6 +20,7 @@ urlpatterns = [
     # Matrículas (vínculo aluno × turma)
     path('turmas/<int:pk>/matriculas/', views.turma_matriculas, name='turma_matriculas'),
     path('turmas/<int:pk>/matricular/', views.turma_matricular, name='turma_matricular'),
+    path('turmas/<int:pk>/importar-alunos/', views.turma_importar_alunos, name='turma_importar_alunos'),
     path('turmas/<int:pk>/desmatricular/', views.turma_desmatricular, name='turma_desmatricular'),
     # Docências (professor × disciplina na turma) — só o administrador
     path('turmas/<int:pk>/docencias/', views.turma_docencias, name='turma_docencias'),

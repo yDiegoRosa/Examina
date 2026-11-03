@@ -648,3 +648,159 @@ class LigarTurmasADisciplinaMigrationTest(TestCase):
         self.assertIsNone(outra.disciplina)
         self.assertIsNone(curso.disciplina)
         self.assertEqual(fac.nome, 'FAC NOITE')  # o nome só muda ao editar na tela
+
+
+# ---------------------------------------------------------------------------
+# Importação de alunos por planilha (2026-11-02)
+# ---------------------------------------------------------------------------
+def _xlsx(*linhas, cabecalho=('matricula', 'nome')):
+    import io
+
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    if cabecalho:
+        ws.append(list(cabecalho))
+    for linha in linhas:
+        ws.append(list(linha))
+    saida = io.BytesIO()
+    wb.save(saida)
+    return saida.getvalue()
+
+
+def _envio(conteudo, nome='alunos.xlsx'):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    return SimpleUploadedFile(nome, conteudo)
+
+
+class ImportarAlunosTest(TestCase):
+    """Decisões do Diego: matrícula existente não muda (avisa se o nome difere); pela turma, matricula."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(username='adm_import', password='x')  # noqa: S106
+        cls.admin.groups.add(Group.objects.get_or_create(name='Administrador')[0])
+        cls.turma = Turma.objects.create(periodo='2026.2', nome='SEG', turno=Turma.Turno.NOITE)
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def _importar(self, conteudo, nome='alunos.xlsx', turma=None):
+        if turma:
+            url = reverse('academico:turma_importar_alunos', args=[turma.pk])
+        else:
+            url = reverse('academico:aluno_importar')
+        return self.client.post(url, {'arquivo': _envio(conteudo, nome)})
+
+    def _situacoes(self, resp):
+        return {linha.matricula: (linha.situacao, linha.turma) for linha in resp.context['resultado'].linhas}
+
+    def test_cadastra_novos_e_nao_altera_existentes(self):
+        Aluno.objects.create(matricula='100', nome='Ana Souza')
+        Aluno.objects.create(matricula='200', nome='Bruno Lima')
+        resp = self._importar(
+            _xlsx(
+                ['100', 'ANA  SOUZA'],  # mesmo nome (caixa e espaços não contam)
+                ['200', 'Bruno Lima Filho'],  # nome diferente: mantém e avisa
+                ['300', 'Carla Dias'],
+                [2026010123, 'Davi Rocha'],  # número no Excel vira texto sem ".0"
+                ['', 'Sem Matrícula'],
+                ['300', 'Carla Repetida'],
+                ['ANON-9', 'Reservado'],
+                [None, None],  # linha vazia é ignorada
+            )
+        )
+        self.assertEqual(resp.status_code, 200)
+        situacoes = {li.numero: li.situacao for li in resp.context['resultado'].linhas}
+        self.assertEqual(
+            situacoes,
+            {2: 'EXISTENTE', 3: 'NOME_DIFERENTE', 4: 'CRIADO', 5: 'CRIADO', 6: 'ERRO', 7: 'ERRO', 8: 'ERRO'},
+        )
+        self.assertEqual(Aluno.objects.get(matricula='200').nome, 'Bruno Lima')
+        self.assertEqual(Aluno.objects.get(matricula='2026010123').nome, 'Davi Rocha')
+        self.assertFalse(Aluno.objects.filter(nome__in=['Sem Matrícula', 'Carla Repetida', 'Reservado']).exists())
+        self.assertContains(resp, 'Já cadastrado como &quot;Bruno Lima&quot;')
+        self.assertContains(resp, 'Matrícula repetida na planilha (já aparece na linha 4)')
+        resultado = resp.context['resultado']
+        self.assertEqual((resultado.criados, resultado.ja_cadastrados, resultado.avisos, resultado.erros), (2, 2, 1, 3))
+        self.assertFalse(Matricula.objects.exists())  # pela lista de alunos não matricula
+
+    def test_csv_com_ponto_e_virgula_latin1_e_cabecalhos_alternativos(self):
+        conteudo = 'Nº Matrícula;Nome Completo\n555;José Antônio\n'.encode('latin-1')
+        resp = self._importar(conteudo, nome='turma.csv')
+        self.assertEqual(self._situacoes(resp), {'555': ('CRIADO', '')})
+        self.assertEqual(Aluno.objects.get(matricula='555').nome, 'José Antônio')
+
+    def test_pela_turma_cadastra_e_matricula(self):
+        ja = Aluno.objects.create(matricula='10', nome='Já Matriculado')
+        Matricula.objects.create(aluno=ja, turma=self.turma)
+        cancelado = Aluno.objects.create(matricula='20', nome='Cancelado Antes')
+        Matricula.objects.create(aluno=cancelado, turma=self.turma, situacao=Matricula.Situacao.CANCELADO)
+        Aluno.objects.create(matricula='30', nome='Inativo', ativo=False)
+        Aluno.objects.create(matricula='40', nome='Sem Turma')
+
+        planilha = _xlsx(
+            ['10', 'Já Matriculado'],
+            ['20', 'Cancelado Antes'],
+            ['30', 'Inativo'],
+            ['40', 'Outro Nome'],
+            ['50', 'Novo'],
+        )
+        resp = self._importar(planilha, turma=self.turma)
+        self.assertEqual(
+            self._situacoes(resp),
+            {
+                '10': ('EXISTENTE', 'JA_MATRICULADO'),
+                '20': ('EXISTENTE', 'REATIVADO'),
+                '30': ('INATIVO', ''),
+                '40': ('NOME_DIFERENTE', 'MATRICULADO'),
+                '50': ('CRIADO', 'MATRICULADO'),
+            },
+        )
+        ativos = set(
+            self.turma.matriculas.filter(situacao=Matricula.Situacao.MATRICULADO).values_list(
+                'aluno__matricula', flat=True
+            )
+        )
+        self.assertEqual(ativos, {'10', '20', '40', '50'})
+        self.assertEqual(resp.context['resultado'].matriculados, 3)
+        self.assertContains(resp, 'Não foi matriculado')
+
+    def test_sem_cabecalho_certo_nada_e_importado(self):
+        resp = self._importar(_xlsx(['1', 'Fulano'], cabecalho=('codigo', 'aluno')))
+        self.assertIsNone(resp.context['resultado'])
+        self.assertContains(resp, 'faltou: matricula')
+        self.assertFalse(Aluno.objects.exists())
+
+    def test_formato_errado_e_recusado(self):
+        resp = self._importar(b'matricula,nome\n1,Fulano\n', nome='alunos.txt')
+        self.assertContains(resp, 'Envie a planilha em .xlsx (Excel) ou .csv.')
+        self.assertFalse(Aluno.objects.exists())
+
+    def test_modelo_enviado_sem_preencher_nao_cria_ninguem(self):
+        modelo = self.client.get(reverse('academico:aluno_modelo_planilha'))
+        self.assertIn('modelo_alunos.xlsx', modelo['Content-Disposition'])
+        resp = self._importar(modelo.content)
+        self.assertContains(resp, 'não tem nenhum aluno abaixo do cabeçalho')
+        self.assertFalse(Aluno.objects.exists())
+
+    def test_so_o_administrador_importa(self):
+        coord = User.objects.create_user(username='coord_import', password='x')  # noqa: S106
+        coord.groups.add(Group.objects.get(name='Coordenador'))
+        self.client.force_login(coord)
+        for url in (
+            reverse('academico:aluno_importar'),
+            reverse('academico:turma_importar_alunos', args=[self.turma.pk]),
+            reverse('academico:aluno_modelo_planilha'),
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self._importar(_xlsx(['1', 'Fulano'])).status_code, 403)
+        self.assertFalse(Aluno.objects.exists())
+
+    def test_botoes_nas_telas_do_administrador(self):
+        self.assertContains(self.client.get(reverse('academico:aluno_list')), reverse('academico:aluno_importar'))
+        tela = self.client.get(reverse('academico:turma_matriculas', args=[self.turma.pk]))
+        self.assertContains(tela, reverse('academico:turma_importar_alunos', args=[self.turma.pk]))
