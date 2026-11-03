@@ -29,9 +29,11 @@ ORDEM_DIFICULDADE = {'F': 0, 'M': 1, 'D': 2}
 CORRIGIDO = Q(acertou__isnull=False) | Q(nota__isnull=False)
 
 # Fração de acerto de cada resposta (0–1): discursiva = nota/10; objetiva = 1 se acertou, 0 se errou.
+# Multiplica por 0.1 em vez de dividir por 10: no SQLite, CAST(10 AS NUMERIC) vira inteiro e
+# "nota / 10" faz divisão inteira quando a nota também é inteira (ex.: 7 / 10 = 0).
 _FRACAO = DecimalField(max_digits=7, decimal_places=4)
 FRACAO_ACERTO = Case(
-    When(nota__isnull=False, then=ExpressionWrapper(F('nota') / Value(Decimal('10')), output_field=_FRACAO)),
+    When(nota__isnull=False, then=ExpressionWrapper(F('nota') * Value(Decimal('0.1')), output_field=_FRACAO)),
     When(acertou=True, then=Value(Decimal('1'))),
     default=Value(Decimal('0')),
     output_field=_FRACAO,
